@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>出發羅</title>
+    <title>雲端旅遊帳本</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -52,7 +52,7 @@
     <div v-if="isLoading" class="loading-bar"></div>
 
     <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
-        <h1 class="text-xl font-bold tracking-wide">☁️ 出發羅</h1>
+        <h1 class="text-xl font-bold tracking-wide">☁️ 雲端旅遊帳本</h1>
         <div class="flex gap-2">
             <span class="text-xs bg-blue-800 px-2 py-1 rounded text-blue-200">Day {{ currentDay }}</span>
             <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
@@ -84,7 +84,6 @@
                            :placeholder="targetCity ? '搜尋 ' + targetCity + ' 的地點...' : '搜尋地點...'" 
                            class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold">
                     <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
-                    
                     <div v-if="searchResults.length > 0" class="suggestions-list">
                         <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item">
                             <div class="font-bold text-gray-800 text-sm">{{ item.display_name.split(',')[0] }}</div>
@@ -101,6 +100,7 @@
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-gray-800 text-lg">{{ place.name }}</span>
                             <span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">📍</span>
+                            <span v-else class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">未定位</span>
                         </div>
                         <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
                     </div>
@@ -123,11 +123,16 @@
                         <span v-if="isMapLoading" class="animate-spin">↻</span>
                         {{ isMapLoading ? '搜尋中...' : '🔍 搜尋此區域景點' }}
                     </button>
-                    <button @click="showMyItineraryOnMap" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-lg border border-gray-100 active:scale-95 transition text-sm">📍 顯示行程</button>
+                    <button @click="forceRefreshMap" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-lg border border-gray-100 active:scale-95 transition text-sm flex justify-center items-center gap-1">
+                        <span v-if="isAutoFixing" class="animate-spin">↻</span>
+                        {{ isAutoFixing ? '補完座標中...' : '📍 顯示行程' }}
+                    </button>
                 </div>
             </div>
             <div id="map" class="flex-1 bg-gray-100"></div>
-            <div class="bg-white/90 backdrop-blur p-2 text-xs text-center text-gray-500 absolute bottom-20 left-4 right-4 rounded-lg shadow pointer-events-none z-[500]">💡 點擊地圖可新增地點</div>
+            <div v-if="isAutoFixing" class="bg-yellow-100 text-yellow-800 p-2 text-xs text-center absolute bottom-20 left-4 right-4 rounded-lg shadow z-[500]">
+                正在幫沒有座標的地點搜尋位置...請稍候
+            </div>
         </div>
 
         <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
@@ -183,17 +188,18 @@
 </div>
 
 <script>
-    const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     createApp({
         setup() {
-            // ★★★ 請確認這裡是您的完整網址 ★★★
+            // ★★★ 請替換成您的 API 網址 ★★★
             const API_URL = 'https://script.google.com/macros/s/AKfycbzCY554TEj4JSALyOrGhpiXE97zP2W3jRg8huIIbJBY7gBdwbBv4EMvW70lxqH5NxzE/exec';
 
             // State
             const currentTab = ref('itinerary');
             const isLoading = ref(false);
             const isMapLoading = ref(false);
+            const isAutoFixing = ref(false); // ★ 自動修復狀態
             const currentDay = ref(1);
             const totalDays = ref(1);
             
@@ -201,17 +207,14 @@
             const itinerary = ref([]);
             const expenses = ref([]);
 
-            // Form
             const newPlace = ref('');
             const newNote = ref('');
             const newPerson = ref('');
             const newExpense = ref({ title: '', amount: '', payer: '', involved: [] });
             
-            // ★ 新增：目標城市 (會儲存在手機裡)
             const targetCity = ref(localStorage.getItem('travel_city') || '');
             const saveCityPref = () => localStorage.setItem('travel_city', targetCity.value);
 
-            // Search & Map
             const searchResults = ref([]);
             const selectedLat = ref(null);
             const selectedLng = ref(null);
@@ -258,20 +261,15 @@
                 await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
             };
 
-            // --- ★ 智慧搜尋功能 (v14.0) ---
+            // Search Logic
             const searchPlacesInput = () => {
                 const q = newPlace.value.trim();
-                const city = targetCity.value.trim(); // 取得鎖定的城市
-
+                const city = targetCity.value.trim();
                 if(q.length < 2) { searchResults.value = []; return; }
                 if(searchTimeout) clearTimeout(searchTimeout);
-                
                 searchTimeout = setTimeout(async () => {
                     try {
-                        // ★ 關鍵修改：如果有點城市，搜尋關鍵字自動變成 "地名, 城市名"
-                        // 例如: 輸入 "西門市場"，系統搜 "西門市場, 台南"
                         const query = city ? `${q}, ${city}` : q;
-                        
                         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
                         searchResults.value = await res.json();
                     } catch(e){}
@@ -284,18 +282,17 @@
                 searchResults.value = [];
             };
 
-            // --- 地圖功能 ---
+            // --- 地圖核心 (v15.0 修復版) ---
             const switchTab = (tab) => {
                 currentTab.value = tab;
                 if(tab === 'map') {
-                    // 如果有點城市，地圖搜尋預設填入該城市
                     if(targetCity.value && !mapSearchQuery.value) mapSearchQuery.value = targetCity.value;
                     nextTick(() => initMap());
                 }
             };
 
             const initMap = () => {
-                if(mapInstance) { mapInstance.invalidateSize(); return; }
+                if(mapInstance) { mapInstance.invalidateSize(); showMyItineraryOnMap(); return; }
                 mapInstance = L.map('map').setView([23.6, 121], 7);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(mapInstance);
                 markersLayer = L.layerGroup().addTo(mapInstance);
@@ -308,16 +305,13 @@
                         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
                         const data = await res.json();
                         const name = data.display_name ? data.display_name.split(',')[0] : '地點';
-                        tempMarker.setPopupContent(`
-                            <div style="text-align:center"><b>${name}</b><br>
-                            <button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-from-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>
-                        `);
+                        tempMarker.setPopupContent(`<div style="text-align:center"><b>${name}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-from-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>`);
                     } catch(err) { tempMarker.setPopupContent('未知地點'); }
                 });
                 document.addEventListener('add-from-map', (e) => addPlaceFromMap(e.detail));
-                showMyItineraryOnMap();
                 
-                // 如果有設定城市，初始化時試著跳過去
+                // ★ 初始化時自動執行地圖顯示
+                showMyItineraryOnMap();
                 if(targetCity.value) { mapSearchQuery.value = targetCity.value; searchCityAndJump(); }
             };
 
@@ -327,9 +321,7 @@
                 try {
                     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}`);
                     const data = await res.json();
-                    if(data.length > 0) {
-                        mapInstance.setView([data[0].lat, data[0].lon], 13);
-                    } else { alert('找不到城市'); }
+                    if(data.length > 0) { mapInstance.setView([data[0].lat, data[0].lon], 13); } else { alert('找不到城市'); }
                 } catch(e){} finally { isMapLoading.value = false; }
             };
 
@@ -350,53 +342,78 @@
                 } catch(e){} finally { isMapLoading.value = false; }
             };
 
-            const showMyItineraryOnMap = () => {
+            // ★★★ v15.0 核心修正：自動補完座標功能 ★★★
+            const showMyItineraryOnMap = async () => {
                 if(!mapInstance) return;
                 markersLayer.clearLayers();
                 exploreLayer.clearLayers();
                 const bounds = L.latLngBounds();
                 let hasPoint = false;
+                
+                // 檢查是否需要自動修復 (沒有座標的點)
+                const itemsToFix = itinerary.value.filter(item => (!item.lat || !item.lng) && item.name);
+                
+                if (itemsToFix.length > 0) {
+                    isAutoFixing.value = true;
+                    // 為了避免一次大量請求被封鎖，我們慢慢查
+                    for (const item of itemsToFix) {
+                        try {
+                            const query = targetCity.value ? `${item.name}, ${targetCity.value}` : item.name;
+                            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+                            const data = await res.json();
+                            if (data.length > 0) {
+                                // 暫時補上座標 (不會寫入資料庫，只為了顯示)
+                                item.lat = data[0].lat;
+                                item.lng = data[0].lon;
+                            }
+                            // 禮貌性延遲 0.6 秒
+                            await new Promise(r => setTimeout(r, 600));
+                        } catch(e) { console.error("Auto fix failed for", item.name); }
+                    }
+                    isAutoFixing.value = false;
+                }
+
+                // 繪製地圖點
                 itinerary.value.forEach(item => {
-                    // ★ 即使舊資料沒有座標，也嘗試用城市名修正
+                    // 只要有座標 (包含剛剛修復的) 就顯示
                     if(item.lat && item.lng) {
                         const d = item.day ? parseInt(item.day) : 1;
-                        L.circleMarker([item.lat, item.lng], {color: getDayColor(d), fillColor: getDayColor(d), fillOpacity: 0.9, radius: 8})
-                        .addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`);
-                        bounds.extend([item.lat, item.lng]); hasPoint = true;
+                        L.circleMarker([item.lat, item.lng], {
+                            color: getDayColor(d), fillColor: getDayColor(d), fillOpacity: 0.9, radius: 8
+                        }).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`);
+                        bounds.extend([item.lat, item.lng]); 
+                        hasPoint = true;
                     }
                 });
                 if(hasPoint) mapInstance.fitBounds(bounds, { padding: [50,50] });
             };
+            
+            // 強制重整地圖 (手動觸發修復)
+            const forceRefreshMap = () => showMyItineraryOnMap();
 
             const addPlaceFromMap = async ({ name, lat, lng }) => {
                 const id = generateId(); const d = currentDay.value;
                 itinerary.value.push({ id, name, day: d, lat, lng, message: '' });
                 await sendToApi('add', 'itinerary', { id, name, day: d, lat, lng, message: '' });
-                alert(`已加入 Day ${d}`); showMyItineraryOnMap();
+                alert(`已加入 Day ${d}`); 
+                // 不用整個重整，直接加點
+                const c = getDayColor(d);
+                L.circleMarker([lat, lng], { color: c, fillColor: c, fillOpacity: 0.9, radius: 8 }).addTo(markersLayer).bindPopup(`<b>D${d}: ${name}</b>`);
             };
 
             const addPlace = async () => {
                 if(!newPlace.value.trim()) return;
                 const id = generateId();
+                // 這裡會把 selectedLat 存進去
                 const d = { id, name: newPlace.value, day: currentDay.value, lat: selectedLat.value, lng: selectedLng.value, message: newNote.value };
                 itinerary.value.push(d);
-                newPlace.value = ''; newNote.value = ''; selectedLat.value = null;
+                newPlace.value = ''; newNote.value = ''; selectedLat.value = null; selectedLng.value = null;
                 await sendToApi('add', 'itinerary', d);
             };
-            const removePlace = async(id) => {
-                const i = itinerary.value.findIndex(x=>x.id===id);
-                if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); }
-            };
+            const removePlace = async(id) => { const i = itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
             const openGoogleMap = (p) => window.open(p.lat ? `https://maps.google.com/?q=${p.lat},${p.lng}` : `https://maps.google.com/?q=${encodeURIComponent(p.name + (targetCity.value ? ','+targetCity.value : ''))}`, '_blank');
-            
-            // Money & Settings
-            const addExpense = async () => {
-                if (!newExpense.value.title || !newExpense.value.amount) return;
-                const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] };
-                expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') });
-                newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name) };
-            };
+            const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name) }; };
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             const addPerson = async () => { if (!newPerson.value.trim()) return; const uid = generateId(); people.value.push({ id: uid, name: newPerson.value }); newExpense.value.involved.push(newPerson.value); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: newPerson.value }); };
             const removePerson = async (idx) => { const item = people.value[idx]; if (!item.id || !confirm('移除？')) return; people.value.splice(idx, 1); await sendToApi('del', 'people', item.id); };
@@ -405,11 +422,10 @@
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
 
             return {
-                currentTab, switchTab, isLoading, isMapLoading, currentDay, totalDays, addNewDay,
+                currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary: computed(()=>itinerary.value.filter(i=>(i.day?parseInt(i.day):1)===currentDay.value)),
-                newPlace, newNote, newPerson, newExpense,
-                targetCity, saveCityPref, // ★ 城市變數
-                mapSearchQuery, searchResults, searchCityAndJump, exploreNearby, showMyItineraryOnMap,
+                newPlace, newNote, newPerson, newExpense, targetCity, saveCityPref,
+                mapSearchQuery, searchResults, searchCityAndJump, exploreNearby, showMyItineraryOnMap, forceRefreshMap,
                 searchPlacesInput, selectPlace, addPlace, removePlace, openGoogleMap,
                 addExpense, removeExpense, addPerson, removePerson, resetApp,
                 totalExpense, balanceSheet, fetchData
@@ -419,4 +435,3 @@
 </script>
 </body>
 </html>
-
