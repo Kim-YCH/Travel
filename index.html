@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雲端旅遊帳本</title>
+    <title>出發囉</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -24,6 +24,9 @@
         .popup-btn { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; width: 100%; margin-top: 5px; }
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #f3f4f6; }
+        
+        /* 讓 Checkbox 更好看 */
+        .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #2563eb; border-color: #2563eb; }
     </style>
 </head>
 <body>
@@ -31,7 +34,7 @@
     <div v-if="isLoading" class="loading-bar"></div>
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">✈️ 您的旅程</h1>
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程開始規劃</p>
         
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
@@ -56,7 +59,7 @@
     <div v-else class="flex flex-col h-full">
         <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
             <div>
-                <h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1>
+                <h1 class="text-lg font-bold tracking-wide">出發囉：{{ currentTrip.name }}</h1>
                 <div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div>
             </div>
             <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
@@ -108,12 +111,41 @@
                     <div class="flex justify-between items-end mb-4"><span class="text-gray-300 text-sm">總支出</span><span class="text-2xl font-bold">${{ totalExpense }}</span></div>
                     <div class="space-y-2 border-t border-gray-600 pt-3"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm"><span>{{ res.name }}</span><span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span></div></div>
                 </div>
+                
                 <div class="card p-4 border border-blue-100">
-                    <div class="grid grid-cols-3 gap-2 mb-3"><input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200"><input v-model.number="newExpense.amount" type="number" placeholder="$" class="bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200"></div>
-                    <div class="mb-3 flex gap-2"><select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border ring-1 ring-gray-200"><option v-for="p in people" :value="p.name">{{p.name}}</option></select></div>
-                    <button @click="addExpense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">記帳</button>
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none">
+                        <input v-model.number="newExpense.amount" type="number" placeholder="$" class="bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none">
+                    </div>
+
+                    <div class="mb-3 flex gap-2 items-center">
+                        <span class="text-xs text-gray-500 w-12">付款人</span>
+                        <select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border-0 ring-1 ring-gray-200">
+                            <option v-for="p in people" :value="p.name">{{ p.name }}</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <span class="text-xs text-gray-500 block mb-1">分攤給 (點擊切換)</span>
+                        <div class="flex flex-wrap gap-2">
+                            <label v-for="p in people" :key="p.id" class="checkbox-wrapper cursor-pointer relative">
+                                <input type="checkbox" :value="p.name" v-model="newExpense.involved" class="absolute opacity-0 w-0 h-0">
+                                <div class="px-3 py-1 rounded-full border border-gray-200 text-sm text-gray-500 bg-white transition select-none">
+                                    {{ p.name }}
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button @click="addExpense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow" :disabled="isLoading">記帳</button>
                 </div>
-                <div class="space-y-2"><div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between"><div><div class="font-bold">{{exp.title}}</div><div class="text-xs text-gray-500">{{exp.payer}} 付款</div></div><div class="flex items-center gap-2"><span class="font-bold">${{exp.amount}}</span><button @click="removeExpense(idx)" class="text-red-300">×</button></div></div></div>
+
+                <div class="space-y-2">
+                    <div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between">
+                        <div><div class="font-bold">{{exp.title}}</div><div class="text-xs text-gray-500">{{exp.payer}} 付款</div></div>
+                        <div class="flex items-center gap-2"><span class="font-bold">${{exp.amount}}</span><button @click="removeExpense(idx)" class="text-red-300">×</button></div>
+                    </div>
+                </div>
             </div>
 
             <div v-if="currentTab === 'settings'" class="p-4 space-y-4">
@@ -131,7 +163,7 @@
 
         <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0">
             <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
-            <button @click="switchTab('map')" class="flex flex-col items-center w-full" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">探索</span></button>
+            <button @click="switchTab('map')" class="flex flex-col items-center w-full" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">地圖</span></button>
             <button @click="switchTab('money')" class="flex flex-col items-center w-full" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
             <button @click="switchTab('settings')" class="flex flex-col items-center w-full" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
         </nav>
@@ -142,7 +174,7 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
-            // ★★★ 請替換成您的 API 網址 ★★★
+            // 4. 更新 API URL
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
 
             // View State
@@ -244,6 +276,8 @@
                     expenses.value = await resExp.json();
                     const ppl = await resPpl.json();
                     people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
+                    
+                    // Init Expense Form
                     if(people.value.length) {
                         newExpense.value.payer = people.value[0].name;
                         newExpense.value.involved = people.value.map(p=>p.name);
@@ -252,13 +286,12 @@
             };
 
             const sendToApi = async (action, type, data) => {
-                // Attach trip_id to data
                 const body = { action, type };
                 if (action === 'add') {
-                    data.trip_id = currentTrip.value.id; // ★ 重要：標記旅程ID
+                    data.trip_id = currentTrip.value.id; 
                     body.data = data;
                 } else {
-                    body.id = data; // Delete only needs ID
+                    body.id = data; 
                 }
                 await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
             };
@@ -266,7 +299,7 @@
             // --- Features ---
             const searchPlacesInput = () => {
                 const q = newPlace.value.trim();
-                const city = currentTrip.value.city; // Use Trip City
+                const city = currentTrip.value.city; 
                 if(q.length < 2) { searchResults.value = []; return; }
                 if(searchTimeout) clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(async () => {
