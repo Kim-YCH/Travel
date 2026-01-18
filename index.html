@@ -72,8 +72,13 @@
                 <div class="space-y-3 pb-20">
                     <div v-for="place in filteredItinerary" :key="place.id" class="card p-4 flex justify-between items-start active:scale-[0.99] transition">
                         <div class="flex-1" @click="openGoogleMap(place)">
-                            <div class="flex items-center gap-2"><span class="font-bold text-gray-800 text-lg">{{ place.name }}</span><span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">📍</span><span v-else class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">未定位</span></div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-gray-800 text-lg">{{ place.name }}</span>
+                                <span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">📍</span>
+                                <span v-else class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">未定位</span>
+                            </div>
                             <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
+                            <div class="text-xs text-blue-400 mt-1">🗺️ 查看詳細資訊</div>
                         </div>
                         <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl" :disabled="isLoading">×</button>
                     </div>
@@ -233,27 +238,17 @@
             const addPlace = async () => { if(!newPlace.value.trim()) return; const id=generateId(); const d={id, name:newPlace.value, day:currentDay.value, lat:selectedLat.value, lng:selectedLng.value, message:newNote.value}; itinerary.value.push(d); newPlace.value=''; newNote.value=''; selectedLat.value=null; await sendToApi('add', 'itinerary', d); };
             const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
-            const openGoogleMap = (p) => window.open(p.lat ? `https://maps.google.com/?q=${p.lat},${p.lng}` : `https://maps.google.com/?q=${encodeURIComponent(p.name + (currentTrip.value.city ? ','+currentTrip.value.city : ''))}`, '_blank');
-            const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name) }; };
-            const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             
-            // ★★★ 核心修正：先抓名字，再清空，再發送 ★★★
-            const addPerson = async () => {
-                const name = newPerson.value.trim(); // 1. 先存
-                if (!name) return;
-                const uid = generateId();
-                
-                // 2. 更新本地
-                people.value.push({ id: uid, name: name });
-                newExpense.value.involved.push(name);
-                
-                // 3. 清空輸入框
-                newPerson.value = '';
-                
-                // 4. 發送 (使用變數 name)
-                await sendToApi('add', 'people', { id: uid, name: name });
+            // v22.0 修改：優先使用關鍵字搜尋，因為這樣才能看到 Google Maps 的「景點資訊卡」
+            const openGoogleMap = (p) => {
+                const query = p.name + (currentTrip.value.city ? ' ' + currentTrip.value.city : '');
+                // 使用 Google Maps Universal Link
+                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
             };
 
+            const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name) }; };
+            const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
+            const addPerson = async () => { const name = newPerson.value.trim(); if (!name) return; const uid = generateId(); people.value.push({ id: uid, name: name }); newExpense.value.involved.push(name); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: name }); };
             const removePerson = async (idx) => { const item = people.value[idx]; if (!item.id || !confirm('移除？')) return; people.value.splice(idx, 1); await sendToApi('del', 'people', item.id); };
             const resetTrip = async () => { if(!confirm(`警告：確定要清空「${currentTrip.value.name}」的所有資料嗎？`)) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空'); };
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
