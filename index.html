@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>出發囉</title>
+    <title>出發囉 (Google版)</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; user-select: none; padding-bottom: env(safe-area-inset-bottom); }
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -20,12 +20,22 @@
         .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
         @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
+        
+        /* Google Maps 容器 */
         #map { height: 100%; width: 100%; z-index: 1; }
-        .popup-btn { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; width: 100%; margin-top: 5px; }
+        
+        /* 搜尋建議列表 */
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .suggestion-item:hover { background-color: #eff6ff; }
+        
+        /* Checkbox 優化 */
         .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #1e40af; border-color: #2563eb; font-weight: bold; }
         .checkbox-wrapper div { color: #111827; font-weight: 500; }
+        
+        /* Google Logo 修正 (避免被全域樣式隱藏) */
+        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
+        img[src*="google"] { display: inline !important; }
     </style>
 </head>
 <body>
@@ -34,7 +44,7 @@
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
-        <p class="text-gray-500 mb-8">選擇一個旅程開始規劃</p>
+        <p class="text-gray-500 mb-8">Google Maps 旗艦版</p>
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
@@ -63,36 +73,18 @@
                 </div>
                 <div class="card p-4 space-y-2 relative">
                     <div class="flex gap-2 relative">
-                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + ' 或貼上座標...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold text-gray-900">
+                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + ' 地點...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold text-gray-900">
                         <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
                         
-                        <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
-                            <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
-                            
-                            <div v-if="isCoordinateMode" @click="useCoordinateInput" class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200">
-                                <span class="text-xl">📍</span>
-                                <div>
-                                    <div class="font-bold text-green-700 text-sm">使用座標定位</div>
-                                    <div class="text-xs text-green-600">直接加入精準位置</div>
-                                </div>
-                            </div>
-
+                        <div v-if="newPlace.length > 0 && searchResults.length > 0" class="suggestions-list">
                             <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item hover:bg-blue-50">
                                 <span class="text-xl">📍</span>
                                 <div class="overflow-hidden">
-                                    <div class="font-bold text-gray-800 text-sm truncate">{{ item.display_name.split(',')[0] }}</div>
-                                    <div class="text-xs text-gray-500 truncate">{{ item.display_name.split(',').slice(1).join(',') }}</div>
+                                    <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                                    <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
                                 </div>
                             </div>
-
-                            <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
-                                <span class="text-xl">🔎</span>
-                                <div class="flex-1">
-                                    <div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找座標</div>
-                                    <div class="text-xs text-gray-400">複製座標後貼回來即可</div>
-                                </div>
-                                <span class="text-gray-300 text-lg">➜</span>
-                            </div>
+                            <div class="p-2 text-xs text-center text-gray-400 bg-gray-50">Powered by Google</div>
                         </div>
                     </div>
                     <input v-model="newNote" type="text" placeholder="備註..." class="w-full border-0 bg-gray-50 p-2 rounded-lg outline-none text-sm text-gray-900">
@@ -100,7 +92,10 @@
                 <div class="space-y-3 pb-20">
                     <div v-for="place in filteredItinerary" :key="place.id" class="card p-4 flex justify-between items-start active:scale-[0.99] transition">
                         <div class="flex-1" @click="openGoogleMap(place)">
-                            <div class="flex items-center gap-2"><span class="font-bold text-gray-800 text-lg">{{ place.name }}</span><span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">📍</span><span v-else class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">未定位</span></div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-gray-800 text-lg">{{ place.name }}</span>
+                                <span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">Google</span>
+                            </div>
                             <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
                         </div>
                         <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl" :disabled="isLoading">×</button>
@@ -110,18 +105,13 @@
             </div>
 
             <div v-show="currentTab === 'map'" class="absolute inset-0 flex flex-col z-10">
-                <div class="absolute top-4 left-4 right-4 z-[500] flex flex-col gap-2">
-                    <div class="flex shadow-lg rounded-lg overflow-hidden">
-                        <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 p-3 border-0 outline-none h-12 text-gray-900">
-                        <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-12">前往</button>
-                    </div>
-                    <div class="flex gap-2">
-                        <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-lg border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1"><span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 探索附近' }}</button>
-                        <button @click="forceRefreshMap" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-lg border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1"><span v-if="isAutoFixing" class="animate-spin">↻</span>{{ isAutoFixing ? '修復中...' : '📍 顯示行程' }}</button>
-                    </div>
-                </div>
                 <div id="map" class="flex-1 bg-gray-100"></div>
-                <div v-if="isAutoFixing" class="bg-yellow-100 text-yellow-800 p-2 text-xs text-center absolute bottom-20 left-4 right-4 rounded-lg shadow z-[500]">正在修復無座標地點...</div>
+                
+                <div class="absolute top-4 left-4 right-4 z-[10] flex gap-2">
+                    <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-3 rounded-lg shadow-lg border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-2">
+                        <span>📍</span> 顯示所有行程
+                    </button>
+                </div>
             </div>
 
             <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
@@ -129,7 +119,6 @@
                     <div class="flex justify-between items-end mb-4"><span class="text-gray-300 text-sm">總支出</span><span class="text-2xl font-bold">${{ totalExpense }}</span></div>
                     <div class="space-y-2 border-t border-gray-600 pt-3"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm"><span>{{ res.name }}</span><span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span></div></div>
                 </div>
-                
                 <div class="card p-4 border border-blue-100">
                     <div class="grid grid-cols-3 gap-2 mb-3">
                         <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none text-gray-900">
@@ -139,7 +128,7 @@
                         <span class="text-xs text-gray-500 w-12">付款人</span>
                         <select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border-0 ring-1 ring-gray-200 text-gray-900">
                             <option disabled value="">請選擇付款人</option>
-                            <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員' + (index+1) }}</option>
+                            <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
                         </select>
                     </div>
                     <div class="mb-4">
@@ -147,7 +136,7 @@
                         <div class="flex flex-wrap gap-2">
                             <label v-for="(p, index) in people" :key="p.id" class="checkbox-wrapper cursor-pointer relative">
                                 <input type="checkbox" :value="p.name" v-model="newExpense.involved" class="absolute opacity-0 w-0 h-0">
-                                <div class="px-3 py-1 rounded-full border border-gray-200 text-sm bg-white transition select-none text-gray-900">{{ p.name || '成員' + (index+1) }}</div>
+                                <div class="px-3 py-1 rounded-full border border-gray-200 text-sm bg-white transition select-none text-gray-900">{{ p.name || '成員 ' + (index+1) }}</div>
                             </label>
                         </div>
                     </div>
@@ -171,12 +160,7 @@
                 <button @click="exitTrip" class="w-full bg-gray-800 text-white py-3 rounded-lg font-bold mb-6">🔙 切換旅程 (回到大廳)</button>
                 <h3 class="font-bold text-gray-700">👥 成員管理</h3>
                 <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1 bg-gray-100 p-2 rounded text-gray-900"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded">新增</button></div>
-                <div class="space-y-2 mb-10">
-                    <div v-for="(p, idx) in people" :key="p.id" class="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100">
-                        <span class="font-medium text-gray-900">{{ p.name || '成員 ' + (idx + 1) + ' (資料不全)' }}</span>
-                        <button @click="removePerson(idx)" class="text-red-400 font-bold">移除</button>
-                    </div>
-                </div>
+                <div class="space-y-2 mb-10"><div v-for="(p, idx) in people" :key="p.id" class="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100"><span class="font-medium text-gray-900">{{ p.name || '成員 ' + (idx + 1) }}</span><button @click="removePerson(idx)" class="text-red-400 font-bold">移除</button></div></div>
                 <div class="border-t pt-4 mt-4 text-center">
                     <button @click="resetTrip" class="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-lg font-bold">🗑️ 刪除此旅程資料</button>
                     <button @click="deleteTripTotally" class="w-full mt-2 text-gray-400 text-xs py-2">❌ 移除此旅程卡片</button>
@@ -197,7 +181,11 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
+            // ★★★ 1. 您的 GAS 網址 (已自動填入) ★★★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
+            
+            // ★★★ 2. 您的 Google Maps API Key (請在這裡貼上) ★★★
+            const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
             // State
             const currentView = ref('lobby'); 
@@ -205,11 +193,8 @@
             const trips = ref([]);
             const newTripName = ref('');
             const newTripCity = ref('');
-            
             const currentTab = ref('itinerary');
             const isLoading = ref(false);
-            const isMapLoading = ref(false);
-            const isAutoFixing = ref(false);
             const currentDay = ref(1);
             const totalDays = ref(1);
             
@@ -223,121 +208,226 @@
             const newExpense = ref({ title: '', amount: '', payer: '', involved: [] });
             
             const searchResults = ref([]);
-            const isSearching = ref(false);
-            const isCoordinateMode = ref(false); // ★ 新增：座標模式偵測
-            const selectedLat = ref(null);
-            const selectedLng = ref(null);
-            const mapSearchQuery = ref('');
-            let searchTimeout = null;
-            let mapInstance = null; let markersLayer = null; let exploreLayer = null;
-
-            const dayColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea', '#db2777', '#0891b2'];
-            const getDayColor = (d) => dayColors[(d - 1) % dayColors.length];
-            const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
+            const selectedPlaceData = ref(null);
             
-            const formatInvolved = (list) => {
-                if (!list || list.length === 0) return '全員';
-                return Array.isArray(list) ? list.join(', ') : list;
+            // Google Maps Variables
+            let googleMap = null;
+            let autocompleteService = null;
+            let markers = [];
+            let infoWindow = null;
+
+            const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
+            const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
+
+            // --- Google Maps Loader ---
+            const loadGoogleMaps = () => {
+                if (window.google && window.google.maps) return Promise.resolve();
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
+                    script.async = true;
+                    script.defer = true;
+                    script.onload = () => {
+                        autocompleteService = new google.maps.places.AutocompleteService();
+                        resolve();
+                    };
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
             };
 
-            const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) { console.error(e); } finally { isLoading.value = false; } };
-            const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
-            const selectTrip = (trip) => { currentTrip.value = trip; currentView.value = 'app'; itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; fetchData(); };
-            const deleteTripTotally = async () => { if(!confirm('確定移除這個旅程卡片？')) return; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) }); exitTrip(); fetchTrips(); };
-            const exitTrip = () => { currentView.value = 'lobby'; currentTrip.value = null; fetchTrips(); };
-            onMounted(() => fetchTrips());
+            onMounted(() => {
+                fetchTrips();
+                loadGoogleMaps();
+            });
 
-            const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) { console.error(e); } finally { isLoading.value = false; } };
-            const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
-            
-            // ★★★ v25.0 混合搜尋與座標貼上 ★★★
-            const searchPlacesInput = () => { 
-                const q = newPlace.value.trim(); 
-                const city = currentTrip.value.city; 
+            // --- Search Logic (Google Places) ---
+            const searchPlacesInput = () => {
+                if (!newPlace.value || !autocompleteService) { searchResults.value = []; return; }
+                const request = {
+                    input: newPlace.value,
+                    // 如果有鎖定城市，可以透過 bias 稍微引導
+                };
                 
-                // 1. 檢查是否為座標 (例如: 35.123, 139.123)
-                const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
-                if (coordRegex.test(q)) {
-                    isCoordinateMode.value = true;
-                    const parts = q.split(',');
-                    selectedLat.value = parseFloat(parts[0]);
-                    selectedLng.value = parseFloat(parts[1]);
-                    return; // 進入座標模式，不搜尋
-                } else {
-                    isCoordinateMode.value = false;
-                    selectedLat.value = null; // 重置
+                autocompleteService.getPlacePredictions(request, (predictions, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                        searchResults.value = predictions;
+                    } else {
+                        searchResults.value = [];
+                    }
+                });
+            };
+
+            const selectPlace = (item) => {
+                newPlace.value = item.structured_formatting.main_text;
+                selectedPlaceData.value = item;
+                searchResults.value = [];
+            };
+
+            // --- Core Logic ---
+            const addPlace = async () => {
+                if(!newPlace.value.trim()) return;
+                const id = generateId();
+                const d = currentDay.value;
+                const placeName = newPlace.value;
+                
+                let lat = null;
+                let lng = null;
+                let placeId = null;
+
+                // 如果是透過選單選的，使用 Places Service 獲取詳細座標
+                if (selectedPlaceData.value && window.google) {
+                    placeId = selectedPlaceData.value.place_id;
+                    const dummyMap = new google.maps.Map(document.createElement('div'));
+                    const service = new google.maps.places.PlacesService(dummyMap);
+                    
+                    try {
+                        await new Promise((resolve) => {
+                            service.getDetails({ placeId: placeId }, (place, status) => {
+                                if (status === google.maps.places.PlacesServiceStatus.OK) {
+                                    lat = place.geometry.location.lat();
+                                    lng = place.geometry.location.lng();
+                                }
+                                resolve();
+                            });
+                        });
+                    } catch (e) { console.error("Google Detail Error", e); }
                 }
 
-                // 2. 一般文字搜尋
-                if(q.length < 1) { searchResults.value = []; isSearching.value = false; return; } 
-                isSearching.value = true; 
+                const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '' };
+                itinerary.value.push(item);
                 
-                if(searchTimeout) clearTimeout(searchTimeout); 
-                searchTimeout = setTimeout(async () => { 
-                    try { 
-                        const query = city ? `${q}, ${city}` : q; 
-                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&accept-language=zh-TW`); 
-                        searchResults.value = await res.json(); 
-                    } catch(e){} finally {
-                        isSearching.value = false;
-                    }
-                }, 500); 
-            };
-            
-            const useCoordinateInput = () => {
-                // 直接使用輸入框內的座標
-                addPlace();
-            };
-
-            const selectPlace = (item) => { newPlace.value = item.display_name.split(',')[0]; selectedLat.value = item.lat; selectedLng.value = item.lon; searchResults.value = []; };
-            
-            // ★★★ 自動加入文字到行程，再開 Google ★★★
-            const searchInGoogleMaps = async () => { 
-                const name = newPlace.value;
-                if (!name) return;
+                newPlace.value = ''; newNote.value = ''; selectedPlaceData.value = null; searchResults.value = [];
                 
-                // 1. 先把文字加進去 (沒座標)
-                const id = generateId(); 
-                const d = currentDay.value; 
-                const item = { id, name: name, day: d, lat: null, lng: null, message: newNote.value || '' }; 
-                itinerary.value.push(item); 
-                newPlace.value = ''; newNote.value = ''; searchResults.value = [];
                 await sendToApi('add', 'itinerary', item);
-                
-                // 2. 再開 Google Maps
-                const query = name + (currentTrip.value.city ? ' ' + currentTrip.value.city : '');
-                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank'); 
             };
 
-            const switchTab = (tab) => { currentTab.value = tab; if(tab === 'map') { if(currentTrip.value.city && !mapSearchQuery.value) mapSearchQuery.value = currentTrip.value.city; nextTick(() => initMap()); } };
-            const initMap = () => { if(mapInstance) { mapInstance.invalidateSize(); showMyItineraryOnMap(); return; } mapInstance = L.map('map').setView([23.6, 121], 7); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(mapInstance); markersLayer = L.layerGroup().addTo(mapInstance); exploreLayer = L.layerGroup().addTo(mapInstance); mapInstance.on('click', async (e) => { const { lat, lng } = e.latlng; const temp = L.marker([lat, lng]).addTo(mapInstance).bindPopup('查詢中...').openPopup(); try { const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=zh-TW`); const data = await res.json(); const name = data.display_name ? data.display_name.split(',')[0] : '地點'; temp.setPopupContent(`<div style="text-align:center"><b>${name}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>`); } catch(e) { temp.setPopupContent('未知'); } }); document.addEventListener('add-map', (e) => addPlaceFromMap(e.detail)); showMyItineraryOnMap(); if(currentTrip.value.city) { mapSearchQuery.value = currentTrip.value.city; searchCityAndJump(); } };
-            const searchCityAndJump = async () => { if(!mapSearchQuery.value) return; isMapLoading.value = true; try { const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}&accept-language=zh-TW`); const data = await res.json(); if(data.length) mapInstance.setView([data[0].lat, data[0].lon], 13); } catch(e){} finally { isMapLoading.value = false; } };
-            const exploreNearby = async () => { if(!mapInstance) return; isMapLoading.value = true; exploreLayer.clearLayers(); const b = mapInstance.getBounds(); const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`; try { const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=tourism&viewbox=${viewbox}&bounded=1&limit=20&accept-language=zh-TW`); const data = await res.json(); data.forEach(i => L.circleMarker([i.lat, i.lon], {color:'#9333ea',fillColor:'#9333ea',fillOpacity:0.6,radius:6}).addTo(exploreLayer).bindPopup(`<div style="text-align:center"><b>${i.display_name.split(',')[0]}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${i.display_name.split(',')[0]}', lat: ${i.lat}, lng: ${i.lon}}}))">➕ 加入</button></div>`)); } catch(e){} finally { isMapLoading.value = false; } };
-            const showMyItineraryOnMap = async () => { if(!mapInstance) return; markersLayer.clearLayers(); exploreLayer.clearLayers(); const bounds = L.latLngBounds(); let hasPoint = false; const itemsToFix = itinerary.value.filter(i => (!i.lat || !i.lng) && i.name); if (itemsToFix.length > 0) { isAutoFixing.value = true; for (const item of itemsToFix) { try { const query = currentTrip.value.city ? `${item.name}, ${currentTrip.value.city}` : item.name; const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&accept-language=zh-TW`); const data = await res.json(); if (data.length > 0) { item.lat = data[0].lat; item.lng = data[0].lon; } await new Promise(r => setTimeout(r, 600)); } catch(e) {} } isAutoFixing.value = false; } itinerary.value.forEach(item => { if(item.lat && item.lng) { const d = item.day ? parseInt(item.day) : 1; L.circleMarker([item.lat, item.lng], {color: getDayColor(d), fillColor: getDayColor(d), fillOpacity:0.9, radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`); bounds.extend([item.lat, item.lng]); hasPoint = true; } }); if(hasPoint) mapInstance.fitBounds(bounds, { padding: [50,50] }); };
-            const forceRefreshMap = () => showMyItineraryOnMap();
-            const addPlaceFromMap = async ({ name, lat, lng }) => { const id = generateId(); const d = currentDay.value; const item={id, name, day:d, lat, lng, message:''}; itinerary.value.push(item); await sendToApi('add', 'itinerary', item); alert(`已加入 Day ${d}`); L.circleMarker([lat, lng], {color:getDayColor(d),fillColor:getDayColor(d),fillOpacity:0.9,radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${name}</b>`); };
+            // --- Map Tab Logic ---
+            const switchTab = (tab) => {
+                currentTab.value = tab;
+                if(tab === 'map') {
+                    nextTick(() => initGoogleMap());
+                }
+            };
+
+            const initGoogleMap = () => {
+                if (!window.google) return;
+                const mapEl = document.getElementById('map');
+                if (!mapEl) return;
+
+                if (!googleMap) {
+                    googleMap = new google.maps.Map(mapEl, {
+                        center: { lat: 23.6, lng: 121 },
+                        zoom: 8,
+                        streetViewControl: false,
+                        mapTypeControl: false,
+                        fullscreenControl: false
+                    });
+                    infoWindow = new google.maps.InfoWindow();
+                }
+                
+                updateMapMarkers();
+            };
+
+            const updateMapMarkers = () => {
+                if (!googleMap) return;
+                
+                markers.forEach(m => m.setMap(null));
+                markers = [];
+                
+                const bounds = new google.maps.LatLngBounds();
+                let hasPoint = false;
+
+                const validPoints = itinerary.value.filter(i => i.lat && i.lng);
+
+                validPoints.forEach(item => {
+                    const d = item.day ? parseInt(item.day) : 1;
+                    const marker = new google.maps.Marker({
+                        position: { lat: Number(item.lat), lng: Number(item.lng) },
+                        map: googleMap,
+                        label: { text: d.toString(), color: "white" },
+                        title: item.name
+                    });
+
+                    marker.addListener("click", () => {
+                        const content = `
+                            <div style="padding:5px; color:black">
+                                <b>Day ${d}: ${item.name}</b><br>
+                                <span style="font-size:12px; color:#555">${item.message || '無備註'}</span><br>
+                                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id||''}" target="_blank" style="color:blue; font-size:12px;">在 Google Maps 查看</a>
+                            </div>
+                        `;
+                        infoWindow.setContent(content);
+                        infoWindow.open(googleMap, marker);
+                    });
+
+                    markers.push(marker);
+                    bounds.extend(marker.getPosition());
+                    hasPoint = true;
+                });
+
+                if (hasPoint) {
+                    googleMap.fitBounds(bounds);
+                } else if (currentTrip.value && currentTrip.value.city) {
+                    const geocoder = new google.maps.Geocoder();
+                    geocoder.geocode({ address: currentTrip.value.city }, (results, status) => {
+                        if (status === 'OK' && results[0]) {
+                            googleMap.setCenter(results[0].geometry.location);
+                            googleMap.setZoom(12);
+                        }
+                    });
+                }
+            };
+
+            const fitBoundsToTrip = () => updateMapMarkers();
+
+            // --- Other Logic ---
+            const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) {} finally { isLoading.value = false; } };
+            const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
+            const selectTrip = (trip) => { currentTrip.value = trip; currentView.value = 'app'; itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; fetchData(); };
+            const deleteTripTotally = async () => { if(!confirm('確定移除？')) return; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) }); exitTrip(); fetchTrips(); };
+            const exitTrip = () => { currentView.value = 'lobby'; currentTrip.value = null; fetchTrips(); };
             
-            const addPlace = async () => { if(!newPlace.value.trim()) return; const id=generateId(); const d={id, name:newPlace.value, day:currentDay.value, lat:selectedLat.value, lng:selectedLng.value, message:newNote.value}; itinerary.value.push(d); newPlace.value=''; newNote.value=''; selectedLat.value=null; selectedLng.value=null; searchResults.value=[]; await sendToApi('add', 'itinerary', d); };
-            const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
+            const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) {} finally { isLoading.value = false; } };
+            const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
+            const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); updateMapMarkers(); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
-            const openGoogleMap = (p) => { const query = p.name + (currentTrip.value.city ? ' ' + currentTrip.value.city : ''); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank'); };
+            // 開啟 Google Maps 導航
+            const openGoogleMap = (p) => {
+                if (p.place_id) {
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank');
+                } else if (p.lat && p.lng) {
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank');
+                } else {
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + currentTrip.value.city)}`, '_blank');
+                }
+            };
             const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name) }; };
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
-            const addPerson = async () => { const name = newPerson.value.trim(); if (!name) return; const uid = generateId(); people.value.push({ id: uid, name: name }); newExpense.value.involved.push(name); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: name }); };
+            
+            // ★★★ v21.0 修復後的 addPerson ★★★
+            const addPerson = async () => {
+                const name = newPerson.value.trim();
+                if (!name) return;
+                const uid = generateId();
+                people.value.push({ id: uid, name: name });
+                newExpense.value.involved.push(name);
+                newPerson.value = ''; // 先清空
+                await sendToApi('add', 'people', { id: uid, name: name }); // 再送出正確的 name
+            };
+
             const removePerson = async (idx) => { const item = people.value[idx]; if (!item.id || !confirm('移除？')) return; people.value.splice(idx, 1); await sendToApi('del', 'people', item.id); };
-            const resetTrip = async () => { if(!confirm(`警告：確定要清空「${currentTrip.value.name}」的所有資料嗎？`)) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空'); };
+            const resetTrip = async () => { if(!confirm('警告：確定要清空嗎？')) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空'); };
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
 
             return {
                 currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
-                currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
+                currentTab, switchTab, isLoading, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary: computed(()=>itinerary.value.filter(i=>(i.day?parseInt(i.day):1)===currentDay.value)),
                 newPlace, newNote, newPerson, newExpense, 
-                mapSearchQuery, searchResults, isSearching, isCoordinateMode, // ★ v25.0
-                searchCityAndJump, exploreNearby, showMyItineraryOnMap, forceRefreshMap,
-                searchPlacesInput, selectPlace, searchInGoogleMaps, useCoordinateInput, // ★ v25.0
-                addPlace, removePlace, openGoogleMap,
+                searchResults, searchPlacesInput, selectPlace,
+                addPlace, removePlace, openGoogleMap, fitBoundsToTrip,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved
             };
