@@ -24,9 +24,9 @@
         .popup-btn { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; width: 100%; margin-top: 5px; }
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #f3f4f6; }
-        
-        /* 讓 Checkbox 更好看 */
-        .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #2563eb; border-color: #2563eb; }
+        /* 優化 Checkbox 樣式，確保文字可見 */
+        .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #1e40af; border-color: #2563eb; font-weight: bold; }
+        .checkbox-wrapper div { color: #374151; font-weight: 500; } 
     </style>
 </head>
 <body>
@@ -36,18 +36,12 @@
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程開始規劃</p>
-        
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
-                <div>
-                    <div class="font-bold text-xl text-gray-800">{{ trip.name }}</div>
-                    <div class="text-sm text-gray-500">📍 {{ trip.city }}</div>
-                </div>
-                <div class="text-2xl text-gray-300">➜</div>
+                <div><div class="font-bold text-xl text-gray-800">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
             <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">還沒有旅程，按下方新增</div>
         </div>
-
         <div class="card p-4 border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
             <input v-model="newTripName" placeholder="旅程名稱 (如: 東京賞櫻)" class="w-full bg-gray-100 p-3 rounded-lg mb-2 outline-none">
@@ -58,10 +52,7 @@
 
     <div v-else class="flex flex-col h-full">
         <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
-            <div>
-                <h1 class="text-lg font-bold tracking-wide">出發囉：{{ currentTrip.name }}</h1>
-                <div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div>
-            </div>
+            <div><h1 class="text-lg font-bold tracking-wide">出發囉：{{ currentTrip.name }}</h1><div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div></div>
             <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
         </header>
 
@@ -120,8 +111,9 @@
 
                     <div class="mb-3 flex gap-2 items-center">
                         <span class="text-xs text-gray-500 w-12">付款人</span>
-                        <select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border-0 ring-1 ring-gray-200">
-                            <option v-for="p in people" :value="p.name">{{ p.name }}</option>
+                        <select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border-0 ring-1 ring-gray-200 text-gray-800">
+                            <option disabled value="">請選擇付款人</option>
+                            <option v-for="p in people" :value="p.name">{{ p.name || '未命名' }}</option>
                         </select>
                     </div>
 
@@ -130,8 +122,8 @@
                         <div class="flex flex-wrap gap-2">
                             <label v-for="p in people" :key="p.id" class="checkbox-wrapper cursor-pointer relative">
                                 <input type="checkbox" :value="p.name" v-model="newExpense.involved" class="absolute opacity-0 w-0 h-0">
-                                <div class="px-3 py-1 rounded-full border border-gray-200 text-sm text-gray-500 bg-white transition select-none">
-                                    {{ p.name }}
+                                <div class="px-3 py-1 rounded-full border border-gray-200 text-sm bg-white transition select-none">
+                                    {{ p.name || '未命名' }}
                                 </div>
                             </label>
                         </div>
@@ -141,9 +133,24 @@
                 </div>
 
                 <div class="space-y-2">
-                    <div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between">
-                        <div><div class="font-bold">{{exp.title}}</div><div class="text-xs text-gray-500">{{exp.payer}} 付款</div></div>
-                        <div class="flex items-center gap-2"><span class="font-bold">${{exp.amount}}</span><button @click="removeExpense(idx)" class="text-red-300">×</button></div>
+                    <div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="font-bold text-gray-800 text-lg">{{ exp.title }}</div>
+                            <div class="text-xs mt-1 space-y-1">
+                                <div class="flex items-center gap-1">
+                                    <span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">先付</span>
+                                    <span class="text-gray-700 font-medium">{{ exp.payer }}</span>
+                                </div>
+                                <div class="flex items-center gap-1 flex-wrap">
+                                    <span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">分攤</span>
+                                    <span class="text-gray-500">{{ formatInvolved(exp.involved) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <span class="font-bold text-xl text-gray-800">${{ exp.amount }}</span>
+                            <button @click="removeExpense(idx)" class="text-gray-300 hover:text-red-500 px-2 text-xl">×</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -154,7 +161,6 @@
                 <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1 bg-gray-100 p-2 rounded"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded">新增</button></div>
                 <div class="space-y-2 mb-10"><div v-for="(p, idx) in people" :key="p.id" class="flex justify-between p-3 bg-gray-50 rounded border border-gray-100"><span>{{ p.name }}</span><button @click="removePerson(idx)" class="text-red-400">移除</button></div></div>
                 <div class="border-t pt-4 mt-4 text-center">
-                     <p class="text-xs text-gray-400 mb-2">這會刪除目前「{{ currentTrip.name }}」的所有資料</p>
                     <button @click="resetTrip" class="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-lg font-bold">🗑️ 刪除此旅程資料</button>
                     <button @click="deleteTripTotally" class="w-full mt-2 text-gray-400 text-xs py-2">❌ 移除此旅程卡片</button>
                 </div>
@@ -174,17 +180,15 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
-            // 4. 更新 API URL
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
 
-            // View State
-            const currentView = ref('lobby'); // lobby | app
+            // State
+            const currentView = ref('lobby'); 
             const currentTrip = ref(null);
             const trips = ref([]);
             const newTripName = ref('');
             const newTripCity = ref('');
-
-            // App State
+            
             const currentTab = ref('itinerary');
             const isLoading = ref(false);
             const isMapLoading = ref(false);
@@ -196,13 +200,11 @@
             const itinerary = ref([]);
             const expenses = ref([]);
 
-            // Forms
             const newPlace = ref('');
             const newNote = ref('');
             const newPerson = ref('');
             const newExpense = ref({ title: '', amount: '', payer: '', involved: [] });
             
-            // Search & Map
             const searchResults = ref([]);
             const selectedLat = ref(null);
             const selectedLng = ref(null);
@@ -213,179 +215,31 @@
             const dayColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea', '#db2777', '#0891b2'];
             const getDayColor = (d) => dayColors[(d - 1) % dayColors.length];
             const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
-
-            // --- Lobby Logic ---
-            const fetchTrips = async () => {
-                isLoading.value = true;
-                try {
-                    const res = await fetch(`${API_URL}?type=trips`);
-                    trips.value = await res.json();
-                } catch(e) { console.error(e); } finally { isLoading.value = false; }
-            };
-
-            const createTrip = async () => {
-                if(!newTripName.value) return;
-                const id = generateId();
-                const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' };
-                trips.value.push(newTrip);
-                newTripName.value = ''; newTripCity.value = '';
-                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) });
-            };
-
-            const selectTrip = (trip) => {
-                currentTrip.value = trip;
-                currentView.value = 'app';
-                // Reset states
-                itinerary.value = []; expenses.value = []; people.value = [];
-                currentDay.value = 1; totalDays.value = 1;
-                fetchData(); // Fetch data for THIS trip
-            };
             
-            const deleteTripTotally = async () => {
-                 if(!confirm('確定移除這個旅程卡片？(資料庫資料不會刪除，僅移除列表)')) return;
-                 await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) });
-                 exitTrip();
-                 fetchTrips();
+            // Format Involved helper
+            const formatInvolved = (list) => {
+                if (!list || list.length === 0) return '全員';
+                return Array.isArray(list) ? list.join(', ') : list;
             };
 
-            const exitTrip = () => {
-                currentView.value = 'lobby';
-                currentTrip.value = null;
-                fetchTrips(); // Refresh list
-            };
-
+            const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) { console.error(e); } finally { isLoading.value = false; } };
+            const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
+            const selectTrip = (trip) => { currentTrip.value = trip; currentView.value = 'app'; itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; fetchData(); };
+            const deleteTripTotally = async () => { if(!confirm('確定移除這個旅程卡片？')) return; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) }); exitTrip(); fetchTrips(); };
+            const exitTrip = () => { currentView.value = 'lobby'; currentTrip.value = null; fetchTrips(); };
             onMounted(() => fetchTrips());
 
-            // --- App Logic ---
-            const fetchData = async () => {
-                if(!currentTrip.value) return;
-                isLoading.value = true;
-                const tripId = currentTrip.value.id;
-                try {
-                    const [resItin, resExp, resPpl] = await Promise.all([
-                        fetch(`${API_URL}?type=itinerary&tripId=${tripId}`),
-                        fetch(`${API_URL}?type=expenses&tripId=${tripId}`),
-                        fetch(`${API_URL}?type=people&tripId=${tripId}`)
-                    ]);
-                    const itinData = await resItin.json();
-                    itinerary.value = itinData;
-                    if(itinData.length > 0) {
-                        const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1);
-                        if(max > totalDays.value) totalDays.value = max;
-                    }
-                    expenses.value = await resExp.json();
-                    const ppl = await resPpl.json();
-                    people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
-                    
-                    // Init Expense Form
-                    if(people.value.length) {
-                        newExpense.value.payer = people.value[0].name;
-                        newExpense.value.involved = people.value.map(p=>p.name);
-                    }
-                } catch(e) { console.error(e); } finally { isLoading.value = false; }
-            };
-
-            const sendToApi = async (action, type, data) => {
-                const body = { action, type };
-                if (action === 'add') {
-                    data.trip_id = currentTrip.value.id; 
-                    body.data = data;
-                } else {
-                    body.id = data; 
-                }
-                await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
-            };
-
-            // --- Features ---
-            const searchPlacesInput = () => {
-                const q = newPlace.value.trim();
-                const city = currentTrip.value.city; 
-                if(q.length < 2) { searchResults.value = []; return; }
-                if(searchTimeout) clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(async () => {
-                    try {
-                        const query = city ? `${q}, ${city}` : q;
-                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
-                        searchResults.value = await res.json();
-                    } catch(e){}
-                }, 500);
-            };
+            const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) { console.error(e); } finally { isLoading.value = false; } };
+            const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
+            const searchPlacesInput = () => { const q = newPlace.value.trim(); const city = currentTrip.value.city; if(q.length < 2) { searchResults.value = []; return; } if(searchTimeout) clearTimeout(searchTimeout); searchTimeout = setTimeout(async () => { try { const query = city ? `${q}, ${city}` : q; const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`); searchResults.value = await res.json(); } catch(e){} }, 500); };
             const selectPlace = (item) => { newPlace.value = item.display_name.split(',')[0]; selectedLat.value = item.lat; selectedLng.value = item.lon; searchResults.value = []; };
-
-            // Map
-            const switchTab = (tab) => {
-                currentTab.value = tab;
-                if(tab === 'map') {
-                    if(currentTrip.value.city && !mapSearchQuery.value) mapSearchQuery.value = currentTrip.value.city;
-                    nextTick(() => initMap());
-                }
-            };
-            const initMap = () => {
-                if(mapInstance) { mapInstance.invalidateSize(); showMyItineraryOnMap(); return; }
-                mapInstance = L.map('map').setView([23.6, 121], 7);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(mapInstance);
-                markersLayer = L.layerGroup().addTo(mapInstance); exploreLayer = L.layerGroup().addTo(mapInstance);
-                mapInstance.on('click', async (e) => {
-                    const { lat, lng } = e.latlng;
-                    const temp = L.marker([lat, lng]).addTo(mapInstance).bindPopup('查詢中...').openPopup();
-                    try {
-                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-                        const data = await res.json();
-                        const name = data.display_name ? data.display_name.split(',')[0] : '地點';
-                        temp.setPopupContent(`<div style="text-align:center"><b>${name}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>`);
-                    } catch(e) { temp.setPopupContent('未知'); }
-                });
-                document.addEventListener('add-map', (e) => addPlaceFromMap(e.detail));
-                showMyItineraryOnMap();
-                if(currentTrip.value.city) { mapSearchQuery.value = currentTrip.value.city; searchCityAndJump(); }
-            };
-            const searchCityAndJump = async () => {
-                if(!mapSearchQuery.value) return;
-                isMapLoading.value = true;
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}`);
-                    const data = await res.json();
-                    if(data.length) mapInstance.setView([data[0].lat, data[0].lon], 13);
-                } catch(e){} finally { isMapLoading.value = false; }
-            };
-            const exploreNearby = async () => {
-                if(!mapInstance) return; isMapLoading.value = true; exploreLayer.clearLayers();
-                const b = mapInstance.getBounds(); const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=tourism&viewbox=${viewbox}&bounded=1&limit=20`);
-                    const data = await res.json();
-                    data.forEach(i => L.circleMarker([i.lat, i.lon], {color:'#9333ea',fillColor:'#9333ea',fillOpacity:0.6,radius:6}).addTo(exploreLayer).bindPopup(`<div style="text-align:center"><b>${i.display_name.split(',')[0]}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${i.display_name.split(',')[0]}', lat: ${i.lat}, lng: ${i.lon}}}))">➕ 加入</button></div>`));
-                } catch(e){} finally { isMapLoading.value = false; }
-            };
-            const showMyItineraryOnMap = async () => {
-                if(!mapInstance) return; markersLayer.clearLayers(); exploreLayer.clearLayers();
-                const bounds = L.latLngBounds(); let hasPoint = false;
-                const itemsToFix = itinerary.value.filter(i => (!i.lat || !i.lng) && i.name);
-                if (itemsToFix.length > 0) {
-                    isAutoFixing.value = true;
-                    for (const item of itemsToFix) {
-                        try {
-                            const query = currentTrip.value.city ? `${item.name}, ${currentTrip.value.city}` : item.name;
-                            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-                            const data = await res.json();
-                            if (data.length > 0) { item.lat = data[0].lat; item.lng = data[0].lon; }
-                            await new Promise(r => setTimeout(r, 600));
-                        } catch(e) {}
-                    }
-                    isAutoFixing.value = false;
-                }
-                itinerary.value.forEach(item => {
-                    if(item.lat && item.lng) {
-                        const d = item.day ? parseInt(item.day) : 1;
-                        L.circleMarker([item.lat, item.lng], {color: getDayColor(d), fillColor: getDayColor(d), fillOpacity:0.9, radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`);
-                        bounds.extend([item.lat, item.lng]); hasPoint = true;
-                    }
-                });
-                if(hasPoint) mapInstance.fitBounds(bounds, { padding: [50,50] });
-            };
+            const switchTab = (tab) => { currentTab.value = tab; if(tab === 'map') { if(currentTrip.value.city && !mapSearchQuery.value) mapSearchQuery.value = currentTrip.value.city; nextTick(() => initMap()); } };
+            const initMap = () => { if(mapInstance) { mapInstance.invalidateSize(); showMyItineraryOnMap(); return; } mapInstance = L.map('map').setView([23.6, 121], 7); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(mapInstance); markersLayer = L.layerGroup().addTo(mapInstance); exploreLayer = L.layerGroup().addTo(mapInstance); mapInstance.on('click', async (e) => { const { lat, lng } = e.latlng; const temp = L.marker([lat, lng]).addTo(mapInstance).bindPopup('查詢中...').openPopup(); try { const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`); const data = await res.json(); const name = data.display_name ? data.display_name.split(',')[0] : '地點'; temp.setPopupContent(`<div style="text-align:center"><b>${name}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>`); } catch(e) { temp.setPopupContent('未知'); } }); document.addEventListener('add-map', (e) => addPlaceFromMap(e.detail)); showMyItineraryOnMap(); if(currentTrip.value.city) { mapSearchQuery.value = currentTrip.value.city; searchCityAndJump(); } };
+            const searchCityAndJump = async () => { if(!mapSearchQuery.value) return; isMapLoading.value = true; try { const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}`); const data = await res.json(); if(data.length) mapInstance.setView([data[0].lat, data[0].lon], 13); } catch(e){} finally { isMapLoading.value = false; } };
+            const exploreNearby = async () => { if(!mapInstance) return; isMapLoading.value = true; exploreLayer.clearLayers(); const b = mapInstance.getBounds(); const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`; try { const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=tourism&viewbox=${viewbox}&bounded=1&limit=20`); const data = await res.json(); data.forEach(i => L.circleMarker([i.lat, i.lon], {color:'#9333ea',fillColor:'#9333ea',fillOpacity:0.6,radius:6}).addTo(exploreLayer).bindPopup(`<div style="text-align:center"><b>${i.display_name.split(',')[0]}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${i.display_name.split(',')[0]}', lat: ${i.lat}, lng: ${i.lon}}}))">➕ 加入</button></div>`)); } catch(e){} finally { isMapLoading.value = false; } };
+            const showMyItineraryOnMap = async () => { if(!mapInstance) return; markersLayer.clearLayers(); exploreLayer.clearLayers(); const bounds = L.latLngBounds(); let hasPoint = false; const itemsToFix = itinerary.value.filter(i => (!i.lat || !i.lng) && i.name); if (itemsToFix.length > 0) { isAutoFixing.value = true; for (const item of itemsToFix) { try { const query = currentTrip.value.city ? `${item.name}, ${currentTrip.value.city}` : item.name; const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`); const data = await res.json(); if (data.length > 0) { item.lat = data[0].lat; item.lng = data[0].lon; } await new Promise(r => setTimeout(r, 600)); } catch(e) {} } isAutoFixing.value = false; } itinerary.value.forEach(item => { if(item.lat && item.lng) { const d = item.day ? parseInt(item.day) : 1; L.circleMarker([item.lat, item.lng], {color: getDayColor(d), fillColor: getDayColor(d), fillOpacity:0.9, radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`); bounds.extend([item.lat, item.lng]); hasPoint = true; } }); if(hasPoint) mapInstance.fitBounds(bounds, { padding: [50,50] }); };
             const forceRefreshMap = () => showMyItineraryOnMap();
             const addPlaceFromMap = async ({ name, lat, lng }) => { const id = generateId(); const d = currentDay.value; const item={id, name, day:d, lat, lng, message:''}; itinerary.value.push(item); await sendToApi('add', 'itinerary', item); alert(`已加入 Day ${d}`); L.circleMarker([lat, lng], {color:getDayColor(d),fillColor:getDayColor(d),fillOpacity:0.9,radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${name}</b>`); };
-            
             const addPlace = async () => { if(!newPlace.value.trim()) return; const id=generateId(); const d={id, name:newPlace.value, day:currentDay.value, lat:selectedLat.value, lng:selectedLng.value, message:newNote.value}; itinerary.value.push(d); newPlace.value=''; newNote.value=''; selectedLat.value=null; await sendToApi('add', 'itinerary', d); };
             const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
@@ -394,13 +248,7 @@
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             const addPerson = async () => { if (!newPerson.value.trim()) return; const uid = generateId(); people.value.push({ id: uid, name: newPerson.value }); newExpense.value.involved.push(newPerson.value); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: newPerson.value }); };
             const removePerson = async (idx) => { const item = people.value[idx]; if (!item.id || !confirm('移除？')) return; people.value.splice(idx, 1); await sendToApi('del', 'people', item.id); };
-            
-            const resetTrip = async () => {
-                if(!confirm(`警告：確定要清空「${currentTrip.value.name}」的所有行程和記帳資料嗎？`)) return;
-                await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})});
-                itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空此旅程資料');
-            };
-
+            const resetTrip = async () => { if(!confirm(`警告：確定要清空「${currentTrip.value.name}」的所有資料嗎？`)) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空'); };
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
 
@@ -412,7 +260,7 @@
                 mapSearchQuery, searchResults, searchCityAndJump, exploreNearby, showMyItineraryOnMap, forceRefreshMap,
                 searchPlacesInput, selectPlace, addPlace, removePlace, openGoogleMap,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
-                totalExpense, balanceSheet, fetchData
+                totalExpense, balanceSheet, fetchData, formatInvolved
             };
         }
     }).mount('#app');
