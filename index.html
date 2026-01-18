@@ -4,202 +4,159 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>雲端旅遊帳本</title>
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="format-detection" content="telephone=no">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background-color: #f0f2f5; 
-            -webkit-user-select: none; user-select: none;
-            padding-bottom: env(safe-area-inset-bottom);
-        }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; user-select: none; padding-bottom: env(safe-area-inset-bottom); }
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .tap-highlight-transparent { -webkit-tap-highlight-color: transparent; }
         input, select, textarea { -webkit-user-select: text; user-select: text; }
-        
-        .day-tab-active { background-color: #2563eb; color: white; border-color: #2563eb; }
-        .day-tab-inactive { background-color: white; color: #6b7280; border-color: #e5e7eb; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
+        .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
+        .day-tab-inactive { background: white; color: #6b7280; border-color: #e5e7eb; }
+        .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
         @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
-
         #map { height: 100%; width: 100%; z-index: 1; }
-        .popup-btn { background-color: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px; width: 100%; }
-        
-        .suggestions-list {
-            position: absolute; top: 100%; left: 0; right: 0;
-            background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 50; max-height: 200px; overflow-y: auto; margin-top: 4px; border: 1px solid #e5e7eb;
-        }
-        .suggestion-item { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; cursor: pointer; }
-        .suggestion-item:active { background-color: #eff6ff; }
+        .popup-btn { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; width: 100%; margin-top: 5px; }
+        .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; }
+        .suggestion-item { padding: 10px; border-bottom: 1px solid #f3f4f6; }
     </style>
 </head>
 <body>
-
 <div id="app" class="max-w-md mx-auto min-h-screen flex flex-col h-screen">
-    
     <div v-if="isLoading" class="loading-bar"></div>
 
-    <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
-        <h1 class="text-xl font-bold tracking-wide">☁️ 雲端旅遊帳本</h1>
-        <div class="flex gap-2">
-            <span class="text-xs bg-blue-800 px-2 py-1 rounded text-blue-200">Day {{ currentDay }}</span>
-            <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
-        </div>
-    </header>
-
-    <main class="flex-1 overflow-hidden flex flex-col relative bg-gray-50">
+    <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">✈️ 您的旅程</h1>
+        <p class="text-gray-500 mb-8">選擇一個旅程開始規劃</p>
         
-        <div v-if="currentTab === 'itinerary'" class="p-4 overflow-y-auto flex-1 space-y-4">
-            
-            <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center">
-                <button v-for="d in totalDays" :key="d" @click="currentDay = d"
-                    class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0"
-                    :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">
-                    Day {{ d }}
-                </button>
-                <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0">+</button>
+        <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
+            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
+                <div>
+                    <div class="font-bold text-xl text-gray-800">{{ trip.name }}</div>
+                    <div class="text-sm text-gray-500">📍 {{ trip.city }}</div>
+                </div>
+                <div class="text-2xl text-gray-300">➜</div>
             </div>
+            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">還沒有旅程，按下方新增</div>
+        </div>
 
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
-                <span class="text-xl">📍</span>
-                <input v-model="targetCity" @change="saveCityPref" type="text" placeholder="設定城市 (如: 台南, 京都)" 
-                       class="flex-1 bg-transparent border-0 outline-none text-blue-900 font-bold placeholder-blue-300">
+        <div class="card p-4 border border-blue-100">
+            <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
+            <input v-model="newTripName" placeholder="旅程名稱 (如: 東京賞櫻)" class="w-full bg-gray-100 p-3 rounded-lg mb-2 outline-none">
+            <input v-model="newTripCity" placeholder="主要城市 (如: 東京)" class="w-full bg-gray-100 p-3 rounded-lg mb-3 outline-none">
+            <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow disabled:opacity-50" :disabled="!newTripName || isLoading">建立新旅程</button>
+        </div>
+    </div>
+
+    <div v-else class="flex flex-col h-full">
+        <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
+            <div>
+                <h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1>
+                <div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div>
             </div>
+            <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
+        </header>
 
-            <div class="card p-4 space-y-2 relative">
-                <div class="flex gap-2 relative">
-                    <input v-model="newPlace" @input="searchPlacesInput" type="text" 
-                           :placeholder="targetCity ? '搜尋 ' + targetCity + ' 的地點...' : '搜尋地點...'" 
-                           class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold">
-                    <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
-                    <div v-if="searchResults.length > 0" class="suggestions-list">
-                        <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item">
-                            <div class="font-bold text-gray-800 text-sm">{{ item.display_name.split(',')[0] }}</div>
-                            <div class="text-xs text-gray-500 truncate">{{ item.display_name }}</div>
+        <main class="flex-1 overflow-hidden flex flex-col relative bg-gray-50">
+            <div v-if="currentTab === 'itinerary'" class="p-4 overflow-y-auto flex-1 space-y-4">
+                <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center">
+                    <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">Day {{ d }}</button>
+                    <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0">+</button>
+                </div>
+                <div class="card p-4 space-y-2 relative">
+                    <div class="flex gap-2 relative">
+                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + ' 地點...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold">
+                        <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
+                        <div v-if="searchResults.length > 0" class="suggestions-list"><div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item"><div class="font-bold text-gray-800 text-sm">{{ item.display_name.split(',')[0] }}</div><div class="text-xs text-gray-500 truncate">{{ item.display_name }}</div></div></div>
+                    </div>
+                    <input v-model="newNote" type="text" placeholder="備註..." class="w-full border-0 bg-gray-50 p-2 rounded-lg outline-none text-sm text-gray-600">
+                </div>
+                <div class="space-y-3 pb-20">
+                    <div v-for="place in filteredItinerary" :key="place.id" class="card p-4 flex justify-between items-start active:scale-[0.99] transition">
+                        <div class="flex-1" @click="openGoogleMap(place)">
+                            <div class="flex items-center gap-2"><span class="font-bold text-gray-800 text-lg">{{ place.name }}</span><span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">📍</span><span v-else class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">未定位</span></div>
+                            <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
                         </div>
+                        <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl" :disabled="isLoading">×</button>
+                    </div>
+                    <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
+                </div>
+            </div>
+
+            <div v-show="currentTab === 'map'" class="absolute inset-0 flex flex-col z-10">
+                <div class="absolute top-4 left-4 right-4 z-[500] flex flex-col gap-2">
+                    <div class="flex shadow-lg rounded-lg overflow-hidden">
+                        <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 p-3 border-0 outline-none h-12">
+                        <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-12">前往</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-lg border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1"><span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 探索附近' }}</button>
+                        <button @click="forceRefreshMap" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-lg border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1"><span v-if="isAutoFixing" class="animate-spin">↻</span>{{ isAutoFixing ? '修復中...' : '📍 顯示行程' }}</button>
                     </div>
                 </div>
-                <input v-model="newNote" type="text" placeholder="備註..." class="w-full border-0 bg-gray-50 p-2 rounded-lg outline-none text-sm text-gray-600">
+                <div id="map" class="flex-1 bg-gray-100"></div>
+                <div v-if="isAutoFixing" class="bg-yellow-100 text-yellow-800 p-2 text-xs text-center absolute bottom-20 left-4 right-4 rounded-lg shadow z-[500]">正在修復無座標地點...</div>
             </div>
 
-            <div class="space-y-3 pb-20">
-                <div v-for="place in filteredItinerary" :key="place.id" class="card p-4 flex justify-between items-start active:scale-[0.99] transition">
-                    <div class="flex-1" @click="openGoogleMap(place)">
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-gray-800 text-lg">{{ place.name }}</span>
-                            <span v-if="place.lat" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">📍</span>
-                            <span v-else class="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">未定位</span>
-                        </div>
-                        <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
-                    </div>
-                    <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl" :disabled="isLoading">×</button>
+            <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
+                <div class="card p-4 bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
+                    <div class="flex justify-between items-end mb-4"><span class="text-gray-300 text-sm">總支出</span><span class="text-2xl font-bold">${{ totalExpense }}</span></div>
+                    <div class="space-y-2 border-t border-gray-600 pt-3"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm"><span>{{ res.name }}</span><span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span></div></div>
                 </div>
-                <div v-if="filteredItinerary.length === 0" class="text-center text-gray-400 mt-10">尚無行程，可去地圖探索</div>
+                <div class="card p-4 border border-blue-100">
+                    <div class="grid grid-cols-3 gap-2 mb-3"><input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200"><input v-model.number="newExpense.amount" type="number" placeholder="$" class="bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200"></div>
+                    <div class="mb-3 flex gap-2"><select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border ring-1 ring-gray-200"><option v-for="p in people" :value="p.name">{{p.name}}</option></select></div>
+                    <button @click="addExpense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">記帳</button>
+                </div>
+                <div class="space-y-2"><div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between"><div><div class="font-bold">{{exp.title}}</div><div class="text-xs text-gray-500">{{exp.payer}} 付款</div></div><div class="flex items-center gap-2"><span class="font-bold">${{exp.amount}}</span><button @click="removeExpense(idx)" class="text-red-300">×</button></div></div></div>
             </div>
-        </div>
 
-        <div v-show="currentTab === 'map'" class="absolute inset-0 flex flex-col z-10">
-            <div class="absolute top-4 left-4 right-4 z-[500] flex flex-col gap-2">
-                <div class="flex shadow-lg rounded-lg overflow-hidden">
-                    <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" 
-                           :placeholder="targetCity ? '跳轉至 ' + targetCity + '...' : '輸入城市...'" 
-                           class="flex-1 p-3 border-0 outline-none h-12">
-                    <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-12">前往</button>
-                </div>
-                <div class="flex gap-2">
-                    <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-lg border border-purple-100 active:scale-95 transition text-sm flex justify-center items-center gap-1">
-                        <span v-if="isMapLoading" class="animate-spin">↻</span>
-                        {{ isMapLoading ? '搜尋中...' : '🔍 搜尋此區域景點' }}
-                    </button>
-                    <button @click="forceRefreshMap" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-lg border border-gray-100 active:scale-95 transition text-sm flex justify-center items-center gap-1">
-                        <span v-if="isAutoFixing" class="animate-spin">↻</span>
-                        {{ isAutoFixing ? '補完座標中...' : '📍 顯示行程' }}
-                    </button>
+            <div v-if="currentTab === 'settings'" class="p-4 space-y-4">
+                <button @click="exitTrip" class="w-full bg-gray-800 text-white py-3 rounded-lg font-bold mb-6">🔙 切換旅程 (回到大廳)</button>
+                <h3 class="font-bold text-gray-700">👥 成員管理</h3>
+                <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1 bg-gray-100 p-2 rounded"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded">新增</button></div>
+                <div class="space-y-2 mb-10"><div v-for="(p, idx) in people" :key="p.id" class="flex justify-between p-3 bg-gray-50 rounded border border-gray-100"><span>{{ p.name }}</span><button @click="removePerson(idx)" class="text-red-400">移除</button></div></div>
+                <div class="border-t pt-4 mt-4 text-center">
+                     <p class="text-xs text-gray-400 mb-2">這會刪除目前「{{ currentTrip.name }}」的所有資料</p>
+                    <button @click="resetTrip" class="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-lg font-bold">🗑️ 刪除此旅程資料</button>
+                    <button @click="deleteTripTotally" class="w-full mt-2 text-gray-400 text-xs py-2">❌ 移除此旅程卡片</button>
                 </div>
             </div>
-            <div id="map" class="flex-1 bg-gray-100"></div>
-            <div v-if="isAutoFixing" class="bg-yellow-100 text-yellow-800 p-2 text-xs text-center absolute bottom-20 left-4 right-4 rounded-lg shadow z-[500]">
-                正在幫沒有座標的地點搜尋位置...請稍候
-            </div>
-        </div>
+        </main>
 
-        <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
-            <div class="card p-4 bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
-                <div class="flex justify-between items-end mb-4">
-                    <span class="text-gray-300 text-sm">總支出</span>
-                    <span class="text-2xl font-bold">${{ totalExpense }}</span>
-                </div>
-                <div class="space-y-2 border-t border-gray-600 pt-3">
-                    <div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm">
-                        <span>{{ res.name }}</span>
-                        <span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="card p-4 border border-blue-100">
-                <div class="grid grid-cols-3 gap-2 mb-3">
-                    <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200">
-                    <input v-model.number="newExpense.amount" type="number" placeholder="$" class="bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200">
-                </div>
-                <div class="mb-3 flex gap-2"><select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border ring-1 ring-gray-200"><option v-for="p in people" :value="p.name">{{p.name}}</option></select></div>
-                <button @click="addExpense" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">記帳</button>
-            </div>
-            <div class="space-y-2">
-                <div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between">
-                    <div><div class="font-bold">{{exp.title}}</div><div class="text-xs text-gray-500">{{exp.payer}} 付款</div></div>
-                    <div class="flex items-center gap-2"><span class="font-bold">${{exp.amount}}</span><button @click="removeExpense(idx)" class="text-red-300">×</button></div>
-                </div>
-            </div>
-        </div>
-
-        <div v-if="currentTab === 'settings'" class="p-4 space-y-4">
-            <h3 class="font-bold text-gray-700">👥 成員管理</h3>
-            <div class="flex gap-2">
-                <input v-model="newPerson" placeholder="名字" class="flex-1 bg-gray-100 p-2 rounded">
-                <button @click="addPerson" class="bg-gray-800 text-white px-4 rounded">新增</button>
-            </div>
-            <div class="space-y-2">
-                <div v-for="(p, idx) in people" :key="p.id" class="flex justify-between p-3 bg-gray-50 rounded border border-gray-100">
-                    <span>{{ p.name }}</span><button @click="removePerson(idx)" class="text-red-400">移除</button>
-                </div>
-            </div>
-            <div class="border-t pt-4 mt-4"><button @click="resetApp" class="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-lg font-bold">🗑️ 重置所有資料</button></div>
-        </div>
-    </main>
-
-    <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0">
-        <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
-        <button @click="switchTab('map')" class="flex flex-col items-center w-full" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">探索</span></button>
-        <button @click="switchTab('money')" class="flex flex-col items-center w-full" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
-        <button @click="switchTab('settings')" class="flex flex-col items-center w-full" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
-    </nav>
+        <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0">
+            <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
+            <button @click="switchTab('map')" class="flex flex-col items-center w-full" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">探索</span></button>
+            <button @click="switchTab('money')" class="flex flex-col items-center w-full" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
+            <button @click="switchTab('settings')" class="flex flex-col items-center w-full" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
+        </nav>
+    </div>
 </div>
 
 <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
-
     createApp({
         setup() {
             // ★★★ 請替換成您的 API 網址 ★★★
-            const API_URL = 'https://script.google.com/macros/s/AKfycbzCY554TEj4JSALyOrGhpiXE97zP2W3jRg8huIIbJBY7gBdwbBv4EMvW70lxqH5NxzE/exec';
+            const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
 
-            // State
+            // View State
+            const currentView = ref('lobby'); // lobby | app
+            const currentTrip = ref(null);
+            const trips = ref([]);
+            const newTripName = ref('');
+            const newTripCity = ref('');
+
+            // App State
             const currentTab = ref('itinerary');
             const isLoading = ref(false);
             const isMapLoading = ref(false);
-            const isAutoFixing = ref(false); // ★ 自動修復狀態
+            const isAutoFixing = ref(false);
             const currentDay = ref(1);
             const totalDays = ref(1);
             
@@ -207,36 +164,76 @@
             const itinerary = ref([]);
             const expenses = ref([]);
 
+            // Forms
             const newPlace = ref('');
             const newNote = ref('');
             const newPerson = ref('');
             const newExpense = ref({ title: '', amount: '', payer: '', involved: [] });
             
-            const targetCity = ref(localStorage.getItem('travel_city') || '');
-            const saveCityPref = () => localStorage.setItem('travel_city', targetCity.value);
-
+            // Search & Map
             const searchResults = ref([]);
             const selectedLat = ref(null);
             const selectedLng = ref(null);
             const mapSearchQuery = ref('');
             let searchTimeout = null;
-            let mapInstance = null;
-            let markersLayer = null;
-            let exploreLayer = null;
+            let mapInstance = null; let markersLayer = null; let exploreLayer = null;
 
             const dayColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea', '#db2777', '#0891b2'];
             const getDayColor = (d) => dayColors[(d - 1) % dayColors.length];
             const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
-            // Fetch
-            const fetchData = async () => {
-                if(!API_URL.includes('google')) return alert('API URL 未設定');
+            // --- Lobby Logic ---
+            const fetchTrips = async () => {
                 isLoading.value = true;
                 try {
+                    const res = await fetch(`${API_URL}?type=trips`);
+                    trips.value = await res.json();
+                } catch(e) { console.error(e); } finally { isLoading.value = false; }
+            };
+
+            const createTrip = async () => {
+                if(!newTripName.value) return;
+                const id = generateId();
+                const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' };
+                trips.value.push(newTrip);
+                newTripName.value = ''; newTripCity.value = '';
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) });
+            };
+
+            const selectTrip = (trip) => {
+                currentTrip.value = trip;
+                currentView.value = 'app';
+                // Reset states
+                itinerary.value = []; expenses.value = []; people.value = [];
+                currentDay.value = 1; totalDays.value = 1;
+                fetchData(); // Fetch data for THIS trip
+            };
+            
+            const deleteTripTotally = async () => {
+                 if(!confirm('確定移除這個旅程卡片？(資料庫資料不會刪除，僅移除列表)')) return;
+                 await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) });
+                 exitTrip();
+                 fetchTrips();
+            };
+
+            const exitTrip = () => {
+                currentView.value = 'lobby';
+                currentTrip.value = null;
+                fetchTrips(); // Refresh list
+            };
+
+            onMounted(() => fetchTrips());
+
+            // --- App Logic ---
+            const fetchData = async () => {
+                if(!currentTrip.value) return;
+                isLoading.value = true;
+                const tripId = currentTrip.value.id;
+                try {
                     const [resItin, resExp, resPpl] = await Promise.all([
-                        fetch(`${API_URL}?type=itinerary`),
-                        fetch(`${API_URL}?type=expenses`),
-                        fetch(`${API_URL}?type=people`)
+                        fetch(`${API_URL}?type=itinerary&tripId=${tripId}`),
+                        fetch(`${API_URL}?type=expenses&tripId=${tripId}`),
+                        fetch(`${API_URL}?type=people&tripId=${tripId}`)
                     ]);
                     const itinData = await resItin.json();
                     itinerary.value = itinData;
@@ -253,18 +250,23 @@
                     }
                 } catch(e) { console.error(e); } finally { isLoading.value = false; }
             };
-            onMounted(() => fetchData());
 
             const sendToApi = async (action, type, data) => {
+                // Attach trip_id to data
                 const body = { action, type };
-                if (action === 'add') body.data = data; else body.id = data;
+                if (action === 'add') {
+                    data.trip_id = currentTrip.value.id; // ★ 重要：標記旅程ID
+                    body.data = data;
+                } else {
+                    body.id = data; // Delete only needs ID
+                }
                 await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
             };
 
-            // Search Logic
+            // --- Features ---
             const searchPlacesInput = () => {
                 const q = newPlace.value.trim();
-                const city = targetCity.value.trim();
+                const city = currentTrip.value.city; // Use Trip City
                 if(q.length < 2) { searchResults.value = []; return; }
                 if(searchTimeout) clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(async () => {
@@ -275,159 +277,108 @@
                     } catch(e){}
                 }, 500);
             };
+            const selectPlace = (item) => { newPlace.value = item.display_name.split(',')[0]; selectedLat.value = item.lat; selectedLng.value = item.lon; searchResults.value = []; };
 
-            const selectPlace = (item) => {
-                newPlace.value = item.display_name.split(',')[0];
-                selectedLat.value = item.lat; selectedLng.value = item.lon;
-                searchResults.value = [];
-            };
-
-            // --- 地圖核心 (v15.0 修復版) ---
+            // Map
             const switchTab = (tab) => {
                 currentTab.value = tab;
                 if(tab === 'map') {
-                    if(targetCity.value && !mapSearchQuery.value) mapSearchQuery.value = targetCity.value;
+                    if(currentTrip.value.city && !mapSearchQuery.value) mapSearchQuery.value = currentTrip.value.city;
                     nextTick(() => initMap());
                 }
             };
-
             const initMap = () => {
                 if(mapInstance) { mapInstance.invalidateSize(); showMyItineraryOnMap(); return; }
                 mapInstance = L.map('map').setView([23.6, 121], 7);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(mapInstance);
-                markersLayer = L.layerGroup().addTo(mapInstance);
-                exploreLayer = L.layerGroup().addTo(mapInstance);
-
+                markersLayer = L.layerGroup().addTo(mapInstance); exploreLayer = L.layerGroup().addTo(mapInstance);
                 mapInstance.on('click', async (e) => {
                     const { lat, lng } = e.latlng;
-                    const tempMarker = L.marker([lat, lng]).addTo(mapInstance).bindPopup('查詢中...').openPopup();
+                    const temp = L.marker([lat, lng]).addTo(mapInstance).bindPopup('查詢中...').openPopup();
                     try {
                         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
                         const data = await res.json();
                         const name = data.display_name ? data.display_name.split(',')[0] : '地點';
-                        tempMarker.setPopupContent(`<div style="text-align:center"><b>${name}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-from-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>`);
-                    } catch(err) { tempMarker.setPopupContent('未知地點'); }
+                        temp.setPopupContent(`<div style="text-align:center"><b>${name}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${name}', lat: ${lat}, lng: ${lng}}}))">➕ 加入 Day ${currentDay.value}</button></div>`);
+                    } catch(e) { temp.setPopupContent('未知'); }
                 });
-                document.addEventListener('add-from-map', (e) => addPlaceFromMap(e.detail));
-                
-                // ★ 初始化時自動執行地圖顯示
+                document.addEventListener('add-map', (e) => addPlaceFromMap(e.detail));
                 showMyItineraryOnMap();
-                if(targetCity.value) { mapSearchQuery.value = targetCity.value; searchCityAndJump(); }
+                if(currentTrip.value.city) { mapSearchQuery.value = currentTrip.value.city; searchCityAndJump(); }
             };
-
             const searchCityAndJump = async () => {
                 if(!mapSearchQuery.value) return;
                 isMapLoading.value = true;
                 try {
                     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(mapSearchQuery.value)}`);
                     const data = await res.json();
-                    if(data.length > 0) { mapInstance.setView([data[0].lat, data[0].lon], 13); } else { alert('找不到城市'); }
+                    if(data.length) mapInstance.setView([data[0].lat, data[0].lon], 13);
                 } catch(e){} finally { isMapLoading.value = false; }
             };
-
             const exploreNearby = async () => {
-                if(!mapInstance) return;
-                isMapLoading.value = true;
-                exploreLayer.clearLayers();
-                const b = mapInstance.getBounds();
-                const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
+                if(!mapInstance) return; isMapLoading.value = true; exploreLayer.clearLayers();
+                const b = mapInstance.getBounds(); const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
                 try {
                     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=tourism&viewbox=${viewbox}&bounded=1&limit=20`);
                     const data = await res.json();
-                    if(!data.length) alert('附近無景點');
-                    data.forEach(item => {
-                        L.circleMarker([item.lat, item.lon], {color: '#9333ea', fillColor: '#9333ea', fillOpacity: 0.6, radius: 6}).addTo(exploreLayer)
-                        .bindPopup(`<div style="text-align:center"><b>${item.display_name.split(',')[0]}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-from-map', {detail: {name: '${item.display_name.split(',')[0]}', lat: ${item.lat}, lng: ${item.lon}}}))">➕ 加入</button></div>`);
-                    });
+                    data.forEach(i => L.circleMarker([i.lat, i.lon], {color:'#9333ea',fillColor:'#9333ea',fillOpacity:0.6,radius:6}).addTo(exploreLayer).bindPopup(`<div style="text-align:center"><b>${i.display_name.split(',')[0]}</b><br><button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${i.display_name.split(',')[0]}', lat: ${i.lat}, lng: ${i.lon}}}))">➕ 加入</button></div>`));
                 } catch(e){} finally { isMapLoading.value = false; }
             };
-
-            // ★★★ v15.0 核心修正：自動補完座標功能 ★★★
             const showMyItineraryOnMap = async () => {
-                if(!mapInstance) return;
-                markersLayer.clearLayers();
-                exploreLayer.clearLayers();
-                const bounds = L.latLngBounds();
-                let hasPoint = false;
-                
-                // 檢查是否需要自動修復 (沒有座標的點)
-                const itemsToFix = itinerary.value.filter(item => (!item.lat || !item.lng) && item.name);
-                
+                if(!mapInstance) return; markersLayer.clearLayers(); exploreLayer.clearLayers();
+                const bounds = L.latLngBounds(); let hasPoint = false;
+                const itemsToFix = itinerary.value.filter(i => (!i.lat || !i.lng) && i.name);
                 if (itemsToFix.length > 0) {
                     isAutoFixing.value = true;
-                    // 為了避免一次大量請求被封鎖，我們慢慢查
                     for (const item of itemsToFix) {
                         try {
-                            const query = targetCity.value ? `${item.name}, ${targetCity.value}` : item.name;
+                            const query = currentTrip.value.city ? `${item.name}, ${currentTrip.value.city}` : item.name;
                             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
                             const data = await res.json();
-                            if (data.length > 0) {
-                                // 暫時補上座標 (不會寫入資料庫，只為了顯示)
-                                item.lat = data[0].lat;
-                                item.lng = data[0].lon;
-                            }
-                            // 禮貌性延遲 0.6 秒
+                            if (data.length > 0) { item.lat = data[0].lat; item.lng = data[0].lon; }
                             await new Promise(r => setTimeout(r, 600));
-                        } catch(e) { console.error("Auto fix failed for", item.name); }
+                        } catch(e) {}
                     }
                     isAutoFixing.value = false;
                 }
-
-                // 繪製地圖點
                 itinerary.value.forEach(item => {
-                    // 只要有座標 (包含剛剛修復的) 就顯示
                     if(item.lat && item.lng) {
                         const d = item.day ? parseInt(item.day) : 1;
-                        L.circleMarker([item.lat, item.lng], {
-                            color: getDayColor(d), fillColor: getDayColor(d), fillOpacity: 0.9, radius: 8
-                        }).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`);
-                        bounds.extend([item.lat, item.lng]); 
-                        hasPoint = true;
+                        L.circleMarker([item.lat, item.lng], {color: getDayColor(d), fillColor: getDayColor(d), fillOpacity:0.9, radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`);
+                        bounds.extend([item.lat, item.lng]); hasPoint = true;
                     }
                 });
                 if(hasPoint) mapInstance.fitBounds(bounds, { padding: [50,50] });
             };
-            
-            // 強制重整地圖 (手動觸發修復)
             const forceRefreshMap = () => showMyItineraryOnMap();
-
-            const addPlaceFromMap = async ({ name, lat, lng }) => {
-                const id = generateId(); const d = currentDay.value;
-                itinerary.value.push({ id, name, day: d, lat, lng, message: '' });
-                await sendToApi('add', 'itinerary', { id, name, day: d, lat, lng, message: '' });
-                alert(`已加入 Day ${d}`); 
-                // 不用整個重整，直接加點
-                const c = getDayColor(d);
-                L.circleMarker([lat, lng], { color: c, fillColor: c, fillOpacity: 0.9, radius: 8 }).addTo(markersLayer).bindPopup(`<b>D${d}: ${name}</b>`);
-            };
-
-            const addPlace = async () => {
-                if(!newPlace.value.trim()) return;
-                const id = generateId();
-                // 這裡會把 selectedLat 存進去
-                const d = { id, name: newPlace.value, day: currentDay.value, lat: selectedLat.value, lng: selectedLng.value, message: newNote.value };
-                itinerary.value.push(d);
-                newPlace.value = ''; newNote.value = ''; selectedLat.value = null; selectedLng.value = null;
-                await sendToApi('add', 'itinerary', d);
-            };
-            const removePlace = async(id) => { const i = itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
+            const addPlaceFromMap = async ({ name, lat, lng }) => { const id = generateId(); const d = currentDay.value; const item={id, name, day:d, lat, lng, message:''}; itinerary.value.push(item); await sendToApi('add', 'itinerary', item); alert(`已加入 Day ${d}`); L.circleMarker([lat, lng], {color:getDayColor(d),fillColor:getDayColor(d),fillOpacity:0.9,radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${name}</b>`); };
+            
+            const addPlace = async () => { if(!newPlace.value.trim()) return; const id=generateId(); const d={id, name:newPlace.value, day:currentDay.value, lat:selectedLat.value, lng:selectedLng.value, message:newNote.value}; itinerary.value.push(d); newPlace.value=''; newNote.value=''; selectedLat.value=null; await sendToApi('add', 'itinerary', d); };
+            const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
-            const openGoogleMap = (p) => window.open(p.lat ? `https://maps.google.com/?q=${p.lat},${p.lng}` : `https://maps.google.com/?q=${encodeURIComponent(p.name + (targetCity.value ? ','+targetCity.value : ''))}`, '_blank');
+            const openGoogleMap = (p) => window.open(p.lat ? `https://maps.google.com/?q=${p.lat},${p.lng}` : `https://maps.google.com/?q=${encodeURIComponent(p.name + (currentTrip.value.city ? ','+currentTrip.value.city : ''))}`, '_blank');
             const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name) }; };
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             const addPerson = async () => { if (!newPerson.value.trim()) return; const uid = generateId(); people.value.push({ id: uid, name: newPerson.value }); newExpense.value.involved.push(newPerson.value); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: newPerson.value }); };
             const removePerson = async (idx) => { const item = people.value[idx]; if (!item.id || !confirm('移除？')) return; people.value.splice(idx, 1); await sendToApi('del', 'people', item.id); };
-            const resetApp = async () => { if(!confirm('刪除所有資料？')) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_all', type:'all'})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; totalDays.value=1; currentDay.value=1; alert('已重置'); };
+            
+            const resetTrip = async () => {
+                if(!confirm(`警告：確定要清空「${currentTrip.value.name}」的所有行程和記帳資料嗎？`)) return;
+                await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})});
+                itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空此旅程資料');
+            };
+
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
 
             return {
+                currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
                 currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary: computed(()=>itinerary.value.filter(i=>(i.day?parseInt(i.day):1)===currentDay.value)),
-                newPlace, newNote, newPerson, newExpense, targetCity, saveCityPref,
+                newPlace, newNote, newPerson, newExpense, 
                 mapSearchQuery, searchResults, searchCityAndJump, exploreNearby, showMyItineraryOnMap, forceRefreshMap,
                 searchPlacesInput, selectPlace, addPlace, removePlace, openGoogleMap,
-                addExpense, removeExpense, addPerson, removePerson, resetApp,
+                addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData
             };
         }
