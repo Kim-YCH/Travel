@@ -23,7 +23,7 @@
         #map { height: 100%; width: 100%; z-index: 1; }
         .popup-btn { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; width: 100%; margin-top: 5px; }
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; }
+        .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #1e40af; border-color: #2563eb; font-weight: bold; }
         .checkbox-wrapper div { color: #111827; font-weight: 500; }
     </style>
@@ -63,26 +63,33 @@
                 </div>
                 <div class="card p-4 space-y-2 relative">
                     <div class="flex gap-2 relative">
-                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + ' 地點...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold text-gray-900">
+                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + ' 或貼上座標...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold text-gray-900">
                         <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
                         
-                        <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching)" class="suggestions-list">
-                            
+                        <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
                             <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
                             
+                            <div v-if="isCoordinateMode" @click="useCoordinateInput" class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200">
+                                <span class="text-xl">📍</span>
+                                <div>
+                                    <div class="font-bold text-green-700 text-sm">使用座標定位</div>
+                                    <div class="text-xs text-green-600">直接加入精準位置</div>
+                                </div>
+                            </div>
+
                             <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item hover:bg-blue-50">
                                 <span class="text-xl">📍</span>
                                 <div class="overflow-hidden">
                                     <div class="font-bold text-gray-800 text-sm truncate">{{ item.display_name.split(',')[0] }}</div>
-                                    <div class="text-xs text-gray-500 truncate">{{ item.display_name }}</div>
+                                    <div class="text-xs text-gray-500 truncate">{{ item.display_name.split(',').slice(1).join(',') }}</div>
                                 </div>
                             </div>
 
-                            <div @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
+                            <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
                                 <span class="text-xl">🔎</span>
                                 <div class="flex-1">
-                                    <div class="font-bold text-blue-600 text-sm">找不到？改用 Google Maps 搜尋</div>
-                                    <div class="text-xs text-gray-400">將搜尋 "{{ newPlace }}"</div>
+                                    <div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找座標</div>
+                                    <div class="text-xs text-gray-400">複製座標後貼回來即可</div>
                                 </div>
                                 <span class="text-gray-300 text-lg">➜</span>
                             </div>
@@ -122,6 +129,7 @@
                     <div class="flex justify-between items-end mb-4"><span class="text-gray-300 text-sm">總支出</span><span class="text-2xl font-bold">${{ totalExpense }}</span></div>
                     <div class="space-y-2 border-t border-gray-600 pt-3"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm"><span>{{ res.name }}</span><span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span></div></div>
                 </div>
+                
                 <div class="card p-4 border border-blue-100">
                     <div class="grid grid-cols-3 gap-2 mb-3">
                         <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none text-gray-900">
@@ -216,6 +224,7 @@
             
             const searchResults = ref([]);
             const isSearching = ref(false);
+            const isCoordinateMode = ref(false); // ★ 新增：座標模式偵測
             const selectedLat = ref(null);
             const selectedLng = ref(null);
             const mapSearchQuery = ref('');
@@ -241,40 +250,63 @@
             const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) { console.error(e); } finally { isLoading.value = false; } };
             const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
             
-            // ★★★ v24.0 優化：總是顯示 Google Maps 搜尋選項 ★★★
+            // ★★★ v25.0 混合搜尋與座標貼上 ★★★
             const searchPlacesInput = () => { 
                 const q = newPlace.value.trim(); 
                 const city = currentTrip.value.city; 
-                // 只要有打字，就顯示選單 (為了顯示 Google 選項)
-                if(q.length > 0) {
-                    isSearching.value = true;
-                    // 先清空 OSM 結果，但 isSearching = true 會讓選單顯示
-                    searchResults.value = []; 
+                
+                // 1. 檢查是否為座標 (例如: 35.123, 139.123)
+                const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
+                if (coordRegex.test(q)) {
+                    isCoordinateMode.value = true;
+                    const parts = q.split(',');
+                    selectedLat.value = parseFloat(parts[0]);
+                    selectedLng.value = parseFloat(parts[1]);
+                    return; // 進入座標模式，不搜尋
                 } else {
-                    isSearching.value = false;
-                    searchResults.value = [];
-                    return;
+                    isCoordinateMode.value = false;
+                    selectedLat.value = null; // 重置
                 }
+
+                // 2. 一般文字搜尋
+                if(q.length < 1) { searchResults.value = []; isSearching.value = false; return; } 
+                isSearching.value = true; 
                 
                 if(searchTimeout) clearTimeout(searchTimeout); 
-                
                 searchTimeout = setTimeout(async () => { 
                     try { 
                         const query = city ? `${q}, ${city}` : q; 
                         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&accept-language=zh-TW`); 
                         searchResults.value = await res.json(); 
                     } catch(e){} finally {
-                        // 搜尋結束，isSearching = false，但如果有 Google 選項，選單仍會顯示
                         isSearching.value = false;
                     }
                 }, 500); 
             };
             
+            const useCoordinateInput = () => {
+                // 直接使用輸入框內的座標
+                addPlace();
+            };
+
             const selectPlace = (item) => { newPlace.value = item.display_name.split(',')[0]; selectedLat.value = item.lat; selectedLng.value = item.lon; searchResults.value = []; };
-            const searchInGoogleMaps = () => { 
-                const query = newPlace.value + (currentTrip.value.city ? ' ' + currentTrip.value.city : '');
+            
+            // ★★★ 自動加入文字到行程，再開 Google ★★★
+            const searchInGoogleMaps = async () => { 
+                const name = newPlace.value;
+                if (!name) return;
+                
+                // 1. 先把文字加進去 (沒座標)
+                const id = generateId(); 
+                const d = currentDay.value; 
+                const item = { id, name: name, day: d, lat: null, lng: null, message: newNote.value || '' }; 
+                itinerary.value.push(item); 
+                newPlace.value = ''; newNote.value = ''; searchResults.value = [];
+                await sendToApi('add', 'itinerary', item);
+                
+                // 2. 再開 Google Maps
+                const query = name + (currentTrip.value.city ? ' ' + currentTrip.value.city : '');
                 window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank'); 
-                searchResults.value = []; 
             };
 
             const switchTab = (tab) => { currentTab.value = tab; if(tab === 'map') { if(currentTrip.value.city && !mapSearchQuery.value) mapSearchQuery.value = currentTrip.value.city; nextTick(() => initMap()); } };
@@ -284,7 +316,8 @@
             const showMyItineraryOnMap = async () => { if(!mapInstance) return; markersLayer.clearLayers(); exploreLayer.clearLayers(); const bounds = L.latLngBounds(); let hasPoint = false; const itemsToFix = itinerary.value.filter(i => (!i.lat || !i.lng) && i.name); if (itemsToFix.length > 0) { isAutoFixing.value = true; for (const item of itemsToFix) { try { const query = currentTrip.value.city ? `${item.name}, ${currentTrip.value.city}` : item.name; const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&accept-language=zh-TW`); const data = await res.json(); if (data.length > 0) { item.lat = data[0].lat; item.lng = data[0].lon; } await new Promise(r => setTimeout(r, 600)); } catch(e) {} } isAutoFixing.value = false; } itinerary.value.forEach(item => { if(item.lat && item.lng) { const d = item.day ? parseInt(item.day) : 1; L.circleMarker([item.lat, item.lng], {color: getDayColor(d), fillColor: getDayColor(d), fillOpacity:0.9, radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${item.name}</b><br>${item.message||''}`); bounds.extend([item.lat, item.lng]); hasPoint = true; } }); if(hasPoint) mapInstance.fitBounds(bounds, { padding: [50,50] }); };
             const forceRefreshMap = () => showMyItineraryOnMap();
             const addPlaceFromMap = async ({ name, lat, lng }) => { const id = generateId(); const d = currentDay.value; const item={id, name, day:d, lat, lng, message:''}; itinerary.value.push(item); await sendToApi('add', 'itinerary', item); alert(`已加入 Day ${d}`); L.circleMarker([lat, lng], {color:getDayColor(d),fillColor:getDayColor(d),fillOpacity:0.9,radius:8}).addTo(markersLayer).bindPopup(`<b>D${d}: ${name}</b>`); };
-            const addPlace = async () => { if(!newPlace.value.trim()) return; const id=generateId(); const d={id, name:newPlace.value, day:currentDay.value, lat:selectedLat.value, lng:selectedLng.value, message:newNote.value}; itinerary.value.push(d); newPlace.value=''; newNote.value=''; selectedLat.value=null; await sendToApi('add', 'itinerary', d); };
+            
+            const addPlace = async () => { if(!newPlace.value.trim()) return; const id=generateId(); const d={id, name:newPlace.value, day:currentDay.value, lat:selectedLat.value, lng:selectedLng.value, message:newNote.value}; itinerary.value.push(d); newPlace.value=''; newNote.value=''; selectedLat.value=null; selectedLng.value=null; searchResults.value=[]; await sendToApi('add', 'itinerary', d); };
             const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
             const openGoogleMap = (p) => { const query = p.name + (currentTrip.value.city ? ' ' + currentTrip.value.city : ''); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank'); };
@@ -301,9 +334,9 @@
                 currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary: computed(()=>itinerary.value.filter(i=>(i.day?parseInt(i.day):1)===currentDay.value)),
                 newPlace, newNote, newPerson, newExpense, 
-                mapSearchQuery, searchResults, isSearching, 
+                mapSearchQuery, searchResults, isSearching, isCoordinateMode, // ★ v25.0
                 searchCityAndJump, exploreNearby, showMyItineraryOnMap, forceRefreshMap,
-                searchPlacesInput, selectPlace, searchInGoogleMaps,
+                searchPlacesInput, selectPlace, searchInGoogleMaps, useCoordinateInput, // ★ v25.0
                 addPlace, removePlace, openGoogleMap,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved
