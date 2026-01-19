@@ -34,6 +34,10 @@
         .checkbox-wrapper div { color: #111827; font-weight: 500; }
         .stat-bar { transition: width 0.5s ease-in-out; }
         
+        /* 編輯 Modal 樣式 */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; display: flex; justify-content: center; items-align: center; padding: 20px; }
+        .modal-content { background: white; border-radius: 16px; width: 100%; max-width: 350px; padding: 20px; margin-top: 20vh; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+
         /* Google Logo 修正 */
         .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
         img[src*="google"] { display: inline !important; }
@@ -43,6 +47,34 @@
 <div id="app" class="max-w-md mx-auto min-h-screen flex flex-col h-screen">
     <div v-if="isLoading" class="loading-bar"></div>
 
+    <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal=false">
+        <div class="modal-content space-y-4">
+            <h3 class="font-bold text-lg text-gray-800">✏️ 編輯內容</h3>
+            
+            <div v-if="editType === 'itinerary'" class="space-y-3">
+                <input v-model="editItemData.name" class="w-full bg-gray-100 p-2 rounded" placeholder="名稱">
+                <input v-model="editItemData.time" type="time" class="w-full bg-gray-100 p-2 rounded" placeholder="時間">
+                <textarea v-model="editItemData.message" class="w-full bg-gray-100 p-2 rounded h-24" placeholder="備註"></textarea>
+            </div>
+
+            <div v-if="editType === 'expenses'" class="space-y-3">
+                <input v-model="editItemData.title" class="w-full bg-gray-100 p-2 rounded" placeholder="項目">
+                <input v-model.number="editItemData.amount" type="number" class="w-full bg-gray-100 p-2 rounded" placeholder="金額">
+                <select v-model="editItemData.category" class="w-full bg-gray-100 p-2 rounded">
+                    <option v-for="c in categories" :value="c">{{c}}</option>
+                </select>
+                <select v-model="editItemData.payer" class="w-full bg-gray-100 p-2 rounded">
+                    <option v-for="p in people" :value="p.name">{{p.name}}</option>
+                </select>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button @click="showEditModal=false" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-bold">取消</button>
+                <button @click="saveEdit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">儲存</button>
+            </div>
+        </div>
+    </div>
+
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
@@ -50,7 +82,7 @@
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
-            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">尚無旅程，請按下方新增</div>
+            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">還沒有旅程，按下方新增</div>
         </div>
         <div class="card p-4 border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
@@ -93,7 +125,6 @@
                         <input v-model="newNote" type="text" placeholder="備註..." class="bg-gray-50 p-2 rounded-lg outline-none text-sm text-gray-900 flex-1 border-0">
                     </div>
                 </div>
-                
                 <div class="space-y-3 pb-20">
                     <div v-for="place in filteredItinerary" :key="place.id" class="card p-4 flex justify-between items-start active:scale-[0.99] transition">
                         <div class="flex-1" @click="openGoogleMap(place)">
@@ -104,7 +135,10 @@
                             </div>
                             <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
                         </div>
-                        <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl" :disabled="isLoading">×</button>
+                        <div class="flex items-center gap-1">
+                            <button @click.stop="openEditModal(place, 'itinerary')" class="text-gray-400 hover:text-blue-500 px-2 text-lg">✏️</button>
+                            <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl" :disabled="isLoading">×</button>
+                        </div>
                     </div>
                     <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
                 </div>
@@ -171,7 +205,13 @@
                                 <div class="flex items-center gap-1 flex-wrap"><span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">分攤</span><span class="text-gray-500">{{ formatInvolved(exp.involved) }}</span></div>
                             </div>
                         </div>
-                        <div class="flex flex-col items-end gap-2"><span class="font-bold text-xl text-gray-800">${{ exp.amount }}</span><button @click="removeExpense(idx)" class="text-gray-300 hover:text-red-500 px-2 text-xl">×</button></div>
+                        <div class="flex flex-col items-end gap-2">
+                            <span class="font-bold text-xl text-gray-800">${{ exp.amount }}</span>
+                            <div class="flex items-center">
+                                <button @click="openEditModal(exp, 'expenses')" class="text-gray-400 hover:text-blue-500 px-2 text-lg">✏️</button>
+                                <button @click="removeExpense(idx)" class="text-gray-300 hover:text-red-500 px-2 text-xl">×</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -203,10 +243,9 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
-            // ★★★ 1. 請確認 GAS 網址是否正確 ★★★
-            const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
+            const API_URL = 'https://script.google.com/macros/s/AKfycbxLhzVedUMpj46CFQrifnIVZ4PSgnzMSIDihjcw3gcHHE98dfNRG7gND7FCova3dl0-/exec';
             
-            // ★★★ 2. 您的 Google Maps API Key (請在這裡貼上) ★★★
+            // ★★★★★ 請在此填入您的 API Key ★★★★★
             const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
             // State
@@ -231,6 +270,11 @@
             const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食' });
             const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
             
+            // Edit Modal State
+            const showEditModal = ref(false);
+            const editType = ref('');
+            const editItemData = ref({});
+
             const searchResults = ref([]);
             const selectedPlaceData = ref(null);
             
@@ -243,7 +287,6 @@
             const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
             const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
 
-            // Google Maps Loader
             const loadGoogleMaps = () => {
                 if (window.google && window.google.maps) return Promise.resolve();
                 return new Promise((resolve, reject) => {
@@ -251,7 +294,7 @@
                     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
                     script.async = true; script.defer = true;
                     script.onload = () => { autocompleteService = new google.maps.places.AutocompleteService(); resolve(); };
-                    // 這裡改為 resolve() 而不是 reject，避免沒有 API key 時整個 APP 卡死
+                    // ★ 錯誤處理：避免沒 Key 卡死
                     script.onerror = () => { console.warn('Google Maps Load Failed'); resolve(); };
                     document.head.appendChild(script);
                 });
@@ -260,17 +303,13 @@
             const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) {} finally { isLoading.value = false; } };
             const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
             
-            // ★★★ 3. 修復：點擊旅程邏輯 (先切換，再讀取) ★★★
+            // ★ 確保點擊能進去 ★
             const selectTrip = (trip) => { 
                 if(!trip) return;
                 currentTrip.value = trip; 
-                // 1. 先切換畫面
-                currentView.value = 'app'; 
-                // 2. 清空舊資料
-                itinerary.value = []; expenses.value = []; people.value = []; 
-                currentDay.value = 1; totalDays.value = 1; 
-                // 3. 背景讀取
-                fetchData(); 
+                itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; 
+                currentView.value = 'app'; // 先切換畫面
+                fetchData(); // 再讀取
             };
             
             const deleteTripTotally = async () => { if(!confirm('確定移除？')) return; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) }); exitTrip(); fetchTrips(); };
@@ -334,7 +373,6 @@
             const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); updateMapMarkers(); } };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
             const openGoogleMap = (p) => { if (p.place_id) window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank'); else if (p.lat && p.lng) window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank'); else window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + currentTrip.value.city)}`, '_blank'); };
-            
             const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name), category: '飲食' }; };
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             const addPerson = async () => { const name = newPerson.value.trim(); if (!name) return; const uid = generateId(); people.value.push({ id: uid, name: name }); newExpense.value.involved.push(name); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: name }); };
@@ -376,6 +414,28 @@
                 navigator.clipboard.writeText(text).then(() => alert("行程已複製到剪貼簿！"));
             };
 
+            // ★ 編輯功能
+            const openEditModal = (item, type) => {
+                editItemData.value = JSON.parse(JSON.stringify(item));
+                editType.value = type;
+                showEditModal.value = true;
+            };
+
+            const saveEdit = async () => {
+                const updatedItem = editItemData.value;
+                if (!updatedItem.id) return;
+                if (editType.value === 'itinerary') {
+                    const idx = itinerary.value.findIndex(x => x.id === updatedItem.id);
+                    if (idx !== -1) itinerary.value[idx] = updatedItem;
+                    await sendToApi('edit', 'itinerary', updatedItem);
+                } else if (editType.value === 'expenses') {
+                    const idx = expenses.value.findIndex(x => x.id === updatedItem.id);
+                    if (idx !== -1) expenses.value[idx] = updatedItem;
+                    await sendToApi('edit', 'expenses', updatedItem);
+                }
+                showEditModal.value = false;
+            };
+
             return {
                 currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
                 currentTab, switchTab, isLoading, currentDay, totalDays, addNewDay,
@@ -385,7 +445,9 @@
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved,
-                categoryAnalysis, exportItinerary
+                categoryAnalysis, exportItinerary,
+                // Edit
+                showEditModal, editType, editItemData, openEditModal, saveEdit
             };
         }
     }).mount('#app');
