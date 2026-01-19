@@ -26,8 +26,6 @@
         .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #1e40af; border-color: #2563eb; font-weight: bold; }
         .checkbox-wrapper div { color: #111827; font-weight: 500; }
-        
-        /* 統計條樣式 */
         .stat-bar { transition: width 0.5s ease-in-out; }
     </style>
 </head>
@@ -37,24 +35,26 @@
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
-        <p class="text-gray-500 mb-8">v28.0 全能管家版</p>
+        <p class="text-gray-500 mb-8">選擇一個旅程</p>
+        
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
-            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">還沒有旅程，按下方新增</div>
+            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">尚無旅程，請新增</div>
         </div>
+
         <div class="card p-4 border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
-            <input v-model="newTripName" placeholder="旅程名稱 (如: 東京賞櫻)" class="w-full bg-gray-100 p-3 rounded-lg mb-2 outline-none text-gray-900">
-            <input v-model="newTripCity" placeholder="主要城市 (如: 東京)" class="w-full bg-gray-100 p-3 rounded-lg mb-3 outline-none text-gray-900">
-            <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow disabled:opacity-50" :disabled="!newTripName || isLoading">建立新旅程</button>
+            <input v-model="newTripName" placeholder="旅程名稱" class="w-full bg-gray-100 p-3 rounded-lg mb-2 outline-none text-gray-900">
+            <input v-model="newTripCity" placeholder="主要城市" class="w-full bg-gray-100 p-3 rounded-lg mb-3 outline-none text-gray-900">
+            <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow disabled:opacity-50" :disabled="!newTripName || isLoading">建立</button>
         </div>
     </div>
 
     <div v-else class="flex flex-col h-full">
         <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
-            <div><h1 class="text-lg font-bold tracking-wide">出發囉：{{ currentTrip.name }}</h1><div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div></div>
+            <div><h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1><div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div></div>
             <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
         </header>
 
@@ -125,7 +125,6 @@
             </div>
 
             <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
-                
                 <div class="card p-4 bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
                     <div class="flex justify-between items-end mb-4"><span class="text-gray-300 text-sm">總支出</span><span class="text-2xl font-bold">${{ totalExpense }}</span></div>
                     <div class="space-y-2 border-t border-gray-600 pt-3"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm"><span>{{ res.name }}</span><span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span></div></div>
@@ -135,13 +134,8 @@
                     <h3 class="font-bold text-gray-700 text-sm mb-2">📊 消費分析</h3>
                     <div class="space-y-2">
                         <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
-                            <div class="flex justify-between mb-1">
-                                <span class="text-gray-600">{{ cat.name }}</span>
-                                <span class="font-bold">${{ cat.total }} ({{ ((cat.total/totalExpense)*100).toFixed(0) }}%)</span>
-                            </div>
-                            <div class="w-full bg-gray-100 rounded-full h-2">
-                                <div class="bg-blue-500 h-2 rounded-full stat-bar" :style="{ width: (cat.total/totalExpense)*100 + '%' }"></div>
-                            </div>
+                            <div class="flex justify-between mb-1"><span class="text-gray-600">{{ cat.name }}</span><span class="font-bold">${{ cat.total }} ({{ ((cat.total/totalExpense)*100).toFixed(0) }}%)</span></div>
+                            <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full stat-bar" :style="{ width: (cat.total/totalExpense)*100 + '%' }"></div></div>
                         </div>
                     </div>
                 </div>
@@ -151,16 +145,9 @@
                         <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none text-gray-900">
                         <input v-model.number="newExpense.amount" type="number" placeholder="$" class="bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none text-gray-900">
                     </div>
-                    
                     <div class="mb-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                        <button v-for="cat in categories" :key="cat" 
-                            @click="newExpense.category = cat"
-                            class="px-3 py-1 rounded-full border text-sm whitespace-nowrap transition"
-                            :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'">
-                            {{ cat }}
-                        </button>
+                        <button v-for="cat in categories" :key="cat" @click="newExpense.category = cat" class="px-3 py-1 rounded-full border text-sm whitespace-nowrap transition" :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'">{{ cat }}</button>
                     </div>
-
                     <div class="mb-3 flex gap-2 items-center">
                         <span class="text-xs text-gray-500 w-12">付款人</span>
                         <select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border-0 ring-1 ring-gray-200 text-gray-900">
@@ -183,10 +170,7 @@
                 <div class="space-y-2">
                     <div v-for="(exp, idx) in expenses" :key="exp.id" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between items-start">
                         <div class="flex-1">
-                            <div class="font-bold text-gray-800 text-lg">
-                                {{ exp.title }} 
-                                <span v-if="exp.category" class="text-xs font-normal text-gray-400 bg-gray-100 px-1 rounded ml-1">{{ exp.category }}</span>
-                            </div>
+                            <div class="font-bold text-gray-800 text-lg">{{ exp.title }} <span v-if="exp.category" class="text-xs font-normal text-gray-400 bg-gray-100 px-1 rounded ml-1">{{ exp.category }}</span></div>
                             <div class="text-xs mt-1 space-y-1">
                                 <div class="flex items-center gap-1"><span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">先付</span><span class="text-gray-700 font-medium">{{ exp.payer || '未知' }}</span></div>
                                 <div class="flex items-center gap-1 flex-wrap"><span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">分攤</span><span class="text-gray-500">{{ formatInvolved(exp.involved) }}</span></div>
@@ -201,9 +185,7 @@
                 <button @click="exitTrip" class="w-full bg-gray-800 text-white py-3 rounded-lg font-bold mb-6">🔙 切換旅程 (回到大廳)</button>
                 
                 <h3 class="font-bold text-gray-700">📋 資料管理</h3>
-                <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-200 py-3 rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2">
-                    <span>📤</span> 匯出純文字行程 (複製到剪貼簿)
-                </button>
+                <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-200 py-3 rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"><span>📤</span> 匯出純文字行程 (複製到剪貼簿)</button>
 
                 <h3 class="font-bold text-gray-700 mt-6">👥 成員管理</h3>
                 <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1 bg-gray-100 p-2 rounded text-gray-900"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded">新增</button></div>
@@ -230,7 +212,7 @@
     createApp({
         setup() {
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
-            const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q'; // 請確認 key 權限
+            const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
             // State
             const currentView = ref('lobby'); 
@@ -251,11 +233,11 @@
             const expenses = ref([]);
 
             const newPlace = ref('');
-            const newTime = ref(''); // ★ 新增：時間
+            const newTime = ref('');
             const newNote = ref('');
             const newPerson = ref('');
-            const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食' }); // ★ 新增：預設分類
-            const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他']; // ★ 分類清單
+            const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食' });
+            const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
             
             const searchResults = ref([]);
             const isSearching = ref(false);
@@ -278,7 +260,6 @@
                 return Array.isArray(list) ? list.join(', ') : list;
             };
 
-            // --- Google Maps ---
             const loadGoogleMaps = () => {
                 if (window.google && window.google.maps) return Promise.resolve();
                 return new Promise((resolve, reject) => {
@@ -293,7 +274,18 @@
 
             const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) {} finally { isLoading.value = false; } };
             const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
-            const selectTrip = (trip) => { currentTrip.value = trip; currentView.value = 'app'; itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; fetchData(); };
+            
+            // ★★★ Fix: selectTrip logic ★★★
+            const selectTrip = (trip) => { 
+                currentTrip.value = trip; 
+                // Reset State
+                itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; 
+                // Switch View immediately
+                currentView.value = 'app'; 
+                // Then fetch data
+                fetchData(); 
+            };
+            
             const deleteTripTotally = async () => { if(!confirm('確定移除？')) return; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) }); exitTrip(); fetchTrips(); };
             const exitTrip = () => { currentView.value = 'lobby'; currentTrip.value = null; fetchTrips(); };
             onMounted(() => { fetchTrips(); loadGoogleMaps(); });
@@ -301,17 +293,13 @@
             const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) {} finally { isLoading.value = false; } };
             const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
             
-            // --- Search ---
             const searchPlacesInput = () => { 
                 const q = newPlace.value.trim(); const city = currentTrip.value.city; 
-                // 1. Coord Check
                 const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
                 if (coordRegex.test(q)) {
                     isCoordinateMode.value = true; isSearching.value = true;
-                    const parts = q.split(',');
-                    const lat = parseFloat(parts[0]); const lng = parseFloat(parts[1]);
+                    const parts = q.split(','); const lat = parseFloat(parts[0]); const lng = parseFloat(parts[1]);
                     selectedLat.value = lat; selectedLng.value = lng;
-                    // Reverse Geocoding via Google
                     const geocoder = new google.maps.Geocoder();
                     geocoder.geocode({ location: { lat, lng } }, (results, status) => {
                         if (status === "OK" && results[0]) resolvedCoordName.value = results[0].address_components[0].short_name || "未知地點";
@@ -320,13 +308,12 @@
                     return; 
                 } else { isCoordinateMode.value = false; selectedLat.value = null; resolvedCoordName.value = ''; }
 
-                // 2. Text Search
                 if(q.length < 1) { searchResults.value = []; isSearching.value = false; return; } 
                 if (!autocompleteService) return;
                 isSearching.value = true; 
                 if(searchTimeout) clearTimeout(searchTimeout); 
                 searchTimeout = setTimeout(() => { 
-                    const request = { input: q, }; // Google Places handles query
+                    const request = { input: q, };
                     autocompleteService.getPlacePredictions(request, (predictions, status) => {
                         if (status === google.maps.places.PlacesServiceStatus.OK && predictions) searchResults.value = predictions;
                         else searchResults.value = [];
@@ -347,7 +334,6 @@
                 markers.forEach(m => m.setMap(null)); markers = [];
                 const bounds = new google.maps.LatLngBounds(); let hasPoint = false;
                 const validPoints = itinerary.value.filter(i => i.lat && i.lng);
-                // Sort by time on map? Optional, but nice.
                 validPoints.forEach(item => {
                     const d = item.day ? parseInt(item.day) : 1;
                     const marker = new google.maps.Marker({ position: { lat: Number(item.lat), lng: Number(item.lng) }, map: googleMap, label: { text: d.toString(), color: "white" }, title: item.name });
@@ -374,7 +360,7 @@
                     const service = new google.maps.places.PlacesService(dummy);
                     try { await new Promise((resolve) => { service.getDetails({ placeId: placeId }, (place, status) => { if (status === google.maps.places.PlacesServiceStatus.OK) { lat = place.geometry.location.lat(); lng = place.geometry.location.lng(); } resolve(); }); }); } catch (e) {}
                 }
-                const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '', time: newTime.value || '' }; // ★ 存入時間
+                const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '', time: newTime.value || '' };
                 itinerary.value.push(item);
                 newPlace.value = ''; newNote.value = ''; newTime.value = ''; selectedPlaceData.value = null; searchResults.value = [];
                 await sendToApi('add', 'itinerary', item);
@@ -383,7 +369,6 @@
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
             const openGoogleMap = (p) => { if (p.place_id) window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank'); else if (p.lat && p.lng) window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank'); else window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + currentTrip.value.city)}`, '_blank'); };
             
-            // ★ Expense Category ★
             const addExpense = async () => { if (!newExpense.value.title || !newExpense.value.amount) return; const uid = generateId(); const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved] }; expenses.value.unshift(d); await sendToApi('add', 'expenses', { ...d, involved: d.involved.join(',') }); newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name), category: '飲食' }; };
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             const addPerson = async () => { const name = newPerson.value.trim(); if (!name) return; const uid = generateId(); people.value.push({ id: uid, name: name }); newExpense.value.involved.push(name); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: name }); };
@@ -392,10 +377,8 @@
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
 
-            // ★ Computed: Filter & Sort Itinerary by Time ★
             const filteredItinerary = computed(() => {
                 let list = itinerary.value.filter(i => (i.day ? parseInt(i.day) : 1) === currentDay.value);
-                // 排序：有時間的排前面(按時間)，沒時間的排後面
                 return list.sort((a, b) => {
                     if (a.time && b.time) return a.time.localeCompare(b.time);
                     if (a.time) return -1;
@@ -404,7 +387,6 @@
                 });
             });
 
-            // ★ Computed: Category Analysis ★
             const categoryAnalysis = computed(() => {
                 const stats = {};
                 expenses.value.forEach(e => {
@@ -414,7 +396,6 @@
                 return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b)=>b.total-a.total);
             });
 
-            // ★ Feature: Export Itinerary ★
             const exportItinerary = () => {
                 let text = `【${currentTrip.value.name}】行程表\n\n`;
                 for(let d = 1; d <= totalDays.value; d++) {
@@ -433,13 +414,13 @@
                 currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
                 currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary,
-                newPlace, newNote, newPerson, newExpense, newTime, categories, // ★
+                newPlace, newNote, newPerson, newExpense, newTime, categories, 
                 searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
                 isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved,
-                categoryAnalysis, exportItinerary // ★
+                categoryAnalysis, exportItinerary
             };
         }
     }).mount('#app');
