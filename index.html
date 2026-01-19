@@ -35,18 +35,24 @@
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
-        <p class="text-gray-500 mb-8">開始你的旅程規劃</p>
+        <p class="text-gray-500 mb-8">選擇一個旅程</p>
+        
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
-                <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
+                <div>
+                    <div class="font-bold text-xl text-gray-900">{{ trip.name }}</div>
+                    <div class="text-sm text-gray-500">📍 {{ trip.city }}</div>
+                </div>
+                <div class="text-2xl text-gray-300">➜</div>
             </div>
             <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">尚無旅程，請按下方新增</div>
         </div>
+
         <div class="card p-4 border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
             <input v-model="newTripName" placeholder="旅程名稱" class="w-full bg-gray-100 p-3 rounded-lg mb-2 outline-none text-gray-900">
             <input v-model="newTripCity" placeholder="主要城市" class="w-full bg-gray-100 p-3 rounded-lg mb-3 outline-none text-gray-900">
-            <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow disabled:opacity-50" :disabled="!newTripName || isLoading">建立新旅程</button>
+            <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow disabled:opacity-50" :disabled="!newTripName || isLoading">建立</button>
         </div>
     </div>
 
@@ -209,10 +215,7 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
-            // ★★★ 1. 您的 GAS 網址 (已自動填入) ★★★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
-            
-            // ★★★ 2. 您的 Google Maps API Key (請在這裡貼上) ★★★
             const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
             // State
@@ -221,6 +224,7 @@
             const trips = ref([]);
             const newTripName = ref('');
             const newTripCity = ref('');
+            
             const currentTab = ref('itinerary');
             const isLoading = ref(false);
             const isMapLoading = ref(false);
@@ -260,7 +264,6 @@
                 return Array.isArray(list) ? list.join(', ') : list;
             };
 
-            // --- Google Maps Loader ---
             const loadGoogleMaps = () => {
                 if (window.google && window.google.maps) return Promise.resolve();
                 return new Promise((resolve, reject) => {
@@ -268,8 +271,8 @@
                     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
                     script.async = true; script.defer = true;
                     script.onload = () => { autocompleteService = new google.maps.places.AutocompleteService(); resolve(); };
-                    // 這裡改為印出錯誤，但不 reject，防止 App 卡死
-                    script.onerror = () => { console.error("Google Maps Load Failed"); resolve(); }; 
+                    // ★ 錯誤處理：避免沒 Key 卡死
+                    script.onerror = () => { console.warn('Google Maps Load Error'); resolve(); };
                     document.head.appendChild(script);
                 });
             };
@@ -277,52 +280,24 @@
             const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) {} finally { isLoading.value = false; } };
             const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
             
-            // ★★★ v29.0 修復：點擊旅程邏輯 (先切換，再讀取) ★★★
-            const selectTrip = async (trip) => { 
+            // ★★★ v30.0 核心修復：確保畫面切換順暢 ★★★
+            const selectTrip = (trip) => { 
                 if(!trip) return;
                 currentTrip.value = trip; 
-                // 1. Reset State
-                itinerary.value = []; expenses.value = []; people.value = []; currentDay.value = 1; totalDays.value = 1; 
-                // 2. Switch View (優先讓畫面變換)
+                // 1. 清空舊資料
+                itinerary.value = []; expenses.value = []; people.value = []; 
+                currentDay.value = 1; totalDays.value = 1; 
+                // 2. 切換畫面 (優先執行)
                 currentView.value = 'app'; 
-                // 3. Fetch Data (背景執行)
-                await fetchData(); 
+                // 3. 背景讀取資料 (不使用 await 阻擋畫面)
+                fetchData(); 
             };
             
             const deleteTripTotally = async () => { if(!confirm('確定移除？')) return; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'del', type: 'trips', id: currentTrip.value.id }) }); exitTrip(); fetchTrips(); };
             const exitTrip = () => { currentView.value = 'lobby'; currentTrip.value = null; fetchTrips(); };
-            
-            // 初始化
-            onMounted(() => { 
-                fetchTrips(); 
-                loadGoogleMaps(); 
-            });
+            onMounted(() => { fetchTrips(); loadGoogleMaps(); });
 
-            const fetchData = async () => { 
-                if(!currentTrip.value) return; 
-                isLoading.value = true; 
-                const tripId = currentTrip.value.id; 
-                try { 
-                    const [resItin, resExp, resPpl] = await Promise.all([ 
-                        fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), 
-                        fetch(`${API_URL}?type=expenses&tripId=${tripId}`), 
-                        fetch(`${API_URL}?type=people&tripId=${tripId}`) 
-                    ]); 
-                    const itinData = await resItin.json(); 
-                    itinerary.value = itinData; 
-                    if(itinData.length > 0) { 
-                        const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); 
-                        if(max > totalDays.value) totalDays.value = max; 
-                    } 
-                    expenses.value = await resExp.json(); 
-                    const ppl = await resPpl.json(); 
-                    people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; 
-                    if(people.value.length) { 
-                        newExpense.value.payer = people.value[0].name; 
-                        newExpense.value.involved = people.value.map(p=>p.name); 
-                    } 
-                } catch(e) { console.error(e); } finally { isLoading.value = false; } 
-            };
+            const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) {} finally { isLoading.value = false; } };
             const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
             
             const searchPlacesInput = () => { 
