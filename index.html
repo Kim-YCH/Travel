@@ -25,7 +25,6 @@
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .suggestion-item:hover { background-color: #eff6ff; }
-        
         .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #1e40af; border-color: #2563eb; font-weight: bold; }
         .stat-bar { transition: width 0.5s ease-in-out; }
         .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
@@ -120,8 +119,7 @@
                     </div>
                     <div class="flex gap-2">
                         <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-lg border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1">
-                            <span v-if="isMapLoading" class="animate-spin">↻</span>
-                            {{ isMapLoading ? '搜尋中...' : '🔍 搜尋此區域' }}
+                            <span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 搜尋此區域' }}
                         </button>
                         <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-lg border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1">
                             <span>🔄</span> 顯示行程
@@ -129,6 +127,9 @@
                     </div>
                 </div>
                 <div id="map" class="flex-1 bg-gray-100"></div>
+                <div v-if="!isMapReady" class="absolute inset-0 flex items-center justify-center bg-gray-100 z-0">
+                    <span class="text-gray-400">地圖準備中...</span>
+                </div>
             </div>
 
             <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
@@ -209,9 +210,9 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
-            // ★★★ 1. 請填入 Apps Script 網址 ★★★
+            // ★ 1. Apps Script 網址 ★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
-            // ★★★ 2. 請填入 API Key ★★★
+            // ★ 2. API Key (已填入) ★
             const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
             // State
@@ -223,7 +224,7 @@
             const currentTab = ref('itinerary');
             const isLoading = ref(false);
             const isMapLoading = ref(false); 
-            const isAutoFixing = ref(false);
+            const isMapReady = ref(false);
             const currentDay = ref(1);
             const totalDays = ref(1);
             
@@ -253,33 +254,26 @@
             const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
             const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
 
-            // ★★★ 核心：時間格式清洗函數 ★★★
             const formatTime = (timeStr) => {
                 if (!timeStr) return '';
-                // 1. 如果已經是正常的 HH:mm (例如 00:18)，直接回傳
                 if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
-                
-                // 2. 如果是 Google 的 ISO 格式 (1899-12...)，轉成時間
                 try {
                     const date = new Date(timeStr);
                     if (isNaN(date.getTime())) return timeStr;
-                    // 強制轉為本地時間 HH:mm
                     const h = date.getHours().toString().padStart(2, '0');
                     const m = date.getMinutes().toString().padStart(2, '0');
                     return `${h}:${m}`;
-                } catch (e) {
-                    return timeStr;
-                }
+                } catch (e) { return timeStr; }
             };
 
             const loadGoogleMaps = () => {
-                if (window.google && window.google.maps) return Promise.resolve();
+                if (window.google && window.google.maps) { isMapReady.value = true; return Promise.resolve(); }
                 return new Promise((resolve, reject) => {
                     const script = document.createElement('script');
                     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
                     script.async = true; script.defer = true;
-                    script.onload = () => { autocompleteService = new google.maps.places.AutocompleteService(); resolve(); };
-                    script.onerror = () => { console.warn('Google Maps Load Error'); resolve(); };
+                    script.onload = () => { autocompleteService = new google.maps.places.AutocompleteService(); isMapReady.value = true; resolve(); };
+                    script.onerror = () => { console.warn('Map Error'); resolve(); };
                     document.head.appendChild(script);
                 });
             };
@@ -304,7 +298,8 @@
             const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
             
             const searchPlacesInput = () => { 
-                const q = newPlace.value.trim(); const city = currentTrip.value.city; 
+                const q = newPlace.value.trim(); 
+                if(!q) { searchResults.value = []; return; }
                 const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
                 if (coordRegex.test(q)) {
                     isCoordinateMode.value = true; isSearching.value = true;
@@ -320,7 +315,6 @@
                     return; 
                 } else { isCoordinateMode.value = false; selectedLat.value = null; resolvedCoordName.value = ''; }
 
-                if(q.length < 1) { searchResults.value = []; isSearching.value = false; return; } 
                 if (!autocompleteService) return;
                 isSearching.value = true; 
                 if(searchTimeout) clearTimeout(searchTimeout); 
@@ -338,11 +332,29 @@
             const selectPlace = (item) => { newPlace.value = item.structured_formatting.main_text; selectedPlaceData.value = item; searchResults.value = []; };
             const searchInGoogleMaps = () => { const query = newPlace.value + (currentTrip.value.city ? ' ' + currentTrip.value.city : ''); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank'); searchResults.value = []; };
 
-            const switchTab = (tab) => { currentTab.value = tab; if(tab === 'map') { nextTick(() => initGoogleMap()); } };
-            const initGoogleMap = () => { if (!window.google) return; const mapEl = document.getElementById('map'); if (!mapEl) return; if (!googleMap) { googleMap = new google.maps.Map(mapEl, { center: { lat: 23.6, lng: 121 }, zoom: 8, streetViewControl: false, mapTypeControl: false, fullscreenControl: false }); infoWindow = new google.maps.InfoWindow(); } updateMapMarkers(); };
+            // ★ 切換地圖時：延遲初始化 + 強制觸發 Resize ★
+            const switchTab = (tab) => { 
+                currentTab.value = tab; 
+                if(tab === 'map') { 
+                    setTimeout(() => {
+                        initGoogleMap();
+                        if(mapInstance) {
+                            google.maps.event.trigger(mapInstance, 'resize');
+                            updateMapMarkers();
+                        }
+                    }, 200); 
+                } 
+            };
+
+            const initGoogleMap = () => { 
+                if (!window.google) return; 
+                const mapEl = document.getElementById('map'); if (!mapEl) return; 
+                if (!mapInstance) { mapInstance = new google.maps.Map(mapEl, { center: { lat: 23.6, lng: 121 }, zoom: 8, streetViewControl: false, mapTypeControl: false, fullscreenControl: false }); infoWindow = new google.maps.InfoWindow(); } 
+                updateMapMarkers(); 
+            };
             
             const updateMapMarkers = () => {
-                if (!googleMap) return;
+                if (!mapInstance) return;
                 markers.forEach(m => m.setMap(null)); markers = [];
                 const bounds = new google.maps.LatLngBounds(); let hasPoint = false;
                 
@@ -361,14 +373,14 @@
                     }
                 });
 
-                if (hasPoint) googleMap.fitBounds(bounds);
-                else if (currentTrip.value && currentTrip.value.city) { const geocoder = new google.maps.Geocoder(); geocoder.geocode({ address: currentTrip.value.city }, (results, status) => { if (status === 'OK' && results[0]) { googleMap.setCenter(results[0].geometry.location); googleMap.setZoom(12); } }); }
+                if (hasPoint) mapInstance.fitBounds(bounds);
+                else if (currentTrip.value && currentTrip.value.city) { const geocoder = new google.maps.Geocoder(); geocoder.geocode({ address: currentTrip.value.city }, (results, status) => { if (status === 'OK' && results[0]) { mapInstance.setCenter(results[0].geometry.location); mapInstance.setZoom(12); } }); }
             };
 
             const createMarker = (item, lat, lng, bounds) => {
                 const d = item.day ? parseInt(item.day) : 1;
-                const marker = new google.maps.Marker({ position: { lat, lng }, map: googleMap, label: { text: d.toString(), color: "white" }, title: item.name });
-                marker.addListener("click", () => { infoWindow.setContent(`<div style="padding:5px; color:black"><b>${item.name}</b><br><span style="font-size:12px; color:#555">${formatTime(item.time) || ''} ${item.message||''}</span><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}" target="_blank" style="color:blue;">Google Maps</a></div>`); infoWindow.open(googleMap, marker); });
+                const marker = new google.maps.Marker({ position: { lat, lng }, map: mapInstance, label: { text: d.toString(), color: "white" }, title: item.name });
+                marker.addListener("click", () => { infoWindow.setContent(`<div style="padding:5px; color:black"><b>${item.name}</b><br><span style="font-size:12px; color:#555">${formatTime(item.time)||''} ${item.message||''}</span><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}" target="_blank" style="color:blue;">Google Maps</a></div>`); infoWindow.open(mapInstance, marker); });
                 markers.push(marker); 
                 if(bounds) bounds.extend(marker.getPosition());
             };
@@ -380,18 +392,18 @@
                 const geocoder = new google.maps.Geocoder();
                 geocoder.geocode({ address: mapSearchQuery.value }, (results, status) => {
                     if (status === 'OK' && results[0]) {
-                        googleMap.setCenter(results[0].geometry.location);
-                        googleMap.setZoom(12);
+                        mapInstance.setCenter(results[0].geometry.location);
+                        mapInstance.setZoom(12);
                     } else alert('找不到該地點');
                 });
             };
 
             const exploreNearby = () => {
-                if(!googleMap || !window.google) return;
+                if(!mapInstance || !window.google) return;
                 isMapLoading.value = true;
-                const service = new google.maps.places.PlacesService(googleMap);
+                const service = new google.maps.places.PlacesService(mapInstance);
                 service.nearbySearch({
-                    location: googleMap.getCenter(),
+                    location: mapInstance.getCenter(),
                     radius: 1000,
                     type: ['tourist_attraction', 'point_of_interest']
                 }, (results, status) => {
@@ -400,15 +412,15 @@
                         markers.forEach(m => m.setMap(null)); markers = [];
                         const bounds = new google.maps.LatLngBounds();
                         results.forEach(place => {
-                            const marker = new google.maps.Marker({ position: place.geometry.location, map: googleMap, icon: { url: place.icon, scaledSize: new google.maps.Size(20, 20) }, title: place.name });
+                            const marker = new google.maps.Marker({ position: place.geometry.location, map: mapInstance, icon: { url: place.icon, scaledSize: new google.maps.Size(20, 20) }, title: place.name });
                             marker.addListener("click", () => {
                                 infoWindow.setContent(`<div style="padding:5px; text-align:center"><b>${place.name}</b><br><button onclick="document.dispatchEvent(new CustomEvent('add-map', {detail: {name: '${place.name}', lat: ${place.geometry.location.lat()}, lng: ${place.geometry.location.lng()}}}))" style="background:#2563eb;color:white;border:none;padding:5px 10px;border-radius:4px;margin-top:5px;width:100%;">➕ 加入行程</button></div>`);
-                                infoWindow.open(googleMap, marker);
+                                infoWindow.open(mapInstance, marker);
                             });
                             markers.push(marker);
                             bounds.extend(place.geometry.location);
                         });
-                        googleMap.fitBounds(bounds);
+                        mapInstance.fitBounds(bounds);
                     } else alert('附近無景點');
                 });
             };
@@ -459,7 +471,7 @@
             
             const editPlace = (item) => {
                 newPlace.value = item.name;
-                newTime.value = formatTime(item.time); // ★ 確保編輯時時間也是乾淨的
+                newTime.value = formatTime(item.time); 
                 newNote.value = item.message || '';
                 removePlace(item.id);
             };
@@ -487,8 +499,8 @@
                 isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
-                totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, // ★
-                categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby
+                totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
+                categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
         }
     }).mount('#app');
