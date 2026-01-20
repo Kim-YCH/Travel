@@ -14,91 +14,73 @@
         /* 全螢幕設定 */
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
-        /* 基礎樣式 */
+        /* ★ 關鍵：Vue 啟動前隱藏畫面，避免出現 {{亂碼}} ★ */
+        [v-cloak] { display: none !important; }
+
+        /* UI 元件美化 (v59 風格) */
         .card { background: white; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); padding: 16px; margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.02); }
         
-        /* ★★★ 重點美化：現代化輸入框樣式 ★★★ */
-        input, select { 
+        input, select, textarea { 
             -webkit-user-select: text; 
             user-select: text; 
-            border: 1px solid #e2e8f0; /* 淺灰邊框 */
-            background-color: #f8fafc; /* 極淺灰背景 */
-            padding: 12px 16px;        /* 加大內距，好點擊 */
-            border-radius: 12px;       /* 圓潤導角 */
+            border: 1px solid #e2e8f0; 
+            background-color: #f8fafc; 
+            padding: 12px 16px; 
+            border-radius: 12px; 
             width: 100%; 
-            font-size: 16px;           /* 防止 iOS 自動縮放 */
-            color: #334155;            /* 深灰文字 */
-            outline: none;             /* 移除預設黑框 */
-            transition: all 0.2s ease-in-out; /* 滑順動畫 */
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+            font-size: 16px;
+            color: #334155; 
+            outline: none; 
+            transition: all 0.2s;
         }
-        /* 輸入框聚焦時的特效 */
-        input:focus, select:focus {
-            background-color: #ffffff;
-            border-color: #3b82f6;     /* 藍色邊框 */
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); /* 藍色光暈 */
-        }
-        /* 提示文字顏色 */
-        ::placeholder { color: #94a3b8; }
+        input:focus, select:focus { background-color: white; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        /* 按鈕優化 */
+        .btn-primary { background: #2563eb; color: white; font-weight: bold; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); transition: all 0.2s; }
+        .btn-primary:active { transform: scale(0.96); }
 
         /* 地圖滿版設定 */
         #map-container { flex: 1; position: relative; width: 100%; height: 100%; background: #e5e7eb; }
         #map { width: 100%; height: 100%; z-index: 1; }
         
-        /* 錯誤顯示框 (預設隱藏) */
-        #fatal-error { display: none !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 99999; padding: 20px; color: red; overflow: auto; }
+        /* 搜尋建議列表 */
+        .suggestions-list { position: absolute; top: 105%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .suggestion-item { padding: 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .suggestion-item:hover { background: #f8fafc; }
         
-        /* 搜尋建議美化 */
-        .suggestions-list { position: absolute; top: 105%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
-        .suggestion-item { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .suggestion-item:hover { background: #eff6ff; }
+        /* 狀態樣式 */
+        .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2); }
+        .day-tab-inactive { background: white; color: #64748b; border-color: #e2e8f0; }
+        .checkbox-wrapper input:checked + div { background-color: #eff6ff; color: #1d4ed8; border-color: #3b82f6; font-weight: 600; }
         
-        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
         .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
         @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
         
-        .checkbox-wrapper input:checked + div { background-color: #eff6ff; color: #1d4ed8; border-color: #3b82f6; font-weight: 600; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1); }
-        .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
-        .day-tab-inactive { background: white; color: #64748b; border-color: #e2e8f0; }
         .no-scrollbar::-webkit-scrollbar { display: none; } 
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
     </style>
 </head>
 <body>
 
-<div id="fatal-error">
-    <h2 class="text-2xl font-bold mb-4">⚠️ 程式發生錯誤</h2>
-    <pre id="error-text" class="bg-gray-100 p-4 rounded text-sm text-black border border-red-300"></pre>
-</div>
-
-<script>
-    window.onerror = function(msg, url, line, col, error) {
-        document.getElementById('fatal-error').style.display = 'block'; // 其實 CSS 擋住了，所以不會顯示
-        document.getElementById('error-text').innerText = `Error: ${msg}\nLine: ${line}:${col}`;
-        return false;
-    };
-</script>
-
-<div id="app" class="flex flex-col h-full w-full">
+<div id="app" class="flex flex-col h-full w-full" v-cloak>
     <div v-if="isLoading" class="loading-bar"></div>
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50 overflow-y-auto">
         <h1 class="text-3xl font-bold text-slate-800 mb-2">✈️ 出發囉</h1>
-        <p class="text-slate-500 mb-8">準備好開始新的冒險了嗎？</p>
-        
+        <p class="text-slate-500 mb-8">選擇一個旅程開始</p>
         <div class="space-y-4 mb-8">
-            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-lg transition-all flex justify-between items-center group">
-                <div><div class="font-bold text-xl text-slate-800 group-hover:text-blue-600 transition">{{ trip.name }}</div><div class="text-sm text-slate-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-slate-300 group-hover:text-blue-500 transition">➜</div>
+            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-lg transition-all flex justify-between items-center">
+                <div><div class="font-bold text-xl text-slate-800">{{ trip.name }}</div><div class="text-sm text-slate-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-slate-300">➜</div>
             </div>
-            <div v-if="trips.length === 0" class="text-center text-slate-400 py-10">讀取中...</div>
+            <div v-if="trips.length === 0" class="text-center text-slate-400 py-10">尚無旅程</div>
         </div>
-        
         <div class="card border-0">
-            <h3 class="font-bold text-slate-700 mb-4">新增旅程</h3>
+            <h3 class="font-bold text-slate-700 mb-3">新增旅程</h3>
             <div class="flex flex-col gap-3">
-                <input v-model="newTripName" placeholder="旅程名稱 (例如: 東京五日遊)">
-                <input v-model="newTripCity" placeholder="主要城市 (例如: Tokyo)">
-                <button @click="createTrip" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-[0.98] transition-all" :disabled="isLoading">建立旅程</button>
+                <input v-model="newTripName" placeholder="旅程名稱 (如: 日本五日遊)">
+                <input v-model="newTripCity" placeholder="主要城市 (如: Osaka)">
+                <button @click="createTrip" class="w-full btn-primary py-3" :disabled="isLoading">建立旅程</button>
             </div>
         </div>
     </div>
@@ -114,7 +96,7 @@
             <div v-show="currentTab === 'itinerary'" class="absolute inset-0 p-4 overflow-y-auto space-y-4 pb-24">
                 <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-5 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition-all flex-shrink-0" :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">Day {{ d }}</button>
-                    <button @click="addNewDay" class="px-4 py-2 rounded-full border border-gray-200 bg-white text-slate-600 font-bold flex-shrink-0 shadow-sm hover:bg-gray-50">+</button>
+                    <button @click="addNewDay" class="px-4 py-2 rounded-full border border-gray-200 bg-white text-slate-600 font-bold flex-shrink-0 shadow-sm">+</button>
                 </div>
                 
                 <div class="card relative space-y-3 !overflow-visible">
@@ -123,7 +105,7 @@
                             <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '...'" class="pl-10">
                             <span class="absolute left-3 top-3.5 text-slate-400">🔍</span>
                         </div>
-                        <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-xl text-2xl shadow-md font-bold hover:bg-blue-700 active:scale-95 transition flex items-center justify-center pb-1">+</button>
+                        <button @click="addPlace" class="btn-primary w-12 text-2xl flex items-center justify-center pb-1">+</button>
                         
                         <div v-if="searchResults.length > 0" class="suggestions-list">
                             <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item">
@@ -145,10 +127,10 @@
                                 <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded-md">{{ formatTime(place.time) }}</span>
                                 <span class="font-bold text-lg text-slate-800">{{ place.name }}</span>
                             </div>
-                            <div class="flex gap-2 mt-1">
+                            <div class="flex gap-2 mt-1 flex-wrap">
                                 <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-bold border border-green-100">已定位</span>
                                 <span v-else class="text-[10px] text-red-400 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">無座標</span>
-                                <div v-if="place.message" class="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full inline-block truncate max-w-[150px]">📝 {{ place.message }}</div>
+                                <div v-if="place.message" class="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full inline-block">📝 {{ place.message }}</div>
                             </div>
                         </div>
                         <div class="flex items-center gap-1 pl-2 border-l ml-2 self-stretch">
@@ -156,20 +138,21 @@
                             <button @click.stop="removePlace(place.id)" class="text-slate-300 hover:text-red-500 px-2 text-xl font-bold transition">×</button>
                         </div>
                     </div>
+                    <div v-if="filteredItinerary.length===0" class="text-center text-slate-400 mt-10">尚無行程</div>
                 </div>
             </div>
 
             <div v-show="currentTab === 'map'" id="map-container">
                 <div class="absolute top-4 left-4 right-4 z-[10] flex flex-col gap-2 pointer-events-none">
                     <div class="flex shadow-xl rounded-xl overflow-hidden border border-white/50 pointer-events-auto">
-                        <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 !rounded-r-none !border-0 bg-white/90 backdrop-blur">
+                        <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 !rounded-r-none !border-0 bg-white/95 backdrop-blur">
                         <button @click="searchCityAndJump" class="bg-blue-600 text-white px-5 font-bold hover:bg-blue-700 transition">Go</button>
                     </div>
                     <div class="flex gap-2 pointer-events-auto">
-                        <button @click="exploreNearby" class="flex-1 bg-white/90 backdrop-blur text-purple-700 font-bold py-2.5 rounded-xl shadow-lg border border-white active:scale-95 text-sm flex justify-center items-center gap-1 transition">
+                        <button @click="exploreNearby" class="flex-1 bg-white/95 backdrop-blur text-purple-700 font-bold py-2.5 rounded-xl shadow-lg border border-white active:scale-95 text-sm flex justify-center items-center gap-1 transition">
                             <span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 搜尋附近' }}
                         </button>
-                        <button @click="fitBoundsToTrip" class="flex-1 bg-white/90 backdrop-blur text-slate-700 font-bold py-2.5 rounded-xl shadow-lg border border-white active:scale-95 text-sm flex justify-center items-center gap-1 transition">
+                        <button @click="fitBoundsToTrip" class="flex-1 bg-white/95 backdrop-blur text-slate-700 font-bold py-2.5 rounded-xl shadow-lg border border-white active:scale-95 text-sm flex justify-center items-center gap-1 transition">
                             <span>🔄</span> 顯示行程
                         </button>
                     </div>
@@ -185,7 +168,7 @@
                 </div>
                 
                 <div v-if="categoryAnalysis.length > 0" class="card">
-                    <h3 class="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">📊 消費分析</h3>
+                    <h3 class="font-bold text-slate-700 text-sm mb-3">📊 消費分析</h3>
                     <div class="space-y-3">
                         <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
                             <div class="flex justify-between mb-1.5"><span class="text-slate-600 font-medium">{{ cat.name }}</span><span class="font-bold text-slate-800">${{ cat.total }} ({{ ((cat.total/totalExpense)*100).toFixed(0) }}%)</span></div>
@@ -200,7 +183,7 @@
                         <input v-model.number="newExpense.amount" type="number" placeholder="$" class="font-mono text-center">
                     </div>
                     <div class="mb-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                        <button v-for="cat in categories" :key="cat" @click="newExpense.category = cat" class="px-4 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition-all" :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'">{{ cat }}</button>
+                        <button v-for="cat in categories" :key="cat" @click="newExpense.category = cat" class="px-4 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition-all" :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'">{{ cat }}</button>
                     </div>
                     <div class="mb-3 flex gap-2 items-center">
                         <span class="text-xs text-slate-400 w-12 font-bold">付款人</span>
@@ -215,7 +198,7 @@
                             </label>
                         </div>
                     </div>
-                    <button @click="addExpense" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-[0.98] transition" :disabled="isLoading">記帳</button>
+                    <button @click="addExpense" class="w-full btn-primary py-3" :disabled="isLoading">記帳</button>
                 </div>
 
                 <div class="space-y-2">
@@ -228,14 +211,11 @@
 
             <div v-show="currentTab === 'settings'" class="absolute inset-0 p-4 space-y-4 overflow-y-auto">
                 <button @click="exitTrip" class="w-full bg-slate-800 text-white py-3.5 rounded-xl font-bold mb-4 shadow-lg active:scale-[0.98] transition">🔙 切換旅程</button>
-                
                 <h3 class="font-bold text-slate-700 ml-1">📋 資料管理</h3>
                 <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-100 py-3.5 rounded-xl font-bold shadow-sm active:scale-[0.98] transition flex justify-center items-center gap-2 hover:bg-blue-50"><span>📤</span> 匯出純文字行程</button>
-                
                 <h3 class="font-bold text-slate-700 mt-6 ml-1">👥 成員管理</h3>
                 <div class="flex gap-2"><input v-model="newPerson" placeholder="輸入名字"><button @click="addPerson" class="bg-slate-800 text-white px-5 rounded-xl font-bold shadow hover:bg-slate-700 transition">新增</button></div>
                 <div class="space-y-2 mb-10"><div v-for="(p, idx) in people" :key="p.id" class="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm"><span class="font-bold text-slate-700">{{ p.name || '成員 ' + (idx + 1) }}</span><button @click="removePerson(idx)" class="text-red-400 font-bold px-2 hover:text-red-600 transition">移除</button></div></div>
-                
                 <div class="border-t pt-8 mt-4 text-center">
                     <button @click="resetTrip" class="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-bold mb-3 hover:bg-red-100 transition">🗑️ 刪除此旅程資料</button>
                     <button @click="deleteTripTotally" class="w-full text-slate-400 text-xs py-3 hover:text-red-400 transition">❌ 移除此旅程卡片</button>
@@ -478,4 +458,26 @@
             const resetTrip = async () => { if(!confirm(`警告：清空？`)) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空'); };
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
-            const filteredItinerary = computed(() => { let list = itinerary.value.filter(i => (i.day ? parseInt(i.day) : 1) === currentDay.value); return list.sort((a, b) => { if (a.time && b.
+            const filteredItinerary = computed(() => { let list = itinerary.value.filter(i => (i.day ? parseInt(i.day) : 1) === currentDay.value); return list.sort((a, b) => { if (a.time && b.time) return a.time.localeCompare(b.time); if (a.time) return -1; if (b.time) return 1; return 0; }); });
+            const categoryAnalysis = computed(() => { const stats = {}; expenses.value.forEach(e => { const cat = e.category || '未分類'; stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0); }); return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b)=>b.total-a.total); });
+            const exportItinerary = () => { let text = `【${currentTrip.value.name}】行程表\n\n`; for(let d = 1; d <= totalDays.value; d++) { text += `📅 Day ${d}\n`; const dayItems = itinerary.value.filter(i => (i.day ? parseInt(i.day) : 1) === d).sort((a, b) => (a.time && b.time) ? a.time.localeCompare(b.time) : (a.time ? -1 : 1)); if(dayItems.length === 0) { text += "  (無行程)\n"; continue; } dayItems.forEach(item => { text += `  ${formatTime(item.time) ? formatTime(item.time) + ' ' : ''}${item.name} ${item.message ? '('+item.message+')' : ''}\n`; }); text += "\n"; } navigator.clipboard.writeText(text).then(() => alert("行程已複製到剪貼簿！")); };
+
+            return {
+                currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
+                currentTab, switchTab, isLoading, isMapLoading, isMapReady, currentDay, totalDays, addNewDay,
+                people, itinerary, expenses, filteredItinerary,
+                newPlace, newTime, newNote, newPerson, newExpense, newTime, categories, 
+                searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
+                isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
+                addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
+                addExpense, removeExpense, addPerson, removePerson, resetTrip,
+                totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
+                categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
+            };
+        }
+    });
+    
+    app.mount('#app');
+</script>
+</body>
+</html>
