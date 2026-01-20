@@ -7,51 +7,42 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* 確保滿版高度 */
+        /* 全螢幕設定 */
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
-        /* 基礎樣式 */
+        /* UI 元件樣式 */
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; }
-        input, select { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
+        input, select, textarea { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
+        .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
+        .day-tab-inactive { background: white; color: #6b7280; border-color: #e5e7eb; }
+        .no-scrollbar::-webkit-scrollbar { display: none; } 
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 地圖滿版設定 */
+        /* 地圖滿版 */
         #map-container { flex: 1; position: relative; width: 100%; height: 100%; background: #e5e7eb; }
         #map { width: 100%; height: 100%; z-index: 1; }
         
-        /* 錯誤顯示框 (預設隱藏) */
-        #fatal-error { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 99999; padding: 20px; color: red; overflow: auto; }
-        
-        /* 搜尋建議 */
+        /* 搜尋建議列表 */
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
         .suggestion-item:hover { background: #f0f9ff; }
         
-        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
+        .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
+        @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
+        
+        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
+        img[src*="google"] { display: inline !important; }
     </style>
 </head>
 <body>
 
-<div id="fatal-error">
-    <h2 class="text-2xl font-bold mb-4">⚠️ 程式發生錯誤</h2>
-    <p class="mb-2">請截圖傳給開發者：</p>
-    <pre id="error-text" class="bg-gray-100 p-4 rounded text-sm text-black border border-red-300"></pre>
-    <button onclick="location.reload()" class="mt-4 bg-blue-600 text-white px-6 py-3 rounded font-bold">重新整理</button>
-</div>
-
-<script>
-    // 全局錯誤攔截
-    window.onerror = function(msg, url, line, col, error) {
-        document.getElementById('fatal-error').style.display = 'block';
-        document.getElementById('error-text').innerText = `Error: ${msg}\nLine: ${line}:${col}\n\n${error ? error.stack : ''}`;
-        return false;
-    };
-</script>
-
 <div id="app" class="flex flex-col h-full w-full">
+    <div v-if="isLoading" class="loading-bar"></div>
+
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50 overflow-y-auto">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
@@ -213,7 +204,7 @@
 
 <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
-    const app = createApp({
+    createApp({
         setup() {
             // ★ Config ★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
@@ -447,15 +438,14 @@
                 people, itinerary, expenses, filteredItinerary,
                 newPlace, newTime, newNote, newPerson, newExpense, newTime, categories, 
                 searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
+                isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
                 categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
         }
-    });
-    
-    app.mount('#app');
+    }).mount('#app');
 </script>
 </body>
 </html>
