@@ -7,21 +7,23 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
+        /* 回復正常的底部間距 */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; user-select: none; padding-bottom: env(safe-area-inset-bottom); }
-        .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; }
+        .flex { display: flex; } .gap-2 { gap: 8px; }
         .tap-highlight-transparent { -webkit-tap-highlight-color: transparent; }
-        input, select, textarea { -webkit-user-select: text; user-select: text; }
+        input, select, textarea { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
         .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
         .day-tab-inactive { background: white; color: #6b7280; border-color: #e5e7eb; }
         .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
         @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
         
-        #map { height: 100%; width: 100%; z-index: 1; background-color: #e5e7eb; }
+        #map { height: 300px; width: 100%; z-index: 1; background-color: #e5e7eb; margin-top: 10px; }
         
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; cursor: pointer; }
@@ -44,12 +46,12 @@
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
-            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card p-5 flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
+            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
             <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">尚無旅程</div>
         </div>
-        <div class="card p-4 border border-blue-100">
+        <div class="card border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
             <input v-model="newTripName" placeholder="旅程名稱" class="w-full bg-gray-100 p-3 rounded-lg mb-2 outline-none text-gray-900">
             <input v-model="newTripCity" placeholder="主要城市" class="w-full bg-gray-100 p-3 rounded-lg mb-3 outline-none text-gray-900">
@@ -63,15 +65,15 @@
             <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95">↻ 同步</button>
         </header>
 
-        <main class="flex-1 overflow-hidden flex flex-col relative bg-gray-50">
-            <div v-if="currentTab === 'itinerary'" class="p-4 overflow-y-auto flex-1 space-y-4">
+        <main class="flex-1 overflow-hidden flex flex-col relative bg-gray-50 p-4 overflow-y-auto">
+            <div v-if="currentTab === 'itinerary'" class="flex-1 space-y-4">
                 <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center">
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">Day {{ d }}</button>
                     <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0">+</button>
                 </div>
                 
-                <div class="card p-4 space-y-2 relative">
-                    <div class="flex gap-2 relative">
+                <div class="card relative">
+                    <div class="flex gap-2 relative mb-2">
                         <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold text-gray-900">
                         <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
                         
@@ -96,7 +98,7 @@
                 </div>
                 
                 <div class="space-y-3 pb-20">
-                    <div v-for="place in filteredItinerary" :key="place.id" class="card p-4 flex justify-between items-start active:scale-[0.99] transition">
+                    <div v-for="place in filteredItinerary" :key="place.id" class="card flex justify-between items-start active:scale-[0.99] transition">
                         <div class="flex-1" @click="openGoogleMap(place)">
                             <div class="flex items-center gap-2">
                                 <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-1 rounded">{{ formatTime(place.time) }}</span>
@@ -115,8 +117,8 @@
                 </div>
             </div>
 
-            <div v-show="currentTab === 'map'" class="absolute inset-0 flex flex-col z-10">
-                <div class="absolute top-4 left-4 right-4 z-[10] flex flex-col gap-2">
+            <div v-show="currentTab === 'map'" class="h-full flex flex-col">
+                <div class="flex flex-col gap-2">
                     <div class="flex shadow-lg rounded-lg overflow-hidden">
                         <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 p-3 border-0 outline-none h-12 text-gray-900 bg-white">
                         <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-12">前往</button>
@@ -130,19 +132,19 @@
                         </button>
                     </div>
                 </div>
-                <div id="map" class="flex-1 bg-gray-100"></div>
-                <div v-if="!isMapReady" class="absolute inset-0 flex items-center justify-center bg-gray-100 z-0 pointer-events-none">
+                <div id="map"></div>
+                <div v-if="!isMapReady" class="absolute inset-0 flex items-center justify-center bg-gray-100 z-0 pointer-events-none" style="top: 60px;">
                     <span class="text-gray-400 bg-white px-4 py-2 rounded shadow">正在載入地圖...</span>
                 </div>
             </div>
 
-            <div v-if="currentTab === 'money'" class="p-4 overflow-y-auto space-y-4 pb-24">
-                <div class="card p-4 bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
+            <div v-if="currentTab === 'money'" class="space-y-4 pb-24">
+                <div class="card bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
                     <div class="flex justify-between items-end mb-4"><span class="text-gray-300 text-sm">總支出</span><span class="text-2xl font-bold">${{ totalExpense }}</span></div>
                     <div class="space-y-2 border-t border-gray-600 pt-3"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between text-sm"><span>{{ res.name }}</span><span :class="res.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-mono font-bold">${{ Math.abs(res.balance).toFixed(0) }}</span></div></div>
                 </div>
 
-                <div v-if="categoryAnalysis.length > 0" class="card p-4">
+                <div v-if="categoryAnalysis.length > 0" class="card">
                     <h3 class="font-bold text-gray-700 text-sm mb-2">📊 消費分析</h3>
                     <div class="space-y-2">
                         <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
@@ -152,7 +154,7 @@
                     </div>
                 </div>
                 
-                <div class="card p-4 border border-blue-100">
+                <div class="card border border-blue-100">
                     <div class="grid grid-cols-3 gap-2 mb-3">
                         <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none text-gray-900">
                         <input v-model.number="newExpense.amount" type="number" placeholder="$" class="bg-gray-50 p-3 rounded-lg border-0 ring-1 ring-gray-200 outline-none text-gray-900">
@@ -211,7 +213,7 @@
 
 <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
-    createApp({
+    const app = createApp({
         setup() {
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
             const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
@@ -274,7 +276,7 @@
                     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
                     script.async = true; script.defer = true;
                     script.onload = () => { try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){} isMapReady.value = true; resolve(); };
-                    script.onerror = () => { console.warn('Google Maps Load Error'); resolve(); };
+                    script.onerror = () => { console.warn('Map Error'); resolve(); };
                     document.head.appendChild(script);
                 });
             };
@@ -502,7 +504,9 @@
                 categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
         }
-    }).mount('#app');
+    });
+    
+    app.mount('#app');
 </script>
 </body>
 </html>
