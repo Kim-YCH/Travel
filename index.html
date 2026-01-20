@@ -4,63 +4,66 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>出發囉</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* 基礎設定 */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding-bottom: env(safe-area-inset-bottom); margin: 0; height: 100vh; display: flex; flex-direction: column; }
+        /* 確保滿版高度 */
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         
-        /* 隱藏除錯框 (關鍵修改：不刪除代碼，只隱藏，確保邏輯不變) */
-        #debug-console { display: none !important; }
-
-        /* UI 樣式 */
+        /* 基礎樣式 */
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; }
-        .flex { display: flex; } .gap-2 { gap: 8px; }
-        input, select { border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
+        input, select { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
         
         /* 地圖滿版設定 */
         #map-container { flex: 1; position: relative; width: 100%; height: 100%; background: #e5e7eb; }
         #map { width: 100%; height: 100%; z-index: 1; }
         
+        /* 錯誤顯示框 (預設隱藏，只有報錯時才出現，作為保險) */
+        #fatal-error { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 99999; padding: 20px; color: red; overflow: auto; }
+        
         /* 搜尋建議 */
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .suggestion-item:hover { background: #f0f9ff; }
         
-        /* Google Maps 修正 */
         .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
-        
-        /* 避免 Vue 未載入時的白畫面 */
-        [v-cloak] { display: none; }
+        .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
+        @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
     </style>
 </head>
 <body>
 
-<div id="debug-console"></div>
+<div id="fatal-error">
+    <h2 class="text-2xl font-bold mb-4">⚠️ 程式發生錯誤</h2>
+    <p class="mb-2">請截圖傳給開發者：</p>
+    <pre id="error-text" class="bg-gray-100 p-4 rounded text-sm text-black border border-red-300"></pre>
+    <button onclick="location.reload()" class="mt-4 bg-blue-600 text-white px-6 py-3 rounded font-bold">重新整理</button>
+</div>
 
 <script>
-    // 錯誤處理 (保留但不彈窗，只在背景紀錄)
-    window.onerror = function(msg, url, line) {
-        console.error("Error: " + msg + " (Line: " + line + ")");
+    // 全局錯誤攔截
+    window.onerror = function(msg, url, line, col, error) {
+        document.getElementById('fatal-error').style.display = 'block';
+        document.getElementById('error-text').innerText = `Error: ${msg}\nLine: ${line}:${col}\n\n${error ? error.stack : ''}`;
         return false;
     };
 </script>
 
-<div id="app" class="flex flex-col h-full w-full" v-cloak>
-    <div v-if="isLoading" style="position:fixed;top:0;left:0;right:0;height:3px;background:#2563eb;z-index:9999;"></div>
+<div id="app" class="flex flex-col h-full w-full">
+    <div v-if="isLoading" class="loading-bar"></div>
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50 overflow-y-auto">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
         <div class="space-y-4 mb-8">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-md flex justify-between items-center">
-                <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">{{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
+                <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
-            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">
-                <span v-if="isLoading">讀取中...</span>
-                <span v-else>尚無旅程</span>
-            </div>
+            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">讀取中...</div>
         </div>
         <div class="card border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
@@ -79,6 +82,7 @@
         </header>
 
         <main class="flex-1 relative bg-gray-50 overflow-hidden">
+            
             <div v-show="currentTab === 'itinerary'" class="absolute inset-0 p-4 overflow-y-auto space-y-4 pb-24">
                 <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'">Day {{ d }}</button>
@@ -118,7 +122,6 @@
                             <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
                         </div>
                     </div>
-                    <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
                 </div>
             </div>
 
