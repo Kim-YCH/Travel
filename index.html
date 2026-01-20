@@ -7,33 +7,51 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+        /* 確保滿版高度 */
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        /* 基礎樣式 */
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; }
         input, select { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
         
-        /* ★★★ 重點修改：地圖全滿設定 ★★★ */
-        #map { width: 100%; height: 100%; background: #e5e7eb; }
+        /* 地圖滿版設定 */
+        #map-container { flex: 1; position: relative; width: 100%; height: 100%; background: #e5e7eb; }
+        #map { width: 100%; height: 100%; z-index: 1; }
         
-        /* 搜尋建議列表 */
+        /* 錯誤顯示框 (預設隱藏) */
+        #fatal-error { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 99999; padding: 20px; color: red; overflow: auto; }
+        
+        /* 搜尋建議 */
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
         .suggestion-item:hover { background: #f0f9ff; }
-        
-        .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
-        @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
         
         .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
     </style>
 </head>
 <body>
 
-<div id="app" class="flex flex-col h-screen w-full">
-    <div v-if="isLoading" class="loading-bar"></div>
+<div id="fatal-error">
+    <h2 class="text-2xl font-bold mb-4">⚠️ 程式發生錯誤</h2>
+    <p class="mb-2">請截圖傳給開發者：</p>
+    <pre id="error-text" class="bg-gray-100 p-4 rounded text-sm text-black border border-red-300"></pre>
+    <button onclick="location.reload()" class="mt-4 bg-blue-600 text-white px-6 py-3 rounded font-bold">重新整理</button>
+</div>
 
+<script>
+    // 全局錯誤攔截
+    window.onerror = function(msg, url, line, col, error) {
+        document.getElementById('fatal-error').style.display = 'block';
+        document.getElementById('error-text').innerText = `Error: ${msg}\nLine: ${line}:${col}\n\n${error ? error.stack : ''}`;
+        return false;
+    };
+</script>
+
+<div id="app" class="flex flex-col h-full w-full">
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50 overflow-y-auto">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
@@ -41,7 +59,7 @@
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-md flex justify-between items-center">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
-            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">尚無旅程</div>
+            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">讀取中...</div>
         </div>
         <div class="card border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
@@ -61,7 +79,7 @@
 
         <main class="flex-1 relative bg-gray-50 overflow-hidden">
             
-            <div v-show="currentTab === 'itinerary'" class="absolute inset-0 p-4 overflow-y-auto space-y-4">
+            <div v-show="currentTab === 'itinerary'" class="absolute inset-0 p-4 overflow-y-auto space-y-4 pb-24">
                 <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'">Day {{ d }}</button>
                     <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm">+</button>
@@ -84,13 +102,14 @@
                     </div>
                 </div>
                 
-                <div class="space-y-3 pb-20">
+                <div class="space-y-3">
                     <div v-for="place in filteredItinerary" :key="place.id" class="card flex justify-between items-start active:scale-[0.99] transition">
                         <div class="flex-1" @click="openGoogleMap(place)">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-1 rounded">{{ formatTime(place.time) }}</span>
                                 <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
                                 <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1 rounded border border-green-200">定位</span>
+                                <span v-else class="text-[10px] text-red-400 bg-red-50 px-1 rounded border border-red-200">無座標</span>
                             </div>
                             <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
                         </div>
@@ -99,31 +118,26 @@
                             <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
                         </div>
                     </div>
-                    <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
                 </div>
             </div>
 
-            <div v-show="currentTab === 'map'" class="absolute inset-0 w-full h-full">
-                <div class="absolute top-4 left-4 right-4 z-[10] flex flex-col gap-2 pointer-events-none">
-                    <div class="flex shadow-lg rounded-lg overflow-hidden border border-gray-200 pointer-events-auto">
+            <div v-show="currentTab === 'map'" id="map-container">
+                <div class="absolute top-4 left-4 right-4 z-[10] flex flex-col gap-2">
+                    <div class="flex shadow-lg rounded-lg overflow-hidden border border-gray-200">
                         <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 p-3 border-0 outline-none h-12 text-gray-900 bg-white">
                         <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-12">前往</button>
                     </div>
-                    <div class="flex gap-2 pointer-events-auto">
-                        <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-md border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1">
-                            <span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 搜尋此區域' }}
+                    <div class="flex gap-2">
+                        <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-md border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1 transition">
+                            <span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 搜尋附近' }}
                         </button>
-                        <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-md border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1">
+                        <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-md border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1 transition">
                             <span>🔄</span> 顯示行程
                         </button>
                     </div>
                 </div>
-                
-                <div id="map" class="w-full h-full"></div>
-                
-                <div v-if="!isMapReady" class="absolute inset-0 flex items-center justify-center bg-gray-100 z-0">
-                    <span class="text-gray-400 bg-white px-4 py-2 rounded shadow">地圖準備中...</span>
-                </div>
+                <div id="map"></div>
+                <div v-if="!isMapReady" class="absolute inset-0 flex items-center justify-center pointer-events-none"><span class="bg-white px-4 py-2 rounded shadow text-gray-500">地圖載入中...</span></div>
             </div>
 
             <div v-show="currentTab === 'money'" class="absolute inset-0 p-4 overflow-y-auto space-y-4 pb-24">
@@ -189,17 +203,17 @@
         </main>
 
         <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-            <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
-            <button @click="switchTab('map')" class="flex flex-col items-center w-full transition" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">地圖</span></button>
-            <button @click="switchTab('money')" class="flex flex-col items-center w-full transition" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
-            <button @click="switchTab('settings')" class="flex flex-col items-center w-full transition" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
+            <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
+            <button @click="switchTab('map')" class="flex flex-col items-center w-full" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">地圖</span></button>
+            <button @click="switchTab('money')" class="flex flex-col items-center w-full" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
+            <button @click="switchTab('settings')" class="flex flex-col items-center w-full" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
         </nav>
     </div>
 </div>
 
 <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
-    createApp({
+    const app = createApp({
         setup() {
             // ★ Config ★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
@@ -230,12 +244,6 @@
             const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
             
             const searchResults = ref([]);
-            const isSearching = ref(false);
-            const isCoordinateMode = ref(false);
-            const resolvedCoordName = ref('');
-            const selectedLat = ref(null);
-            const selectedLng = ref(null);
-            const selectedPlaceData = ref(null);
             const mapSearchQuery = ref('');
             let searchTimeout = null;
             let mapInstance = null; let markers = []; let infoWindow = null;
@@ -244,7 +252,6 @@
             const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
             const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
 
-            // Time Formatter
             const formatTime = (timeStr) => {
                 if (!timeStr) return '';
                 if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
@@ -263,10 +270,7 @@
                     const script = document.createElement('script');
                     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
                     script.async = true; script.defer = true;
-                    script.onload = () => { 
-                        try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){} 
-                        isMapReady.value = true; resolve(); 
-                    };
+                    script.onload = () => { try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){} isMapReady.value = true; resolve(); };
                     script.onerror = () => { console.warn('Map Error'); resolve(); };
                     document.head.appendChild(script);
                 });
@@ -294,36 +298,17 @@
             const searchPlacesInput = () => { 
                 const q = newPlace.value.trim(); 
                 if(!q) { searchResults.value = []; return; }
-                const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
-                if (coordRegex.test(q)) {
-                    isCoordinateMode.value = true; isSearching.value = true;
-                    const parts = q.split(','); const lat = parseFloat(parts[0]); const lng = parseFloat(parts[1]);
-                    selectedLat.value = lat; selectedLng.value = lng;
-                    if(window.google) {
-                        const geocoder = new google.maps.Geocoder();
-                        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                            if (status === "OK" && results[0]) resolvedCoordName.value = results[0].address_components[0].short_name || "未知地點";
-                            isSearching.value = false;
-                        });
-                    } else { resolvedCoordName.value = "座標"; isSearching.value = false; }
-                    return; 
-                } else { isCoordinateMode.value = false; selectedLat.value = null; resolvedCoordName.value = ''; }
-
                 if (!autocompleteService) return;
-                isSearching.value = true; 
                 if(searchTimeout) clearTimeout(searchTimeout); 
                 searchTimeout = setTimeout(() => { 
-                    const request = { input: q, };
-                    autocompleteService.getPlacePredictions(request, (predictions, status) => {
+                    autocompleteService.getPlacePredictions({ input: q }, (predictions, status) => {
                         if (status === google.maps.places.PlacesServiceStatus.OK && predictions) searchResults.value = predictions;
                         else searchResults.value = [];
-                        isSearching.value = false;
                     });
                 }, 500); 
             };
             
-            const useCoordinateInput = () => { if (resolvedCoordName.value) newPlace.value = resolvedCoordName.value; addPlace(); };
-            const selectPlace = (item) => { newPlace.value = item.structured_formatting.main_text; selectedPlaceData.value = item; searchResults.value = []; };
+            const selectPlace = (item) => { newPlace.value = item.structured_formatting.main_text; addPlace(item.place_id); searchResults.value = []; };
             const searchInGoogleMaps = () => { const query = newPlace.value + (currentTrip.value.city ? ' ' + currentTrip.value.city : ''); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank'); searchResults.value = []; };
 
             const switchTab = (tab) => { 
@@ -394,11 +379,7 @@
                 if(!mapInstance || !window.google) return;
                 isMapLoading.value = true;
                 const service = new google.maps.places.PlacesService(mapInstance);
-                service.nearbySearch({
-                    location: mapInstance.getCenter(),
-                    radius: 1000,
-                    type: ['tourist_attraction', 'point_of_interest']
-                }, (results, status) => {
+                service.nearbySearch({ location: mapInstance.getCenter(), radius: 1000, type: ['tourist_attraction', 'point_of_interest'] }, (results, status) => {
                     isMapLoading.value = false;
                     if (status === google.maps.places.PlacesServiceStatus.OK) {
                         markers.forEach(m => m.setMap(null)); markers = [];
@@ -425,49 +406,27 @@
                 alert(`已加入: ${name}`);
             });
 
-            const addPlace = async () => {
-                if(!newPlace.value.trim()) return;
-                const id = generateId(); const d = currentDay.value; const placeName = newPlace.value;
-                let lat = null; let lng = null; let placeId = null;
-                
-                if (selectedPlaceData.value && window.google) {
-                    placeId = selectedPlaceData.value.place_id;
-                    const dummy = new google.maps.Map(document.createElement('div'));
-                    const service = new google.maps.places.PlacesService(dummy);
-                    try { await new Promise((resolve) => { service.getDetails({ placeId: placeId }, (place, status) => { if (status === google.maps.places.PlacesServiceStatus.OK) { lat = place.geometry.location.lat(); lng = place.geometry.location.lng(); } resolve(); }); }); } catch (e) {}
-                } else if (selectedLat.value && selectedLng.value) {
-                    lat = selectedLat.value; lng = selectedLng.value;
-                } else if (window.google) {
-                    try {
-                        const geocoder = new google.maps.Geocoder();
-                        await new Promise((resolve) => {
-                            geocoder.geocode({ address: placeName + (currentTrip.value.city ? " " + currentTrip.value.city : "") }, (results, status) => {
-                                if (status === 'OK' && results[0]) {
-                                    lat = results[0].geometry.location.lat();
-                                    lng = results[0].geometry.location.lng();
-                                    placeId = results[0].place_id;
-                                }
-                                resolve();
-                            });
-                        });
-                    } catch(e) {}
-                }
-
-                const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '', time: newTime.value || '' };
+            const addPlace = async (googlePlaceId = null) => {
+                if(!newPlace.value) return;
+                const id = generateId();
+                const item = { id, name: newPlace.value, day: currentDay.value, time: newTime.value, message: newNote.value, lat: '', lng: '', place_id: googlePlaceId };
                 itinerary.value.push(item);
-                newPlace.value = ''; newNote.value = ''; newTime.value = ''; selectedPlaceData.value = null; searchResults.value = []; selectedLat.value = null; selectedLng.value = null;
-                await sendToApi('add', 'itinerary', item);
+                newPlace.value = ''; newNote.value = '';
+                if (googlePlaceId && window.google) {
+                    const dummy = document.createElement('div');
+                    const service = new google.maps.places.PlacesService(dummy);
+                    service.getDetails({ placeId: googlePlaceId }, (place, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK) {
+                            item.lat = place.geometry.location.lat();
+                            item.lng = place.geometry.location.lng();
+                            sendToApi('add', 'itinerary', item);
+                        } else sendToApi('add', 'itinerary', item);
+                    });
+                } else sendToApi('add', 'itinerary', item);
             };
             
             const removePlace = async(id) => { const i=itinerary.value.findIndex(x=>x.id===id); if(i!==-1) { itinerary.value.splice(i,1); await sendToApi('del', 'itinerary', id); updateMapMarkers(); } };
-            
-            const editPlace = (item) => {
-                newPlace.value = item.name;
-                newTime.value = formatTime(item.time); 
-                newNote.value = item.message || '';
-                removePlace(item.id);
-            };
-
+            const editPlace = (item) => { newPlace.value = item.name; newTime.value = formatTime(item.time); newNote.value = item.message || ''; removePlace(item.id); };
             const addNewDay = () => { totalDays.value++; currentDay.value = totalDays.value; };
             const openGoogleMap = (p) => { if (p.place_id) window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank'); else if (p.lat && p.lng) window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank'); else window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + currentTrip.value.city)}`, '_blank'); };
             
@@ -484,18 +443,19 @@
 
             return {
                 currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
-                currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
+                currentTab, switchTab, isLoading, isMapLoading, isMapReady, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary,
-                newPlace, newNote, newPerson, newExpense, newTime, categories, 
+                newPlace, newTime, newNote, newPerson, newExpense, newTime, categories, 
                 searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
-                isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
                 categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
         }
-    }).mount('#app');
+    });
+    
+    app.mount('#app');
 </script>
 </body>
 </html>
