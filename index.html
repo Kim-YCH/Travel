@@ -11,43 +11,34 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding-bottom: env(safe-area-inset-bottom); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; }
-        .flex { display: flex; } .gap-2 { gap: 8px; }
-        .tap-highlight-transparent { -webkit-tap-highlight-color: transparent; }
-        input, select, textarea { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
-        .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
-        .day-tab-inactive { background: white; color: #6b7280; border-color: #e5e7eb; }
-        .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input, select { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
         
-        /* 讀取條 */
-        .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
+        /* ★★★ 重點修改：地圖全滿設定 ★★★ */
+        #map { width: 100%; height: 100%; background: #e5e7eb; }
+        
+        /* 搜尋建議列表 */
+        .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .suggestion-item:hover { background: #f0f9ff; }
+        
+        .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
         @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
         
-        #map { height: 300px; width: 100%; z-index: 1; background-color: #e5e7eb; margin-top: 10px; border-radius: 8px; }
-        
-        .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .suggestion-item { padding: 12px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-        .suggestion-item:hover { background-color: #eff6ff; }
-        
-        .checkbox-wrapper input:checked + div { background-color: #dbeafe; color: #1e40af; border-color: #2563eb; font-weight: bold; }
-        .checkbox-wrapper div { color: #111827; font-weight: 500; }
-        .stat-bar { transition: width 0.5s ease-in-out; }
-        
-        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
-        img[src*="google"] { display: inline !important; }
+        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
     </style>
 </head>
 <body>
 
-<div id="app" class="max-w-md mx-auto min-h-screen flex flex-col h-screen">
+<div id="app" class="flex flex-col h-screen w-full">
     <div v-if="isLoading" class="loading-bar"></div>
 
-    <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50">
+    <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50 overflow-y-auto">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
-        <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
-            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
+        <div class="space-y-4 mb-8">
+            <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-md flex justify-between items-center">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
             <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">尚無旅程</div>
@@ -57,46 +48,39 @@
             <div class="flex flex-col gap-2">
                 <input v-model="newTripName" placeholder="旅程名稱" class="bg-gray-50">
                 <input v-model="newTripCity" placeholder="主要城市" class="bg-gray-50">
-                <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow hover:bg-blue-700 transition" :disabled="isLoading">建立</button>
+                <button @click="createTrip" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow" :disabled="isLoading">建立</button>
             </div>
         </div>
     </div>
 
-    <div v-else class="flex flex-col h-full">
-        <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
-            <div><h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1><div class="text-xs text-blue-200">Day {{ currentDay }} | {{ currentTrip.city }}</div></div>
-            <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95 hover:bg-blue-600 transition">↻ 同步</button>
+    <div v-else class="flex flex-col h-full w-full overflow-hidden">
+        <header class="bg-blue-600 text-white p-4 pt-10 pb-4 shadow-md z-50 flex justify-between items-center flex-shrink-0">
+            <div><h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1><div class="text-xs text-blue-100">Day {{ currentDay }} | {{ currentTrip.city }}</div></div>
+            <button @click="fetchData" class="text-xs bg-blue-700 px-3 py-1 rounded-full text-blue-100 active:scale-95 shadow">↻ 同步</button>
         </header>
 
-        <main class="flex-1 overflow-hidden flex flex-col relative bg-gray-50 p-4 overflow-y-auto">
-            <div v-if="currentTab === 'itinerary'" class="flex-1 space-y-4">
-                <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center">
-                    <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">Day {{ d }}</button>
+        <main class="flex-1 relative bg-gray-50 overflow-hidden">
+            
+            <div v-show="currentTab === 'itinerary'" class="absolute inset-0 p-4 overflow-y-auto space-y-4">
+                <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'">Day {{ d }}</button>
                     <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm">+</button>
                 </div>
                 
                 <div class="card relative space-y-2">
                     <div class="flex gap-2 relative">
-                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '...'" class="flex-1 bg-gray-50 font-bold">
-                        <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow active:scale-95 transition" :disabled="isLoading">+</button>
-                        
-                        <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
-                            <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
-                            <div v-if="isCoordinateMode" @click="useCoordinateInput" class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200">
-                                <span class="text-xl">📍</span><div><div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div><div class="text-xs text-green-600">點擊使用</div></div>
-                            </div>
-                            <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item hover:bg-blue-50">
+                        <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '...'" class="flex-1 bg-gray-100">
+                        <button @click="addPlace" class="bg-blue-600 text-white w-12 rounded-lg text-2xl shadow font-bold">+</button>
+                        <div v-if="searchResults.length > 0" class="suggestions-list">
+                            <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item">
                                 <span class="text-xl mr-2">📍</span>
-                                <div class="overflow-hidden"><div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div><div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div></div>
-                            </div>
-                            <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
-                                <span class="text-xl">🔎</span><div class="flex-1"><div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找</div><div class="text-xs text-gray-400">複製座標貼回來</div></div><span class="text-gray-300 text-lg">➜</span>
+                                <div><div class="font-bold text-sm">{{ item.structured_formatting.main_text }}</div><div class="text-xs text-gray-500">{{ item.structured_formatting.secondary_text }}</div></div>
                             </div>
                         </div>
                     </div>
                     <div class="flex gap-2">
-                        <input v-model="newTime" type="time" class="w-1/3 bg-gray-50">
-                        <input v-model="newNote" type="text" placeholder="備註..." class="flex-1 bg-gray-50">
+                        <input v-model="newTime" type="time" class="w-1/3 bg-gray-100">
+                        <input v-model="newNote" type="text" placeholder="備註..." class="flex-1 bg-gray-100">
                     </div>
                 </div>
                 
@@ -106,8 +90,7 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-1 rounded">{{ formatTime(place.time) }}</span>
                                 <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
-                                <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1 rounded border border-green-200">已定位</span>
-                                <span v-else class="text-[10px] text-red-400 bg-red-50 px-1 rounded border border-red-200">無座標</span>
+                                <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1 rounded border border-green-200">定位</span>
                             </div>
                             <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
                         </div>
@@ -116,35 +99,39 @@
                             <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
                         </div>
                     </div>
-                    <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程，快去新增吧！</div>
+                    <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
                 </div>
             </div>
 
-            <div v-show="currentTab === 'map'" class="h-full flex flex-col">
-                <div class="flex flex-col gap-2">
-                    <div class="flex shadow-lg rounded-lg overflow-hidden border border-gray-200">
+            <div v-show="currentTab === 'map'" class="absolute inset-0 w-full h-full">
+                <div class="absolute top-4 left-4 right-4 z-[10] flex flex-col gap-2 pointer-events-none">
+                    <div class="flex shadow-lg rounded-lg overflow-hidden border border-gray-200 pointer-events-auto">
                         <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 p-3 border-0 outline-none h-12 text-gray-900 bg-white">
                         <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-12">前往</button>
                     </div>
-                    <div class="flex gap-2">
-                        <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-md border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1 transition">
+                    <div class="flex gap-2 pointer-events-auto">
+                        <button @click="exploreNearby" class="flex-1 bg-white text-purple-700 font-bold py-2 rounded-lg shadow-md border border-purple-100 active:scale-95 text-sm flex justify-center items-center gap-1">
                             <span v-if="isMapLoading" class="animate-spin">↻</span>{{ isMapLoading ? '搜尋中...' : '🔍 搜尋此區域' }}
                         </button>
-                        <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-md border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1 transition">
+                        <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-2 rounded-lg shadow-md border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-1">
                             <span>🔄</span> 顯示行程
                         </button>
                     </div>
                 </div>
-                <div id="map"></div>
-                <div v-if="!isMapReady" class="text-center text-gray-400 mt-4 text-sm bg-white p-2 rounded shadow">正在連線 Google Maps...</div>
+                
+                <div id="map" class="w-full h-full"></div>
+                
+                <div v-if="!isMapReady" class="absolute inset-0 flex items-center justify-center bg-gray-100 z-0">
+                    <span class="text-gray-400 bg-white px-4 py-2 rounded shadow">地圖準備中...</span>
+                </div>
             </div>
 
-            <div v-if="currentTab === 'money'" class="space-y-4 pb-24">
+            <div v-show="currentTab === 'money'" class="absolute inset-0 p-4 overflow-y-auto space-y-4 pb-24">
                 <div class="card bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
                     <div class="flex justify-between items-end mb-4"><span class="text-gray-400 text-sm">總支出</span><span class="text-3xl font-bold tracking-wider">${{ totalExpense }}</span></div>
                     <div class="space-y-1 border-t border-gray-600 pt-3 text-sm"><div v-for="res in balanceSheet" :key="res.name" class="flex justify-between"><span>{{ res.name }}</span><span :class="res.balance>=0?'text-green-400':'text-red-400'" class="font-mono font-bold">{{ res.balance > 0 ? '+' : ''}}{{ res.balance }}</span></div></div>
                 </div>
-
+                
                 <div v-if="categoryAnalysis.length > 0" class="card">
                     <h3 class="font-bold text-gray-700 text-sm mb-3">📊 消費分析</h3>
                     <div class="space-y-3">
@@ -154,7 +141,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="card border border-blue-100">
                     <div class="grid grid-cols-3 gap-2 mb-3">
                         <input v-model="newExpense.title" placeholder="項目" class="col-span-2 bg-gray-50">
@@ -187,7 +174,7 @@
                 </div>
             </div>
 
-            <div v-if="currentTab === 'settings'" class="p-4 space-y-4">
+            <div v-show="currentTab === 'settings'" class="absolute inset-0 p-4 space-y-4 overflow-y-auto">
                 <button @click="exitTrip" class="w-full bg-gray-700 text-white py-3 rounded-lg font-bold mb-4 shadow">🔙 切換旅程</button>
                 <h3 class="font-bold text-gray-700">📋 資料管理</h3>
                 <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-200 py-3 rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"><span>📤</span> 匯出純文字行程</button>
@@ -202,10 +189,10 @@
         </main>
 
         <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-            <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
-            <button @click="switchTab('map')" class="flex flex-col items-center w-full" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">地圖</span></button>
-            <button @click="switchTab('money')" class="flex flex-col items-center w-full" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
-            <button @click="switchTab('settings')" class="flex flex-col items-center w-full" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
+            <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition" :class="currentTab==='itinerary'?'text-blue-600':'text-gray-400'"><span class="text-xl">📍</span><span class="text-xs">行程</span></button>
+            <button @click="switchTab('map')" class="flex flex-col items-center w-full transition" :class="currentTab==='map'?'text-purple-600':'text-gray-400'"><span class="text-xl">🗺️</span><span class="text-xs">地圖</span></button>
+            <button @click="switchTab('money')" class="flex flex-col items-center w-full transition" :class="currentTab==='money'?'text-green-600':'text-gray-400'"><span class="text-xl">💰</span><span class="text-xs">分帳</span></button>
+            <button @click="switchTab('settings')" class="flex flex-col items-center w-full transition" :class="currentTab==='settings'?'text-gray-600':'text-gray-400'"><span class="text-xl">⚙️</span><span class="text-xs">設定</span></button>
         </nav>
     </div>
 </div>
@@ -257,21 +244,17 @@
             const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
             const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
 
-            // ★★★ 時間修復核心：過濾掉 1899 年的日期，只留時間 ★★★
+            // Time Formatter
             const formatTime = (timeStr) => {
                 if (!timeStr) return '';
-                // 如果已經是 HH:mm，直接回傳
                 if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
                 try {
                     const date = new Date(timeStr);
                     if (isNaN(date.getTime())) return timeStr;
-                    // 強制轉為 24 小時制時間
                     const h = date.getHours().toString().padStart(2, '0');
                     const m = date.getMinutes().toString().padStart(2, '0');
                     return `${h}:${m}`;
-                } catch (e) {
-                    return timeStr;
-                }
+                } catch (e) { return timeStr; }
             };
 
             const loadGoogleMaps = () => {
@@ -280,7 +263,10 @@
                     const script = document.createElement('script');
                     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
                     script.async = true; script.defer = true;
-                    script.onload = () => { try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){} isMapReady.value = true; resolve(); };
+                    script.onload = () => { 
+                        try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){} 
+                        isMapReady.value = true; resolve(); 
+                    };
                     script.onerror = () => { console.warn('Map Error'); resolve(); };
                     document.head.appendChild(script);
                 });
@@ -498,7 +484,7 @@
 
             return {
                 currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
-                currentTab, switchTab, isLoading, isMapLoading, isMapReady, currentDay, totalDays, addNewDay,
+                currentTab, switchTab, isLoading, isMapLoading, isAutoFixing, currentDay, totalDays, addNewDay,
                 people, itinerary, expenses, filteredItinerary,
                 newPlace, newNote, newPerson, newExpense, newTime, categories, 
                 searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
@@ -506,7 +492,7 @@
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
-                categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby
+                categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
         }
     }).mount('#app');
