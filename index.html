@@ -22,8 +22,9 @@
         #map-container { flex: 1; position: relative; width: 100%; height: 100%; background: #e5e7eb; }
         #map { width: 100%; height: 100%; z-index: 1; }
         
-        /* 錯誤顯示框 (預設隱藏) */
-        #fatal-error { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 99999; padding: 20px; color: red; overflow: auto; }
+        /* ★★★ 關鍵修改：保留錯誤框結構，但強制隱藏 (display: none) ★★★ */
+        /* 這樣既不會破壞程式邏輯，也不會讓使用者看到紅字 */
+        #fatal-error { display: none !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 99999; padding: 20px; color: red; overflow: auto; }
         
         /* 搜尋建議 */
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -37,16 +38,18 @@
 
 <div id="fatal-error">
     <h2 class="text-2xl font-bold mb-4">⚠️ 程式發生錯誤</h2>
-    <p class="mb-2">請截圖傳給開發者：</p>
     <pre id="error-text" class="bg-gray-100 p-4 rounded text-sm text-black border border-red-300"></pre>
-    <button onclick="location.reload()" class="mt-4 bg-blue-600 text-white px-6 py-3 rounded font-bold">重新整理</button>
 </div>
 
 <script>
-    // 全局錯誤攔截
+    // 保留 v53 的錯誤攔截邏輯 (確保執行流程一致)
     window.onerror = function(msg, url, line, col, error) {
-        document.getElementById('fatal-error').style.display = 'block';
-        document.getElementById('error-text').innerText = `Error: ${msg}\nLine: ${line}:${col}\n\n${error ? error.stack : ''}`;
+        const el = document.getElementById('fatal-error');
+        const txt = document.getElementById('error-text');
+        if(el && txt) {
+            // 雖然寫入了錯誤訊息，但因為 display: none，使用者看不到
+            txt.innerText = `Error: ${msg}\nLine: ${line}:${col}`;
+        }
         return false;
     };
 </script>
@@ -213,7 +216,7 @@
 
 <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
-    const app = createApp({
+    createApp({
         setup() {
             // ★ Config ★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
@@ -447,15 +450,14 @@
                 people, itinerary, expenses, filteredItinerary,
                 newPlace, newTime, newNote, newPerson, newExpense, newTime, categories, 
                 searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
+                isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
                 addExpense, removeExpense, addPerson, removePerson, resetTrip,
                 totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
                 categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
         }
-    });
-    
-    app.mount('#app');
+    }).mount('#app');
 </script>
 </body>
 </html>
