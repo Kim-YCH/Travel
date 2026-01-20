@@ -31,22 +31,11 @@
         .checkbox-wrapper div { color: #111827; font-weight: 500; }
         .stat-bar { transition: width 0.5s ease-in-out; }
         
-        /* 隱藏部分 Google UI 保持乾淨 */
         .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
         img[src*="google"] { display: inline !important; }
     </style>
 </head>
 <body>
-<div id="error-msg" style="display:none; position:fixed; top:0; left:0; right:0; padding:20px; background:red; color:white; z-index:99999;">
-    程式發生錯誤，請截圖給開發者：<span id="error-text"></span>
-</div>
-<script>
-    window.onerror = function(msg, url, line) {
-        document.getElementById('error-msg').style.display = 'block';
-        document.getElementById('error-text').innerText = msg + " (Line: " + line + ")";
-    };
-</script>
-
 <div id="app" class="max-w-md mx-auto min-h-screen flex flex-col h-screen">
     <div v-if="isLoading" class="loading-bar"></div>
 
@@ -79,7 +68,6 @@
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">Day {{ d }}</button>
                     <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0">+</button>
                 </div>
-                
                 <div class="card p-4 space-y-2 relative">
                     <div class="flex gap-2 relative">
                         <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '...'" class="flex-1 border-0 bg-gray-100 p-3 rounded-lg outline-none font-bold text-gray-900">
@@ -87,11 +75,9 @@
                         
                         <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
                             <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
-                            
                             <div v-if="isCoordinateMode" @click="useCoordinateInput" class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200">
                                 <span class="text-xl">📍</span><div><div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div><div class="text-xs text-green-600">點擊使用此地點</div></div>
                             </div>
-
                             <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item hover:bg-blue-50">
                                 <span class="text-xl">📍</span>
                                 <div class="overflow-hidden">
@@ -99,10 +85,9 @@
                                     <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
                                 </div>
                             </div>
-
                             <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
                                 <span class="text-xl">🔎</span>
-                                <div class="flex-1"><div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找座標</div><div class="text-xs text-gray-400">複製座標貼回來即可</div></div><span class="text-gray-300 text-lg">➜</span>
+                                <div class="flex-1"><div class="font-bold text-blue-600 text-sm">去 Google Maps 找座標</div><div class="text-xs text-gray-400">複製貼上即可自動轉換</div></div><span class="text-gray-300 text-lg">➜</span>
                             </div>
                         </div>
                     </div>
@@ -118,7 +103,7 @@
                             <div class="flex items-center gap-2">
                                 <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-1 rounded">{{ place.time }}</span>
                                 <span class="font-bold text-gray-800 text-lg">{{ place.name }}</span>
-                                <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">已存座標</span>
+                                <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1 rounded">已定位</span>
                                 <span v-else class="text-[10px] text-red-400 bg-red-50 px-1 rounded">無座標</span>
                             </div>
                             <div v-if="place.message" class="text-sm text-gray-500 mt-1 bg-gray-50 p-1 rounded inline-block">📝 {{ place.message }}</div>
@@ -136,7 +121,7 @@
                 <div id="map" class="flex-1 bg-gray-100"></div>
                 <div class="absolute top-4 left-4 right-4 z-[10] flex gap-2">
                     <button @click="fitBoundsToTrip" class="flex-1 bg-white text-gray-700 font-bold py-3 rounded-lg shadow-lg border border-gray-100 active:scale-95 text-sm flex justify-center items-center gap-2">
-                        <span>🔄</span> 重整地圖點
+                        <span>🔄</span> 重整地圖
                     </button>
                 </div>
             </div>
@@ -168,7 +153,7 @@
                     <div class="mb-3 flex gap-2 items-center">
                         <span class="text-xs text-gray-500 w-12">付款人</span>
                         <select v-model="newExpense.payer" class="flex-1 bg-gray-50 p-2 rounded border-0 ring-1 ring-gray-200 text-gray-900">
-                            <option disabled value="">請選擇</option>
+                            <option disabled value="">請選擇付款人</option>
                             <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
                         </select>
                     </div>
@@ -225,9 +210,8 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
-            // ★ 設定 API URL (您提供的) ★
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
-            // ★ 設定 Google Maps Key (您提供的) ★
+            // ★★★ 您的 API Key ★★★
             const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
             // State
@@ -282,7 +266,6 @@
             const fetchTrips = async () => { isLoading.value = true; try { const res = await fetch(`${API_URL}?type=trips`); trips.value = await res.json(); } catch(e) {} finally { isLoading.value = false; } };
             const createTrip = async () => { if(!newTripName.value) return; const id = generateId(); const newTrip = { id, name: newTripName.value, city: newTripCity.value || '' }; trips.value.push(newTrip); newTripName.value = ''; newTripCity.value = ''; await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'add', type: 'trips', data: newTrip }) }); };
             
-            // ★ 修復：切換旅程與畫面邏輯 ★
             const selectTrip = (trip) => { 
                 if(!trip) return;
                 currentTrip.value = trip; 
@@ -296,26 +279,7 @@
             const exitTrip = () => { currentView.value = 'lobby'; currentTrip.value = null; fetchTrips(); };
             onMounted(() => { fetchTrips(); loadGoogleMaps(); });
 
-            const fetchData = async () => { 
-                if(!currentTrip.value) return; 
-                isLoading.value = true; 
-                const tripId = currentTrip.value.id; 
-                try { 
-                    const [resItin, resExp, resPpl] = await Promise.all([ 
-                        fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), 
-                        fetch(`${API_URL}?type=expenses&tripId=${tripId}`), 
-                        fetch(`${API_URL}?type=people&tripId=${tripId}`) 
-                    ]); 
-                    const itinData = await resItin.json(); 
-                    itinerary.value = itinData; 
-                    if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } 
-                    expenses.value = await resExp.json(); 
-                    const ppl = await resPpl.json(); 
-                    people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; 
-                    if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } 
-                } catch(e) {} finally { isLoading.value = false; } 
-            };
-            
+            const fetchData = async () => { if(!currentTrip.value) return; isLoading.value = true; const tripId = currentTrip.value.id; try { const [resItin, resExp, resPpl] = await Promise.all([ fetch(`${API_URL}?type=itinerary&tripId=${tripId}`), fetch(`${API_URL}?type=expenses&tripId=${tripId}`), fetch(`${API_URL}?type=people&tripId=${tripId}`) ]); const itinData = await resItin.json(); itinerary.value = itinData; if(itinData.length > 0) { const max = itinData.reduce((m, i) => Math.max(m, i.day ? parseInt(i.day) : 1), 1); if(max > totalDays.value) totalDays.value = max; } expenses.value = await resExp.json(); const ppl = await resPpl.json(); people.value = ppl.length ? ppl : [{id:'default', name:'我'}]; if(people.value.length) { newExpense.value.payer = people.value[0].name; newExpense.value.involved = people.value.map(p=>p.name); } } catch(e) {} finally { isLoading.value = false; } };
             const sendToApi = async (action, type, data) => { const body = { action, type }; if (action === 'add') { data.trip_id = currentTrip.value.id; body.data = data; } else { body.id = data; } await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) }); };
             
             const searchPlacesInput = () => { 
@@ -361,12 +325,14 @@
                 markers.forEach(m => m.setMap(null)); markers = [];
                 const bounds = new google.maps.LatLngBounds(); let hasPoint = false;
                 
-                // ★ 這裡：處理沒有座標的點，嘗試自動 Geocoding (如果資料庫沒存到，這裡現場補救顯示) ★
+                // ★ 優先使用資料庫的座標，秒讀取！
                 itinerary.value.forEach(item => {
                     if (item.lat && item.lng) {
                         createMarker(item, Number(item.lat), Number(item.lng), bounds);
                         hasPoint = true;
-                    } else if (item.name && window.google) {
+                    } 
+                    // 如果還是沒有座標 (舊資料)，才去現場查
+                    else if (item.name && window.google) {
                         const geocoder = new google.maps.Geocoder();
                         geocoder.geocode({ address: item.name + (currentTrip.value.city ? " " + currentTrip.value.city : "") }, (results, status) => {
                             if (status === 'OK' && results[0]) {
@@ -390,20 +356,25 @@
 
             const fitBoundsToTrip = () => updateMapMarkers();
 
-            // ★★★ 核心修正：強制解析座標後再儲存 ★★★
+            // ★★★ 核心修正：新增行程時，務必抓取座標並存入變數 ★★★
             const addPlace = async () => {
                 if(!newPlace.value.trim()) return;
                 const id = generateId(); const d = currentDay.value; const placeName = newPlace.value;
                 let lat = null; let lng = null; let placeId = null;
                 
+                // 1. 下拉選單選擇的
                 if (selectedPlaceData.value && window.google) {
                     placeId = selectedPlaceData.value.place_id;
                     const dummy = new google.maps.Map(document.createElement('div'));
                     const service = new google.maps.places.PlacesService(dummy);
                     try { await new Promise((resolve) => { service.getDetails({ placeId: placeId }, (place, status) => { if (status === google.maps.places.PlacesServiceStatus.OK) { lat = place.geometry.location.lat(); lng = place.geometry.location.lng(); } resolve(); }); }); } catch (e) {}
-                } else if (selectedLat.value && selectedLng.value) {
+                } 
+                // 2. 座標輸入模式
+                else if (selectedLat.value && selectedLng.value) {
                     lat = selectedLat.value; lng = selectedLng.value;
-                } else if (window.google) {
+                }
+                // 3. 手動輸入文字 (嘗試 Geocoding)
+                else if (window.google) {
                     try {
                         const geocoder = new google.maps.Geocoder();
                         await new Promise((resolve) => {
@@ -419,7 +390,7 @@
                     } catch(e) {}
                 }
 
-                // ★ lat, lng 一定要送出 ★
+                // 將座標打包進 item，送去資料庫存起來！
                 const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '', time: newTime.value || '' };
                 itinerary.value.push(item);
                 newPlace.value = ''; newNote.value = ''; newTime.value = ''; selectedPlaceData.value = null; searchResults.value = []; selectedLat.value = null; selectedLng.value = null;
