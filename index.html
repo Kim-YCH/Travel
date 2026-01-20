@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
@@ -36,9 +36,22 @@
         
         .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
         img[src*="google"] { display: inline !important; }
+
+        /* 隱藏除錯框 (保留代碼但隱藏) */
+        #debug-console { display: none !important; }
     </style>
 </head>
 <body>
+
+<div id="debug-console"></div>
+
+<script>
+    // 保留錯誤攔截邏輯，確保執行流程與 v50 一致，但不會彈出視窗
+    window.onerror = function(msg, url, line) {
+        console.error("Error: " + msg + " (Line: " + line + ")");
+        return false;
+    };
+</script>
 
 <div id="app" class="flex flex-col h-full w-full">
     <div v-if="isLoading" class="loading-bar"></div>
@@ -50,7 +63,10 @@
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-md flex justify-between items-center">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
-            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">讀取中...</div>
+            <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">
+                <span v-if="isLoading">讀取中...</span>
+                <span v-else>尚無旅程</span>
+            </div>
         </div>
         <div class="card border border-blue-100">
             <h3 class="font-bold text-gray-700 mb-3">新增旅程</h3>
@@ -93,7 +109,7 @@
                     </div>
                 </div>
                 
-                <div class="space-y-3">
+                <div class="space-y-3 pb-20">
                     <div v-for="place in filteredItinerary" :key="place.id" class="card flex justify-between items-start active:scale-[0.99] transition">
                         <div class="flex-1" @click="openGoogleMap(place)">
                             <div class="flex items-center gap-2 flex-wrap">
@@ -109,6 +125,7 @@
                             <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
                         </div>
                     </div>
+                    <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
                 </div>
             </div>
 
@@ -235,6 +252,12 @@
             const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
             
             const searchResults = ref([]);
+            const isSearching = ref(false);
+            const isCoordinateMode = ref(false);
+            const resolvedCoordName = ref('');
+            const selectedLat = ref(null);
+            const selectedLng = ref(null);
+            const selectedPlaceData = ref(null);
             const mapSearchQuery = ref('');
             let searchTimeout = null;
             let mapInstance = null; let markers = []; let infoWindow = null;
