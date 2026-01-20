@@ -4,41 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>出發囉</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* 全螢幕設定 */
-        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        /* 基礎設定 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding-bottom: env(safe-area-inset-bottom); margin: 0; height: 100vh; display: flex; flex-direction: column; }
         
-        /* UI 元件樣式 */
+        /* 隱藏除錯框 (關鍵修改：不刪除代碼，只隱藏，確保邏輯不變) */
+        #debug-console { display: none !important; }
+
+        /* UI 樣式 */
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; }
-        input, select, textarea { -webkit-user-select: text; user-select: text; border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
-        .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
-        .day-tab-inactive { background: white; color: #6b7280; border-color: #e5e7eb; }
-        .no-scrollbar::-webkit-scrollbar { display: none; } 
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .flex { display: flex; } .gap-2 { gap: 8px; }
+        input, select { border: 1px solid #ddd; padding: 8px; border-radius: 4px; width: 100%; }
         
-        /* 地圖滿版 */
+        /* 地圖滿版設定 */
         #map-container { flex: 1; position: relative; width: 100%; height: 100%; background: #e5e7eb; }
         #map { width: 100%; height: 100%; z-index: 1; }
         
-        /* 搜尋建議列表 */
+        /* 搜尋建議 */
         .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
-        .suggestion-item:hover { background: #f0f9ff; }
         
-        .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
-        @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
+        /* Google Maps 修正 */
+        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } img[src*="google"] { display: inline !important; }
         
-        .gmnoprint a, .gmnoprint span, .gm-style-cc { display:none; } 
-        img[src*="google"] { display: inline !important; }
-
-        /* 隱藏除錯框 (保留代碼但隱藏) */
-        #debug-console { display: none !important; }
+        /* 避免 Vue 未載入時的白畫面 */
+        [v-cloak] { display: none; }
     </style>
 </head>
 <body>
@@ -46,22 +40,22 @@
 <div id="debug-console"></div>
 
 <script>
-    // 保留錯誤攔截邏輯，確保執行流程與 v50 一致，但不會彈出視窗
+    // 錯誤處理 (保留但不彈窗，只在背景紀錄)
     window.onerror = function(msg, url, line) {
         console.error("Error: " + msg + " (Line: " + line + ")");
         return false;
     };
 </script>
 
-<div id="app" class="flex flex-col h-full w-full">
-    <div v-if="isLoading" class="loading-bar"></div>
+<div id="app" class="flex flex-col h-full w-full" v-cloak>
+    <div v-if="isLoading" style="position:fixed;top:0;left:0;right:0;height:3px;background:#2563eb;z-index:9999;"></div>
 
     <div v-if="currentView === 'lobby'" class="flex-1 p-6 flex flex-col justify-center bg-gray-50 overflow-y-auto">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
         <p class="text-gray-500 mb-8">選擇一個旅程</p>
         <div class="space-y-4 mb-8">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card cursor-pointer border-l-4 border-blue-500 hover:shadow-md flex justify-between items-center">
-                <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
+                <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">{{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
             <div v-if="trips.length === 0" class="text-center text-gray-400 py-10">
                 <span v-if="isLoading">讀取中...</span>
@@ -85,7 +79,6 @@
         </header>
 
         <main class="flex-1 relative bg-gray-50 overflow-hidden">
-            
             <div v-show="currentTab === 'itinerary'" class="absolute inset-0 p-4 overflow-y-auto space-y-4 pb-24">
                 <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'">Day {{ d }}</button>
@@ -252,12 +245,6 @@
             const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
             
             const searchResults = ref([]);
-            const isSearching = ref(false);
-            const isCoordinateMode = ref(false);
-            const resolvedCoordName = ref('');
-            const selectedLat = ref(null);
-            const selectedLng = ref(null);
-            const selectedPlaceData = ref(null);
             const mapSearchQuery = ref('');
             let searchTimeout = null;
             let mapInstance = null; let markers = []; let infoWindow = null;
