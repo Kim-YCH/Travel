@@ -94,7 +94,7 @@
 
     <div v-if="currentView === 'lobby'" class="content-area p-6 justify-center">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
-        <p class="text-gray-500 mb-8">準備好下一趟旅程了嗎？</p>
+ 
         
         <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
