@@ -11,15 +11,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* ★★★ 核心佈局修正：強制全螢幕高度，不讓網頁捲動 ★★★ */
-        html, body { 
-            height: 100%; 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; /* 禁止 Body 捲動 */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: #f0f2f5; 
-        }
+        /* ★★★ 1. 強制全螢幕高度 (解決地圖無法拉長的問題) ★★★ */
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; }
         
         .mobile-container {
             max-width: 480px; 
@@ -29,23 +22,34 @@
             display: flex;      /* 彈性佈局 */
             flex-direction: column; /* 垂直排列 */
             position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            box-shadow: 0 0 20px rgba(0,0,0,0.1); 
         }
 
-        /* 內容區域：自動伸縮，內部捲動 */
-        .content-area {
+        /* 一般頁面：可以捲動 */
+        .content-scroll { 
             flex: 1;            /* 自動填滿剩餘空間 */
-            overflow-y: auto;   /* 內容太多時才捲動 */
+            overflow-y: auto;   /* 內容太多時捲動 */
             overflow-x: hidden;
             position: relative;
-            display: flex;      /* 讓內部也可以用 Flex */
+            display: flex;
             flex-direction: column;
+            background: #f8fafc;
+        }
+
+        /* 地圖頁面：不可捲動 (為了讓地圖滿版) */
+        .content-fixed {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
         }
 
         .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 16px; margin-bottom: 12px; flex-shrink: 0; }
         .flex { display: flex; } .gap-2 { gap: 8px; }
         
-        /* 輸入框高度 54px */
+        /* ★★★ 2. 輸入框與按鈕高度統一 54px ★★★ */
         input, select { 
             -webkit-user-select: text; user-select: text; 
             border: 1px solid #e2e8f0; 
@@ -63,22 +67,13 @@
         .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
         .day-tab-inactive { background: white; color: #64748b; border-color: #e2e8f0; }
         .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
         .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
         @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
         
-        /* ★★★ 地圖 CSS 強制填滿 ★★★ */
-        #map { 
-            width: 100%; 
-            /* 不設固定高度，讓 flex 自動撐開 */
-            flex: 1; 
-            background-color: #e5e7eb; 
-            border-radius: 12px; 
-            margin-top: 10px; 
-            min-height: 0; /* 關鍵：防止 flex 子元素無法縮小 */
-        }
+        /* ★★★ 3. 地圖滿版 CSS ★★★ */
+        #map { width: 100%; height: 100%; background-color: #e5e7eb; }
         
-        .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; margin-top: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .suggestion-item { padding: 12px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .suggestion-item:hover { background-color: #f0f9ff; }
         
@@ -92,11 +87,11 @@
 <div id="app" class="mobile-container">
     <div v-if="isLoading" class="loading-bar"></div>
 
-    <div v-if="currentView === 'lobby'" class="content-area p-6 justify-center">
+    <div v-if="currentView === 'lobby'" class="content-scroll p-6 justify-center bg-gray-50">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
- 
         
-        <div class="space-y-4 mb-8 overflow-y-auto max-h-[60vh]">
+    
+        <div class="space-y-4 mb-8">
             <div v-for="trip in trips" :key="trip.id" @click="selectTrip(trip)" class="card flex justify-between items-center active:scale-95 transition cursor-pointer border-l-4 border-blue-500 hover:shadow-md">
                 <div><div class="font-bold text-xl text-gray-900">{{ trip.name }}</div><div class="text-sm text-gray-500">📍 {{ trip.city }}</div></div><div class="text-2xl text-gray-300">➜</div>
             </div>
@@ -119,9 +114,9 @@
             <button @click="fetchData" class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95">↻ 同步</button>
         </header>
 
-        <main class="content-area bg-gray-50">
+        <main :class="currentTab === 'map' ? 'content-fixed' : 'content-scroll'" class="bg-gray-50">
             
-            <div v-if="currentTab === 'itinerary'" class="p-4 space-y-4">
+            <div v-if="currentTab === 'itinerary'" class="p-4 space-y-4 pb-24">
                 <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0">
                     <button v-for="d in totalDays" :key="d" @click="currentDay = d" class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0" :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">Day {{ d }}</button>
                     <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">+</button>
@@ -174,7 +169,7 @@
                 </div>
             </div>
 
-            <div v-show="currentTab === 'map'" class="h-full flex flex-col p-4 w-full">
+            <div v-show="currentTab === 'map'" class="content-fixed p-4 w-full">
                 <div class="flex flex-col gap-2 flex-shrink-0">
                     <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200">
                         <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump" type="text" :placeholder="'跳轉至 ' + currentTrip.city + '...'" class="flex-1 p-3 border-0 outline-none h-[54px] text-gray-900 bg-white" style="border-radius: 0;">
@@ -189,8 +184,8 @@
                         </button>
                     </div>
                 </div>
-                <div id="map" class="shadow-inner"></div>
-                <div v-if="!isMapReady" class="text-center text-gray-400 mt-4 text-sm">正在載入地圖...</div>
+                <div id="map" class="shadow-inner mt-2"></div>
+                <div v-if="!isMapReady" class="text-center text-gray-400 mt-4 text-sm absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">正在載入地圖...</div>
             </div>
 
             <div v-if="currentTab === 'money'" class="p-4 space-y-4 pb-24">
@@ -218,7 +213,7 @@
                         <button v-for="cat in categories" :key="cat" @click="newExpense.category = cat" class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition" :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'">{{ cat }}</button>
                     </div>
                     <div class="mb-3 flex gap-2 items-center">
-                        <span class="text-xs text-gray-500 font-bold w-10 text-center">付款</span>
+                        <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
                         <select v-model="newExpense.payer" class="flex-1"><option disabled value="">請選擇</option><option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option></select>
                     </div>
                     <div class="mb-4">
@@ -241,7 +236,7 @@
                 </div>
             </div>
 
-            <div v-if="currentTab === 'settings'" class="p-4 space-y-4">
+            <div v-if="currentTab === 'settings'" class="p-4 space-y-4 pb-24">
                 <button @click="exitTrip" class="w-full bg-gray-700 text-white h-[54px] rounded-lg font-bold mb-6 shadow text-lg">🔙 切換旅程</button>
                 <h3 class="font-bold text-gray-700 ml-1">📋 資料管理</h3>
                 <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"><span>📤</span> 匯出純文字行程</button>
@@ -249,8 +244,7 @@
                 <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded-lg font-bold">新增</button></div>
                 <div class="space-y-2 mb-10"><div v-for="(p, idx) in people" :key="p.id" class="flex justify-between items-center p-3 bg-white rounded border border-gray-100 shadow-sm"><span class="font-bold text-gray-800">{{ p.name || '成員 ' + (idx + 1) }}</span><button @click="removePerson(idx)" class="text-red-400 font-bold px-2">移除</button></div></div>
                 <div class="border-t pt-4 mt-4 text-center">
-                    <button @click="resetTrip" class="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-lg font-bold mb-2">🗑️ 清空此旅程資料</button>
-                    <button @click="deleteTripTotally" class="w-full text-gray-400 text-xs py-2">❌ 移除此旅程卡片</button>
+                    <button @click="deleteTripTotally" class="w-full bg-red-500 text-white border border-red-600 py-3 rounded-lg font-bold mb-3 shadow-md hover:bg-red-600 transition">❌ 刪除此旅程</button>
                 </div>
             </div>
         </main>
@@ -268,6 +262,7 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     createApp({
         setup() {
+            // ★ Config ★ (使用您提供的，無 token 邏輯)
             const API_URL = 'https://script.google.com/macros/s/AKfycby303KH-yL7YZajdYUwBQEW-lyFmhz5qsCL5KrY73fZSS5wmSfjPZX8qCYxaNP3FnM/exec';
             const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
@@ -501,7 +496,8 @@
             const removeExpense = async (idx) => { const item = expenses.value[idx]; if (!item.id) return; expenses.value.splice(idx, 1); await sendToApi('del', 'expenses', item.id); };
             const addPerson = async () => { const name = newPerson.value.trim(); if (!name) return; const uid = generateId(); people.value.push({ id: uid, name: name }); newExpense.value.involved.push(name); newPerson.value = ''; await sendToApi('add', 'people', { id: uid, name: name }); };
             const removePerson = async (idx) => { const item = people.value[idx]; if (!item.id || !confirm('移除？')) return; people.value.splice(idx, 1); await sendToApi('del', 'people', item.id); };
-            const resetTrip = async () => { if(!confirm(`警告：清空？`)) return; await fetch(API_URL, {method:'POST', body:JSON.stringify({action:'reset_trip', type:'all', tripId: currentTrip.value.id})}); itinerary.value=[]; expenses.value=[]; people.value=[{id:'def',name:'我'}]; alert('已清空'); };
+            // 移除了 ResetTrip，只保留 Delete
+            
             const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
             const balanceSheet = computed(() => { if(!people.value.length) return []; let b={}; people.value.forEach(p=>b[p.name]=0); expenses.value.forEach(e=>{ const amt=Number(e.amount)||0; if(b[e.payer]===undefined) return; b[e.payer]+=amt; const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name); const v=inv.filter(n=>b[n]!==undefined); if(v.length) { const s=amt/v.length; v.forEach(n=>b[n]-=s); } }); return Object.keys(b).map(n=>({name:n, balance:b[n]})); });
             const filteredItinerary = computed(() => { let list = itinerary.value.filter(i => (i.day ? parseInt(i.day) : 1) === currentDay.value); return list.sort((a, b) => { if (a.time && b.time) return a.time.localeCompare(b.time); if (a.time) return -1; if (b.time) return 1; return 0; }); });
@@ -516,7 +512,7 @@
                 searchResults, searchPlacesInput, selectPlace, searchInGoogleMaps,
                 isSearching, isCoordinateMode, resolvedCoordName, useCoordinateInput,
                 addPlace, removePlace, openGoogleMap, fitBoundsToTrip, editPlace,
-                addExpense, removeExpense, addPerson, removePerson, resetTrip,
+                addExpense, removeExpense, addPerson, removePerson,
                 totalExpense, balanceSheet, fetchData, formatInvolved, formatTime, 
                 categoryAnalysis, exportItinerary, searchCityAndJump, exploreNearby, isMapReady
             };
