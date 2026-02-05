@@ -7,9 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- ✅ Vue：主用 unpkg（最穩），避免 Vue is not defined -->
   <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.prod.js"></script>
-
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
@@ -73,6 +71,8 @@
       line-height: 1;
     }
     .day-x:active { transform: scale(0.95); }
+
+
   </style>
 </head>
 <body>
@@ -80,6 +80,7 @@
 <div id="app" class="mobile-container">
   <div v-if="isLoading" class="loading-bar"></div>
 
+  <!-- Lobby -->
   <div v-if="currentView === 'lobby'" class="content-scroll p-6 justify-center bg-gray-50">
     <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
 
@@ -105,6 +106,7 @@
     </div>
   </div>
 
+  <!-- App -->
   <div v-else class="flex flex-col h-full overflow-hidden">
     <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
       <div>
@@ -117,24 +119,30 @@
     </header>
 
     <main :class="currentTab === 'map' ? 'content-fixed' : 'content-scroll'" class="bg-gray-50">
+
+      <!-- Itinerary -->
       <div v-if="currentTab === 'itinerary'" class="p-4 space-y-4 pb-24">
+
         <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0">
           <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
+
             <button
               @click="onDayClick(d)"
-              @dblclick="onDayDblClick(d)"
+              @dblclick="d === 1 && onDayDblClick(d)"
               class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition"
               :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">
-              <div>Day {{ d }}</div>
+              <div class="flex items-center justify-center gap-1">
+                <span>Day {{ d }}</span>
+                
+              </div>
               <div class="text-[10px] font-normal opacity-90">
                 {{ dayLabel(d) || '—' }}
               </div>
             </button>
 
-            <div
-              class="day-x"
-              v-if="totalDays > 1"
-              @click.stop="deleteDay(d)">×</div>
+           
+
+            <div class="day-x" v-if="totalDays > 1" @click.stop="deleteDay(d)">×</div>
           </div>
 
           <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">+</button>
@@ -148,18 +156,34 @@
 
             <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
               <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+
               <div v-if="isCoordinateMode" @click="useCoordinateInput" class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200">
-                <span class="text-xl">📍</span><div><div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div><div class="text-xs text-green-600">點擊使用</div></div>
+                <span class="text-xl">📍</span>
+                <div>
+                  <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
+                  <div class="text-xs text-green-600">點擊使用</div>
+                </div>
               </div>
+
               <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item hover:bg-blue-50">
                 <span class="text-xl">📍</span>
-                <div class="overflow-hidden"><div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div><div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div></div>
+                <div class="overflow-hidden">
+                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                </div>
               </div>
+
               <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
-                <span class="text-xl">🔎</span><div class="flex-1"><div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找</div><div class="text-xs text-gray-400">複製座標貼回來</div></div><span class="text-gray-300 text-lg">➜</span>
+                <span class="text-xl">🔎</span>
+                <div class="flex-1">
+                  <div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找</div>
+                  <div class="text-xs text-gray-400">複製座標貼回來</div>
+                </div>
+                <span class="text-gray-300 text-lg">➜</span>
               </div>
             </div>
           </div>
+
           <div class="flex gap-2">
             <input v-model="newTime" type="time" class="w-1/3 text-center font-mono">
             <input v-model="newNote" type="text" placeholder="備註..." class="flex-1">
@@ -194,6 +218,7 @@
         </div>
       </div>
 
+      <!-- Map -->
       <div v-show="currentTab === 'map'" class="content-fixed p-4 w-full">
         <div class="flex flex-col gap-2 flex-shrink-0">
           <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200">
@@ -213,6 +238,7 @@
         <div v-if="!isMapReady" class="text-center text-gray-400 mt-4 text-sm absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">正在載入地圖...</div>
       </div>
 
+      <!-- Money -->
       <div v-if="currentTab === 'money'" class="p-4 space-y-4 pb-24">
         <div class="card bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
           <div class="flex justify-between items-end mb-4"><span class="text-gray-400 text-sm">總支出</span><span class="text-3xl font-bold tracking-wider">${{ totalExpense }}</span></div>
@@ -246,7 +272,10 @@
           </div>
           <div class="mb-3 flex gap-2 items-center">
             <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
-            <select v-model="newExpense.payer" class="flex-1"><option disabled value="">請選擇</option><option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option></select>
+            <select v-model="newExpense.payer" class="flex-1">
+              <option disabled value="">請選擇</option>
+              <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
+            </select>
           </div>
           <div class="mb-4">
             <span class="text-xs text-gray-500 font-bold block mb-2 ml-1">分攤給 (點擊切換)</span>
@@ -274,12 +303,16 @@
         </div>
       </div>
 
+      <!-- Settings -->
       <div v-if="currentTab === 'settings'" class="p-4 space-y-4 pb-24">
         <button @click="exitTrip" class="w-full bg-gray-700 text-white h-[54px] rounded-lg font-bold mb-6 shadow text-lg">🔙 切換旅程</button>
         <h3 class="font-bold text-gray-700 ml-1">📋 資料管理</h3>
         <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"><span>📤</span> 匯出純文字行程</button>
         <h3 class="font-bold text-gray-700 mt-6 ml-1">👥 成員管理</h3>
-        <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded-lg font-bold">新增</button></div>
+        <div class="flex gap-2">
+          <input v-model="newPerson" placeholder="名字" class="flex-1">
+          <button @click="addPerson" class="bg-gray-800 text-white px-4 rounded-lg font-bold">新增</button>
+        </div>
         <div class="space-y-2 mb-10">
           <div v-for="(p, idx) in people" :key="p.id" class="flex justify-between items-center p-3 bg-white rounded border border-gray-100 shadow-sm">
             <span class="font-bold text-gray-800">{{ p.name || '成員 ' + (idx + 1) }}</span>
@@ -300,13 +333,17 @@
     </nav>
   </div>
 
+  <!-- Date Modal -->
   <div v-if="showDateModal" class="modal-mask" @click.self="closeDateModal">
     <div class="modal-card">
-      <div class="font-bold text-gray-800 text-lg mb-2">設定 Day {{ modalDay }} 日期</div>
+      <div class="font-bold text-gray-800 text-lg mb-2">設定 Day 1 日期</div>
       <input type="date" v-model="dateInput">
       <div class="flex gap-2 mt-4">
         <button class="flex-1 h-[50px] rounded-xl border font-bold text-gray-600" @click="closeDateModal">取消</button>
         <button class="flex-1 h-[50px] rounded-xl bg-blue-600 text-white font-bold" @click="applyDate">套用</button>
+      </div>
+      <div class="text-xs text-gray-400 mt-3">
+        只需要設定 Day 1，後面日期會自動推算。
       </div>
     </div>
   </div>
@@ -317,7 +354,7 @@ const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzU6Y4_I3TPb4sQGOx0vvROJr9jKHWtKgWM959mJLme6_125Kj2jbEjQ2XyhAL4pB4/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzFzEUmxP6WeWWYutSuOU1euMBSSihKUJDhRbzZ8H90W1E0dA_uX3kKKRz_8ERmvo7B/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -380,6 +417,8 @@ createApp({
       return new Date(y, m-1, d, 12, 0, 0);
     };
     const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+
+    // ✅ Day N = start_date + (N-1)
     const dayLabel = (day) => {
       const base = parseYMD(currentTrip.value?.start_date);
       if (!base) return '';
@@ -447,7 +486,6 @@ createApp({
       try { await postJSON({ action: 'update', type: 'itinerary', data }); return; } catch(e) {}
     };
 
-    // ✅ NEW: 拖曳排序寫入資料庫 itinerary.order
     const updateDayOrdersToDB = async (day) => {
       if (!currentTrip.value) return;
       if (!itineraryListEl.value) return;
@@ -458,7 +496,6 @@ createApp({
 
       const updates = ids.map((id, idx) => ({ id, order: idx + 1 }));
 
-      // 先同步前端狀態，讓畫面/匯出立即一致
       const mapOrder = new Map(updates.map(u => [String(u.id), u.order]));
       itinerary.value.forEach(it => {
         const dd = it.day ? parseInt(it.day,10) : 1;
@@ -572,28 +609,42 @@ createApp({
       initSortable();
     };
 
+    // ✅ 只允許 Day1 開啟日期設定
     const onDayDblClick = (d) => {
-      modalDay.value = d;
+      if (d !== 1) return;
+
+      modalDay.value = 1;
       const base = parseYMD(currentTrip.value?.start_date);
-      const def = base ? addDays(base, d-1) : new Date();
+      const def = base || new Date();
       dateInput.value = toYMD(def);
+
       showDateModal.value = true;
     };
 
     const closeDateModal = () => { showDateModal.value = false; };
 
+    // ✅ Day1 設哪天就是哪天（不偏移）
     const applyDate = async () => {
       const pick = parseYMD(dateInput.value);
-      if (!pick || !currentTrip.value) { showDateModal.value = false; return; }
-      const newStart = addDays(pick, -(modalDay.value - 1));
-      const ymd = toYMD(newStart);
+      if (!pick || !currentTrip.value) {
+        showDateModal.value = false;
+        return;
+      }
+
+      const ymd = toYMD(pick);
+
       currentTrip.value.start_date = ymd;
       const idx = trips.value.findIndex(t => String(t.id) === String(currentTrip.value.id));
       if (idx !== -1) trips.value[idx].start_date = ymd;
+
       showDateModal.value = false;
       isLoading.value = true;
-      try { await editOrUpdateTrip({ id: currentTrip.value.id, start_date: ymd }); } catch(e) {}
-      finally { isLoading.value = false; }
+      try {
+        await editOrUpdateTrip({ id: currentTrip.value.id, start_date: ymd });
+      } catch(e) {
+      } finally {
+        isLoading.value = false;
+      }
     };
 
     const deleteDay = async (d) => {
@@ -759,6 +810,7 @@ createApp({
       searchResults.value = [];
     };
 
+    // ✅ 新增行程：自動 order = 同一天最大 order + 1
     const addPlace = async () => {
       if(!newPlace.value.trim()) return;
 
@@ -797,7 +849,6 @@ createApp({
         });
       }
 
-      // ✅ 新增時：order 排最後
       const dayItems = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
       const maxOrder = dayItems.reduce((m, x) => Math.max(m, Number(x.order)||0), 0);
       const newOrder = maxOrder + 1;
@@ -824,6 +875,7 @@ createApp({
       const i = itinerary.value.findIndex(x=>String(x.id)===String(id));
       if(i!==-1) itinerary.value.splice(i,1);
       await postJSON({ action: 'del', type: 'itinerary', id });
+
       const ids = (loadDayOrder(currentTrip.value.id, currentDay.value) || []).filter(x => String(x) !== String(id));
       saveDayOrder(currentTrip.value.id, currentDay.value, ids);
 
