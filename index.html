@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
+  <!-- ✅ 修正 Vue not defined：改用 unpkg -->
   <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
@@ -53,26 +54,6 @@
 
     .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .modal-card { width: 92%; max-width: 360px; background: #fff; border-radius: 18px; padding: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); }
-
-    .day-btn-wrap { position: relative; }
-    .day-x {
-      position: absolute;
-      top: -6px;
-      right: -6px;
-      width: 20px;
-      height: 20px;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.15);
-      color: white;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-    }
-    .day-x:active { transform: scale(0.95); }
-
-
   </style>
 </head>
 <body>
@@ -124,25 +105,15 @@
       <div v-if="currentTab === 'itinerary'" class="p-4 space-y-4 pb-24">
 
         <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0">
-          <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
-
+          <div v-for="d in totalDays" :key="d" class="flex-shrink-0">
             <button
               @click="onDayClick(d)"
-              @dblclick="d === 1 && onDayDblClick(d)"
+              @dblclick="onDayDblClick(d)"
               class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition"
               :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">
-              <div class="flex items-center justify-center gap-1">
-                <span>Day {{ d }}</span>
-                
-              </div>
-              <div class="text-[10px] font-normal opacity-90">
-                {{ dayLabel(d) || '—' }}
-              </div>
+              <div>Day {{ d }}</div>
+              <div class="text-[10px] font-normal opacity-90">{{ dayLabel(d) || '—' }}</div>
             </button>
-
-           
-
-            <div class="day-x" v-if="totalDays > 1" @click.stop="deleteDay(d)">×</div>
           </div>
 
           <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">+</button>
@@ -209,7 +180,6 @@
             </div>
 
             <div class="flex items-center gap-1 pl-3 border-l ml-2">
-              <button @click.stop="editPlace(place)" class="text-gray-400 hover:text-blue-500 px-2 text-xl">✎</button>
               <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
             </div>
           </div>
@@ -333,17 +303,52 @@
     </nav>
   </div>
 
-  <!-- Date Modal -->
-  <div v-if="showDateModal" class="modal-mask" @click.self="closeDateModal">
+  <!-- ✅ Day Modal：Day1 兩個功能（日期 + 交換），Day2+ 只有交換 -->
+  <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal">
     <div class="modal-card">
-      <div class="font-bold text-gray-800 text-lg mb-2">設定 Day 1 日期</div>
-      <input type="date" v-model="dateInput">
-      <div class="flex gap-2 mt-4">
-        <button class="flex-1 h-[50px] rounded-xl border font-bold text-gray-600" @click="closeDateModal">取消</button>
-        <button class="flex-1 h-[50px] rounded-xl bg-blue-600 text-white font-bold" @click="applyDate">套用</button>
+      <div class="font-bold text-gray-800 text-lg mb-3">Day {{ modalDay }} 功能</div>
+
+      <!-- Day1：兩個選項 -->
+      <div v-if="modalDay === 1" class="space-y-2 mb-4">
+        <button class="w-full h-[50px] rounded-xl border font-bold text-gray-700 active:scale-95"
+                @click="activeModalTab = 'date'">設定日期</button>
+        <button class="w-full h-[50px] rounded-xl border font-bold text-gray-700 active:scale-95"
+                @click="activeModalTab = 'swap'">選擇天數（交換）</button>
       </div>
-      <div class="text-xs text-gray-400 mt-3">
-        只需要設定 Day 1，後面日期會自動推算。
+
+      <!-- Day2+：只有交換 -->
+      <div v-else class="mb-4 text-sm text-gray-500">選擇要交換的天數</div>
+
+      <!-- 日期（只在 Day1 + tab=date） -->
+      <div v-if="modalDay === 1 && activeModalTab === 'date'" class="space-y-3">
+        <div class="text-sm text-gray-500 font-bold">設定 Day1 日期</div>
+        <input type="date" v-model="dateInput">
+        <div class="flex gap-2">
+          <button class="flex-1 h-[50px] rounded-xl border font-bold text-gray-600" @click="closeDayModal">取消</button>
+          <button class="flex-1 h-[50px] rounded-xl bg-blue-600 text-white font-bold" @click="applyDate">套用</button>
+        </div>
+        <div class="text-xs text-gray-400">設定 Day1 後，Day2+ 會自動推算。</div>
+      </div>
+
+      <!-- 交換（Day1 tab=swap 或 Day2+ 永遠顯示） -->
+      <div v-if="(modalDay === 1 && activeModalTab === 'swap') || (modalDay !== 1)" class="space-y-3">
+        <div class="text-sm text-gray-500 font-bold">Day {{ modalDay }} 要跟哪一天交換？</div>
+
+        <select v-model.number="swapTargetDay">
+          <option disabled value="0">請選擇</option>
+          <option v-for="d in totalDays" :key="'swap_'+d" :value="d" v-if="d !== modalDay">
+            Day {{ d }}（{{ dayLabel(d) || '—' }}）
+          </option>
+        </select>
+
+        <div class="flex gap-2">
+          <button class="flex-1 h-[50px] rounded-xl border font-bold text-gray-600" @click="closeDayModal">取消</button>
+          <button class="flex-1 h-[50px] rounded-xl bg-blue-600 text-white font-bold"
+                  :disabled="swapTargetDay === 0"
+                  @click="swapDays(modalDay, swapTargetDay)">交換</button>
+        </div>
+
+        <div class="text-xs text-gray-400">會把兩天的所有行程整批互換。</div>
       </div>
     </div>
   </div>
@@ -354,7 +359,7 @@ const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzFzEUmxP6WeWWYutSuOU1euMBSSihKUJDhRbzZ8H90W1E0dA_uX3kKKRz_8ERmvo7B/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzoTzuAD3f9OnXUUTroCBxCf432MDrLM3INSqpOdUhXPvPBsPs6oySNPFvSfPLGaO8q/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -400,9 +405,12 @@ createApp({
     const itineraryListEl = ref(null);
     let sortable = null;
 
-    const showDateModal = ref(false);
+    // ✅ Day Modal 狀態
+    const showDayModal = ref(false);
     const modalDay = ref(1);
+    const activeModalTab = ref('swap'); // 'date' | 'swap'
     const dateInput = ref('');
+    const swapTargetDay = ref(0);
 
     const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
@@ -411,14 +419,13 @@ createApp({
     const parseYMD = (s) => {
       if (!s) return null;
       const p = String(s).split('-');
-      if (p.length !== 3) return null;
+      if (p.length < 3) return null;
       const y = parseInt(p[0],10), m = parseInt(p[1],10), d = parseInt(p[2],10);
       if (!y || !m || !d) return null;
       return new Date(y, m-1, d, 12, 0, 0);
     };
     const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
 
-    // ✅ Day N = start_date + (N-1)
     const dayLabel = (day) => {
       const base = parseYMD(currentTrip.value?.start_date);
       if (!base) return '';
@@ -486,34 +493,6 @@ createApp({
       try { await postJSON({ action: 'update', type: 'itinerary', data }); return; } catch(e) {}
     };
 
-    const updateDayOrdersToDB = async (day) => {
-      if (!currentTrip.value) return;
-      if (!itineraryListEl.value) return;
-
-      const ids = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
-        .map(el => el.getAttribute('data-id'))
-        .filter(Boolean);
-
-      const updates = ids.map((id, idx) => ({ id, order: idx + 1 }));
-
-      const mapOrder = new Map(updates.map(u => [String(u.id), u.order]));
-      itinerary.value.forEach(it => {
-        const dd = it.day ? parseInt(it.day,10) : 1;
-        if (dd === day) {
-          const o = mapOrder.get(String(it.id));
-          if (o != null) it.order = o;
-        }
-      });
-
-      await postJSON({
-        action: 'batchUpdateOrder',
-        type: 'itinerary',
-        tripId: currentTrip.value.id,
-        day,
-        updates
-      });
-    };
-
     const fetchTrips = async () => {
       isLoading.value = true;
       try {
@@ -570,9 +549,7 @@ createApp({
         ]);
 
         const itinData = await resItin.json();
-        itinerary.value = Array.isArray(itinData)
-          ? itinData.map(x => ({ ...x, order: (x.order === '' || x.order == null) ? 0 : Number(x.order) }))
-          : [];
+        itinerary.value = Array.isArray(itinData) ? itinData : [];
 
         const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
         totalDays.value = Math.max(totalDays.value, maxDay);
@@ -609,27 +586,31 @@ createApp({
       initSortable();
     };
 
-    // ✅ 只允許 Day1 開啟日期設定
+    // ✅ 雙擊：Day1 有日期+交換；Day2+ 只有交換
     const onDayDblClick = (d) => {
-      if (d !== 1) return;
+      modalDay.value = d;
+      showDayModal.value = true;
+      swapTargetDay.value = 0;
 
-      modalDay.value = 1;
-      const base = parseYMD(currentTrip.value?.start_date);
-      const def = base || new Date();
-      dateInput.value = toYMD(def);
-
-      showDateModal.value = true;
+      if (d === 1) {
+        activeModalTab.value = 'swap'; // 你要預設日期就改成 'date'
+        const base = parseYMD(currentTrip.value?.start_date);
+        const def = base || new Date();
+        dateInput.value = toYMD(def);
+      } else {
+        activeModalTab.value = 'swap';
+      }
     };
 
-    const closeDateModal = () => { showDateModal.value = false; };
+    const closeDayModal = () => {
+      showDayModal.value = false;
+      swapTargetDay.value = 0;
+    };
 
     // ✅ Day1 設哪天就是哪天（不偏移）
     const applyDate = async () => {
       const pick = parseYMD(dateInput.value);
-      if (!pick || !currentTrip.value) {
-        showDateModal.value = false;
-        return;
-      }
+      if (!pick || !currentTrip.value) { closeDayModal(); return; }
 
       const ymd = toYMD(pick);
 
@@ -637,43 +618,41 @@ createApp({
       const idx = trips.value.findIndex(t => String(t.id) === String(currentTrip.value.id));
       if (idx !== -1) trips.value[idx].start_date = ymd;
 
-      showDateModal.value = false;
+      closeDayModal();
       isLoading.value = true;
-      try {
-        await editOrUpdateTrip({ id: currentTrip.value.id, start_date: ymd });
-      } catch(e) {
-      } finally {
-        isLoading.value = false;
-      }
+      try { await editOrUpdateTrip({ id: currentTrip.value.id, start_date: ymd }); }
+      finally { isLoading.value = false; }
     };
 
-    const deleteDay = async (d) => {
+    // ✅ 交換兩天行程（把 itinerary.day 互換）
+    const swapDays = async (dayA, dayB) => {
+      dayA = Number(dayA || 0);
+      dayB = Number(dayB || 0);
       if (!currentTrip.value) return;
-      if (!confirm(`刪除 Day ${d} 的所有行程？`)) return;
+      if (!dayA || !dayB || dayA === dayB) return;
+
+      if (!confirm(`確定交換 Day ${dayA} 和 Day ${dayB} 的所有行程？`)) return;
 
       isLoading.value = true;
       try {
-        const tripId = currentTrip.value.id;
-
-        const toDelete = itinerary.value.filter(it => (it.day ? parseInt(it.day,10) : 1) === d);
-        for (const it of toDelete) {
-          await postJSON({ action: 'del', type: 'itinerary', id: it.id });
+        for (const it of itinerary.value) {
+          const dd = it.day ? parseInt(it.day, 10) : 1;
+          if (dd === dayA) {
+            it.day = dayB;
+            await editOrUpdateItin({ id: it.id, day: dayB });
+          } else if (dd === dayB) {
+            it.day = dayA;
+            await editOrUpdateItin({ id: it.id, day: dayA });
+          }
         }
 
-        itinerary.value = itinerary.value.filter(it => (it.day ? parseInt(it.day,10) : 1) !== d);
+        // 清掉 localStorage 排序避免混亂
+        clearDayOrder(currentTrip.value.id, dayA);
+        clearDayOrder(currentTrip.value.id, dayB);
 
-        const toShift = itinerary.value.filter(it => (it.day ? parseInt(it.day,10) : 1) > d);
-        for (const it of toShift) {
-          const newDay = (it.day ? parseInt(it.day,10) : 1) - 1;
-          it.day = newDay;
-          it.order = 0;
-          await editOrUpdateItin({ id: it.id, day: newDay, order: 0 });
-        }
+        currentDay.value = dayA;
 
-        for (let day = d; day <= totalDays.value; day++) clearDayOrder(tripId, day);
-        totalDays.value = Math.max(1, totalDays.value - 1);
-        if (currentDay.value > totalDays.value) currentDay.value = totalDays.value;
-
+        closeDayModal();
         await nextTick();
         initSortable();
         updateMapMarkers();
@@ -688,35 +667,6 @@ createApp({
       nextTick().then(initSortable);
     };
 
-    const promptSwapDays = async () => {
-      const a = prompt(`要交換哪一天？(1 ~ ${totalDays.value})`, String(currentDay.value));
-      if (!a) return;
-      const b = prompt(`要跟哪一天交換？(1 ~ ${totalDays.value})`, '2');
-      if (!b) return;
-      const dayA = parseInt(a,10), dayB = parseInt(b,10);
-      if (!dayA || !dayB || dayA < 1 || dayB < 1 || dayA > totalDays.value || dayB > totalDays.value || dayA === dayB) return;
-
-      isLoading.value = true;
-      try {
-        for (const it of itinerary.value) {
-          const dd = it.day ? parseInt(it.day,10) : 1;
-          if (dd === dayA) { it.day = dayB; it.order = 0; await editOrUpdateItin({ id: it.id, day: dayB, order: 0 }); }
-          else if (dd === dayB) { it.day = dayA; it.order = 0; await editOrUpdateItin({ id: it.id, day: dayA, order: 0 }); }
-        }
-
-        const tripId = currentTrip.value.id;
-        const oa = loadDayOrder(tripId, dayA);
-        const ob = loadDayOrder(tripId, dayB);
-        if (oa) saveDayOrder(tripId, dayB, oa); else clearDayOrder(tripId, dayB);
-        if (ob) saveDayOrder(tripId, dayA, ob); else clearDayOrder(tripId, dayA);
-
-        currentDay.value = dayA;
-        await nextTick();
-        initSortable();
-        updateMapMarkers();
-      } finally { isLoading.value = false; }
-    };
-
     const destroySortable = () => { if (sortable) { sortable.destroy(); sortable = null; } };
 
     const initSortable = () => {
@@ -729,31 +679,18 @@ createApp({
         animation: 150,
         handle: '.drag-handle',
         ghostClass: 'opacity-50',
-        onEnd: async () => {
+        onEnd: () => {
           const ids = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
             .map(el => el.getAttribute('data-id'))
             .filter(Boolean);
           saveDayOrder(currentTrip.value.id, currentDay.value, ids);
-
-          try {
-            isLoading.value = true;
-            await updateDayOrdersToDB(currentDay.value);
-          } finally {
-            isLoading.value = false;
-          }
         }
       });
     };
 
-    // ✅ 排序：DB order 優先，沒有才用 localStorage/time
     const filteredItinerary = computed(() => {
       const day = currentDay.value;
       const list = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === day);
-
-      const hasDbOrder = list.some(x => Number(x.order) > 0);
-      if (hasDbOrder) {
-        return list.slice().sort((a,b) => (Number(a.order)||999999) - (Number(b.order)||999999));
-      }
 
       const ids = currentTrip.value ? loadDayOrder(currentTrip.value.id, day) : null;
       if (ids && ids.length) {
@@ -810,7 +747,6 @@ createApp({
       searchResults.value = [];
     };
 
-    // ✅ 新增行程：自動 order = 同一天最大 order + 1
     const addPlace = async () => {
       if(!newPlace.value.trim()) return;
 
@@ -849,11 +785,7 @@ createApp({
         });
       }
 
-      const dayItems = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
-      const maxOrder = dayItems.reduce((m, x) => Math.max(m, Number(x.order)||0), 0);
-      const newOrder = maxOrder + 1;
-
-      const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '', time: newTime.value || '', trip_id: currentTrip.value.id, order: newOrder };
+      const item = { id, name: placeName, day: d, lat, lng, place_id: placeId, message: newNote.value || '', time: newTime.value || '', trip_id: currentTrip.value.id };
       itinerary.value.push(item);
 
       newPlace.value = ''; newNote.value = ''; newTime.value = '';
@@ -875,26 +807,11 @@ createApp({
       const i = itinerary.value.findIndex(x=>String(x.id)===String(id));
       if(i!==-1) itinerary.value.splice(i,1);
       await postJSON({ action: 'del', type: 'itinerary', id });
-
       const ids = (loadDayOrder(currentTrip.value.id, currentDay.value) || []).filter(x => String(x) !== String(id));
       saveDayOrder(currentTrip.value.id, currentDay.value, ids);
-
       await nextTick();
       initSortable();
-      try {
-        isLoading.value = true;
-        await updateDayOrdersToDB(currentDay.value);
-      } finally {
-        isLoading.value = false;
-      }
       updateMapMarkers();
-    };
-
-    const editPlace = (item) => {
-      newPlace.value = item.name;
-      newTime.value = formatTime(item.time);
-      newNote.value = item.message || '';
-      removePlace(item.id);
     };
 
     const openGoogleMap = (p) => {
@@ -1054,23 +971,17 @@ createApp({
       let text = `【${currentTrip.value.name}】行程表\n\n`;
       for(let d = 1; d <= totalDays.value; d++) {
         text += `📅 Day ${d}\n`;
-
-        let dayItems = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
-
-        const hasDbOrder = dayItems.some(x => Number(x.order) > 0);
-        if (hasDbOrder) {
-          dayItems = dayItems.slice().sort((a,b)=> (Number(a.order)||999999) - (Number(b.order)||999999));
+        const base = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
+        const ids = loadDayOrder(currentTrip.value.id, d);
+        let dayItems = base.slice();
+        if (ids && ids.length) {
+          const map = new Map(dayItems.map(x => [String(x.id), x]));
+          const ordered = [];
+          ids.forEach(id => { const it = map.get(String(id)); if (it) ordered.push(it); });
+          dayItems.forEach(it => { if (!ids.includes(String(it.id))) ordered.push(it); });
+          dayItems = ordered;
         } else {
-          const ids = loadDayOrder(currentTrip.value.id, d);
-          if (ids && ids.length) {
-            const map = new Map(dayItems.map(x => [String(x.id), x]));
-            const ordered = [];
-            ids.forEach(id => { const it = map.get(String(id)); if (it) ordered.push(it); });
-            dayItems.forEach(it => { if (!ids.includes(String(it.id))) ordered.push(it); });
-            dayItems = ordered;
-          } else {
-            dayItems = dayItems.slice().sort((a,b)=>timeToNum(a.time)-timeToNum(b.time));
-          }
+          dayItems = dayItems.sort((a,b)=>timeToNum(a.time)-timeToNum(b.time));
         }
 
         if(dayItems.length === 0) { text += "  (無行程)\n\n"; continue; }
@@ -1078,6 +989,17 @@ createApp({
         text += "\n";
       }
       navigator.clipboard.writeText(text);
+    };
+
+    const promptSwapDays = async () => {
+      // 仍保留原本 ↔ 按鈕功能（可不使用）
+      const a = prompt(`要交換哪一天？(1 ~ ${totalDays.value})`, String(currentDay.value));
+      if (!a) return;
+      const b = prompt(`要跟哪一天交換？(1 ~ ${totalDays.value})`, '2');
+      if (!b) return;
+      const dayA = parseInt(a,10), dayB = parseInt(b,10);
+      if (!dayA || !dayB || dayA < 1 || dayB < 1 || dayA > totalDays.value || dayB > totalDays.value || dayA === dayB) return;
+      await swapDays(dayA, dayB);
     };
 
     watch(currentDay, () => nextTick().then(initSortable));
@@ -1094,16 +1016,18 @@ createApp({
       newPlace, newTime, newNote, newPerson, newExpense, categories,
       searchResults, isSearching, isCoordinateMode, resolvedCoordName,
       searchPlacesInput, useCoordinateInput, selectPlace, searchInGoogleMaps,
-      addPlace, removePlace, editPlace, openGoogleMap,
+      addPlace, removePlace, openGoogleMap,
       mapSearchQuery, searchCityAndJump, exploreNearby, fitBoundsToTrip,
       addExpense, removeExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis,
       exportItinerary, fetchData, formatInvolved, formatTime,
-      promptSwapDays,
       itineraryListEl,
-      showDateModal, modalDay, dateInput, closeDateModal, applyDate,
-      onDayClick, onDayDblClick, dayLabel,
-      deleteDay
+
+      // modal + swap
+      showDayModal, modalDay, activeModalTab, dateInput, swapTargetDay,
+      onDayClick, onDayDblClick, closeDayModal, applyDate, swapDays, dayLabel,
+
+      promptSwapDays
     };
   }
 }).mount('#app');
