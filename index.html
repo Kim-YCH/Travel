@@ -117,7 +117,7 @@
           </div>
 
           <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">+</button>
-          <button @click="promptSwapDays" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">↔</button>
+          
         </div>
 
         <div class="card relative space-y-2 flex-shrink-0">
@@ -991,16 +991,7 @@ createApp({
       navigator.clipboard.writeText(text);
     };
 
-    const promptSwapDays = async () => {
-      // 仍保留原本 ↔ 按鈕功能（可不使用）
-      const a = prompt(`要交換哪一天？(1 ~ ${totalDays.value})`, String(currentDay.value));
-      if (!a) return;
-      const b = prompt(`要跟哪一天交換？(1 ~ ${totalDays.value})`, '2');
-      if (!b) return;
-      const dayA = parseInt(a,10), dayB = parseInt(b,10);
-      if (!dayA || !dayB || dayA < 1 || dayB < 1 || dayA > totalDays.value || dayB > totalDays.value || dayA === dayB) return;
-      await swapDays(dayA, dayB);
-    };
+ 
 
     watch(currentDay, () => nextTick().then(initSortable));
     watch(currentTab, () => nextTick().then(initSortable));
@@ -1027,7 +1018,7 @@ createApp({
       showDayModal, modalDay, activeModalTab, dateInput, swapTargetDay,
       onDayClick, onDayDblClick, closeDayModal, applyDate, swapDays, dayLabel,
 
-      promptSwapDays
+      
     };
   }
 }).mount('#app');
