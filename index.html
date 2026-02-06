@@ -359,7 +359,7 @@ const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzoTzuAD3f9OnXUUTroCBxCf432MDrLM3INSqpOdUhXPvPBsPs6oySNPFvSfPLGaO8q/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxQq7zBqKoJoXhqOO4P0cnyh3UZNlL9Gin4pTAlBN_DqgmkcR2X3y94ZMkvNOEzEAfd/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -630,32 +630,32 @@ createApp({
       dayB = Number(dayB || 0);
       if (!currentTrip.value) return;
       if (!dayA || !dayB || dayA === dayB) return;
-
+    
       if (!confirm(`確定交換 Day ${dayA} 和 Day ${dayB} 的所有行程？`)) return;
-
+    
       isLoading.value = true;
       try {
-        for (const it of itinerary.value) {
-          const dd = it.day ? parseInt(it.day, 10) : 1;
-          if (dd === dayA) {
-            it.day = dayB;
-            await editOrUpdateItin({ id: it.id, day: dayB });
-          } else if (dd === dayB) {
-            it.day = dayA;
-            await editOrUpdateItin({ id: it.id, day: dayA });
-          }
-        }
-
-        // 清掉 localStorage 排序避免混亂
+        // ✅ 只打一支後端
+        await postJSON({
+          action: 'swap_days',
+          type: 'itinerary',
+          tripId: currentTrip.value.id,
+          dayA,
+          dayB
+        });
+    
+        // ✅ 交換完成後，重新抓一次 itinerary（一次 GET）
         clearDayOrder(currentTrip.value.id, dayA);
         clearDayOrder(currentTrip.value.id, dayB);
-
-        currentDay.value = dayA;
-
+    
         closeDayModal();
+        await fetchData(false);
+        currentDay.value = dayA;
+    
         await nextTick();
         initSortable();
-        updateMapMarkers();
+        if (currentTab.value === 'map') updateMapMarkers();
+    
       } finally {
         isLoading.value = false;
       }
