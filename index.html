@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>出發囉</title>
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- ✅ Vue UMD global -->
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
@@ -39,7 +38,7 @@
     .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #2563eb; z-index: 9999; animation: loading 1s infinite linear; }
     @keyframes loading { 0% { width: 0%; left: 0; } 50% { width: 50%; left: 25%; } 100% { width: 100%; left: 100%; } }
 
-    #map { width: 100%; height: 100%; background-color: #e5e7eb; }
+    #map { width: 100%; height: 100%; background-color: #e5e7eb; border-radius: 14px; }
 
     .suggestions-list { position: absolute; top: 100%; left: 0; right: 0; background: white; z-index: 50; max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; margin-top: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
     .suggestion-item { padding: 12px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 8px; cursor: pointer; }
@@ -54,6 +53,33 @@
 
     .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .modal-card { width: 92%; max-width: 360px; background: #fff; border-radius: 18px; padding: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); }
+
+    .day-btn-wrap { position: relative; }
+    .day-x {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.15);
+      color: white;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .day-x:active { transform: scale(0.95); }
+
+    .small-btn {
+      height: 46px;
+      border-radius: 12px;
+      font-weight: 800;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
   </style>
 </head>
 <body>
@@ -61,7 +87,6 @@
 <div id="app" class="mobile-container">
   <div v-if="isLoading" class="loading-bar"></div>
 
-  <!-- Lobby -->
   <div v-if="currentView === 'lobby'" class="content-scroll p-6 justify-center bg-gray-50">
     <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
 
@@ -87,7 +112,6 @@
     </div>
   </div>
 
-  <!-- App -->
   <div v-else class="flex flex-col h-full overflow-hidden">
     <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
       <div>
@@ -96,23 +120,30 @@
           Day {{ currentDay }} | {{ dayLabel(currentDay) }} | {{ currentTrip.city }}
         </div>
       </div>
-      <button @click="fetchData(true)" class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95">↻ 同步</button>
+      <button @click="fetchData" class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95">↻ 同步</button>
     </header>
 
-    <main class="content-scroll bg-gray-50">
-      <!-- Itinerary -->
+    <main :class="currentTab === 'map' ? 'content-fixed' : 'content-scroll'" class="bg-gray-50">
+
       <div v-if="currentTab === 'itinerary'" class="p-4 space-y-4 pb-24">
-        <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0">
-          <button v-for="d in totalDays" :key="d"
-                  @click="onDayClick(d)"
-                  @dblclick="onDayDblClick(d)"
-                  class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition flex-shrink-0"
-                  :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">
-            <div>Day {{ d }}</div>
-            <div class="text-[10px] font-normal opacity-90">
-              {{ dayLabel(d) || '—' }}
-            </div>
-          </button>
+        <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0 relative z-50">
+          <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
+            <button
+              @click.stop.prevent="onDayClick(d)"
+              @dblclick.stop.prevent="onDayDblClick(d)"
+              class="px-4 py-2 rounded-full border text-sm font-bold whitespace-nowrap transition"
+              :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'">
+              <div>Day {{ d }}</div>
+              <div class="text-[10px] font-normal opacity-90">
+                {{ dayLabel(d) || '—' }}
+              </div>
+            </button>
+
+            <div
+              class="day-x"
+              v-if="totalDays > 1"
+              @click.stop.prevent="deleteDay(d)">×</div>
+          </div>
 
           <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">+</button>
         </div>
@@ -124,6 +155,7 @@
 
             <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
               <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+
               <div v-if="isCoordinateMode" @click="useCoordinateInput" class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200">
                 <span class="text-xl">📍</span>
                 <div>
@@ -132,11 +164,19 @@
                 </div>
               </div>
 
+              <div v-for="item in searchResults" :key="item.place_id" @click="selectPlace(item)" class="suggestion-item hover:bg-blue-50">
+                <span class="text-xl">📍</span>
+                <div class="overflow-hidden">
+                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                </div>
+              </div>
+
               <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
                 <span class="text-xl">🔎</span>
                 <div class="flex-1">
                   <div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找</div>
-                  <div class="text-xs text-gray-400">複製座標貼回來</div>
+                  <div class="text-xs text-gray-400">可複製座標貼回來</div>
                 </div>
                 <span class="text-gray-300 text-lg">➜</span>
               </div>
@@ -176,7 +216,23 @@
         </div>
       </div>
 
-      <!-- Money -->
+      <div v-if="currentTab === 'map'" class="content-fixed p-4 w-full">
+        <div class="flex flex-col gap-2 flex-shrink-0">
+          <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200">
+            <input v-model="mapSearchQuery" @keyup.enter="searchCityAndJump"
+                   type="text" :placeholder="'跳轉至 ' + (currentTrip.city || '') + '...'"
+                   class="flex-1 p-3 border-0 outline-none h-[54px] text-gray-900 bg-white" style="border-radius: 0;">
+            <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-[54px]">前往</button>
+          </div>
+          <button @click="fitBoundsToTrip" class="bg-white text-gray-700 font-bold py-2.5 rounded-xl shadow-sm border border-gray-200 active:scale-95 text-sm flex justify-center items-center gap-1">
+            <span>🔄</span> 顯示行程
+          </button>
+        </div>
+
+        <div id="map" class="shadow-inner mt-2" style="height: calc(100% - 140px);"></div>
+        <div v-if="!isMapReady" class="text-center text-gray-400 mt-4 text-sm absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">正在載入地圖...</div>
+      </div>
+
       <div v-if="currentTab === 'money'" class="p-4 space-y-4 pb-24">
         <div class="card bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
           <div class="flex justify-between items-end mb-4"><span class="text-gray-400 text-sm">總支出</span><span class="text-3xl font-bold tracking-wider">${{ totalExpense }}</span></div>
@@ -192,8 +248,13 @@
           <h3 class="font-bold text-gray-700 text-sm mb-3">📊 消費分析</h3>
           <div class="space-y-3">
             <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
-              <div class="flex justify-between mb-1"><span class="text-gray-600">{{ cat.name }}</span><span class="font-bold text-gray-800">${{ cat.total }} ({{ ((cat.total/totalExpense)*100).toFixed(0) }}%)</span></div>
-              <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full stat-bar" :style="{ width: (cat.total/totalExpense)*100 + '%' }"></div></div>
+              <div class="flex justify-between mb-1">
+                <span class="text-gray-600">{{ cat.name }}</span>
+                <span class="font-bold text-gray-800">${{ cat.total }} ({{ totalExpense ? ((cat.total/totalExpense)*100).toFixed(0) : 0 }}%)</span>
+              </div>
+              <div class="w-full bg-gray-100 rounded-full h-2">
+                <div class="bg-blue-500 h-2 rounded-full stat-bar" :style="{ width: totalExpense ? (cat.total/totalExpense)*100 + '%' : '0%' }"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -203,13 +264,11 @@
             <input v-model="newExpense.title" placeholder="項目" class="col-span-2">
             <input v-model.number="newExpense.amount" type="number" placeholder="$" class="font-mono font-bold">
           </div>
-
           <div class="mb-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
             <button v-for="cat in categories" :key="cat" @click="newExpense.category = cat"
                     class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition"
                     :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'">{{ cat }}</button>
           </div>
-
           <div class="mb-3 flex gap-2 items-center">
             <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
             <select v-model="newExpense.payer" class="flex-1">
@@ -217,7 +276,6 @@
               <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
             </select>
           </div>
-
           <div class="mb-4">
             <span class="text-xs text-gray-500 font-bold block mb-2 ml-1">分攤給 (點擊切換)</span>
             <div class="flex flex-wrap gap-2">
@@ -227,14 +285,16 @@
               </label>
             </div>
           </div>
-
           <button @click="addExpense" class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow active:scale-95 transition text-lg" :disabled="isLoading">記帳</button>
         </div>
 
         <div class="space-y-2">
           <div v-for="(exp, idx) in expenses" :key="exp.id" class="card flex justify-between items-center py-3 border-l-4 border-gray-300">
             <div>
-              <div class="font-bold text-gray-800 text-lg">{{ exp.title }} <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span></div>
+              <div class="font-bold text-gray-800 text-lg">
+                {{ exp.title }}
+                <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span>
+              </div>
               <div class="text-xs text-gray-500 mt-1">{{ exp.payer }} 先付 <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤</div>
             </div>
             <div class="flex flex-col items-end gap-1">
@@ -245,7 +305,6 @@
         </div>
       </div>
 
-      <!-- Settings -->
       <div v-if="currentTab === 'settings'" class="p-4 space-y-4 pb-24">
         <button @click="exitTrip" class="w-full bg-gray-700 text-white h-[54px] rounded-lg font-bold mb-6 shadow text-lg">🔙 切換旅程</button>
 
@@ -253,8 +312,10 @@
         <button @click="exportItinerary" class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"><span>📤</span> 匯出純文字行程</button>
 
         <h3 class="font-bold text-gray-700 mt-6 ml-1">👥 成員管理</h3>
-        <div class="flex gap-2"><input v-model="newPerson" placeholder="名字" class="flex-1"><button @click="addPerson" class="bg-gray-800 text-white px-4 rounded-lg font-bold">新增</button></div>
-
+        <div class="flex gap-2">
+          <input v-model="newPerson" placeholder="名字" class="flex-1">
+          <button @click="addPerson" class="bg-gray-800 text-white px-4 rounded-lg font-bold">新增</button>
+        </div>
         <div class="space-y-2 mb-10">
           <div v-for="(p, idx) in people" :key="p.id" class="flex justify-between items-center p-3 bg-white rounded border border-gray-100 shadow-sm">
             <span class="font-bold text-gray-800">{{ p.name || '成員 ' + (idx + 1) }}</span>
@@ -266,676 +327,863 @@
           <button @click="deleteTripTotally" class="w-full bg-red-500 text-white border border-red-600 py-3 rounded-lg font-bold mb-3 shadow-md hover:bg-red-600 transition">❌ 刪除此旅程</button>
         </div>
       </div>
+
     </main>
 
     <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='itinerary'?'text-blue-600 scale-110':'text-gray-400'"><span class="text-2xl mb-0.5">📍</span><span class="text-[10px] font-bold">行程</span></button>
+      <button @click="switchTab('map')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='map'?'text-purple-600 scale-110':'text-gray-400'"><span class="text-2xl mb-0.5">🗺️</span><span class="text-[10px] font-bold">地圖</span></button>
       <button @click="switchTab('money')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='money'?'text-green-600 scale-110':'text-gray-400'"><span class="text-2xl mb-0.5">💰</span><span class="text-[10px] font-bold">分帳</span></button>
       <button @click="switchTab('settings')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='settings'?'text-gray-800 scale-110':'text-gray-400'"><span class="text-2xl mb-0.5">⚙️</span><span class="text-[10px] font-bold">設定</span></button>
     </nav>
   </div>
 
-  <!-- ✅ Day Modal: Day1有日期+交換；其他天只有交換 -->
   <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal">
-    <div class="modal-card">
-      <div class="font-bold text-gray-800 text-lg mb-3">Day {{ modalDay }} 功能</div>
+    <div class="modal-card space-y-3">
+      <div class="font-bold text-gray-800 text-lg">Day{{ modalDay }} 設定</div>
 
-      <div v-if="modalDay === 1" class="space-y-3">
-        <div class="text-sm text-gray-600 font-bold">設定 Day1 日期</div>
+      <template v-if="modalDay === 1">
+        <div class="text-sm text-gray-500">設定 Day1 日期（其他天自動推算）</div>
         <input type="date" v-model="dateInput">
+        <button class="w-full bg-blue-600 text-white small-btn active:scale-95" @click="applyDay1Date">套用 Day1 日期</button>
+      </template>
+
+      <div class="border-t pt-3">
+        <div class="text-sm text-gray-500 mb-2">交換天數（Day{{ modalDay }} ↔ 其他天）</div>
+        <div class="flex gap-2">
+          <select v-model.number="swapTargetDay" class="flex-1">
+            <option :value="0" disabled>選擇要交換的天數</option>
+            <option v-for="d in totalDays" :key="'swap'+d" :value="d" v-if="d !== modalDay">Day {{ d }}</option>
+          </select>
+          <button class="w-[120px] bg-gray-900 text-white small-btn active:scale-95" @click="swapWithDay">交換</button>
+        </div>
+
       </div>
 
-      <div class="mt-4 space-y-2">
-        <div class="text-sm text-gray-600 font-bold">交換天數</div>
-        <select v-model.number="swapTarget">
-          <option v-for="d in totalDays" :key="d" :value="d" :disabled="d===modalDay">
-            Day {{ d }}
-          </option>
-        </select>
-      </div>
-
-      <div class="flex gap-2 mt-5">
-        <button class="flex-1 h-[50px] rounded-xl border font-bold text-gray-600" @click="closeDayModal">取消</button>
-        <button class="flex-1 h-[50px] rounded-xl bg-blue-600 text-white font-bold" @click="applyDayModal">套用</button>
-      </div>
+      <button class="w-full border text-gray-600 small-btn active:scale-95" @click="closeDayModal">關閉</button>
     </div>
   </div>
+
 </div>
 
 <script>
-  const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
-  createApp({
-    setup() {
-      // ✅ 你的 Apps Script Web App /exec
-      const API_URL = 'https://script.google.com/macros/s/AKfycbwYDtsU5BZ35LS7XNV2_pd4qrUfGwqaz0O_rMU45yyBBtjIJaUyYRxu_4cL0m1TJOJ8/exec';
+createApp({
+  setup() {
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwYDtsU5BZ35LS7XNV2_pd4qrUfGwqaz0O_rMU45yyBBtjIJaUyYRxu_4cL0m1TJOJ8/exec';
+    const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
-      const currentView = ref('lobby');
-      const currentTrip = ref(null);
-      const trips = ref([]);
-      const newTripName = ref('');
-      const newTripCity = ref('');
+    const currentView = ref('lobby');
+    const currentTrip = ref(null);
+    const trips = ref([]);
+    const newTripName = ref('');
+    const newTripCity = ref('');
 
-      const currentTab = ref('itinerary');
-      const isLoading = ref(false);
+    const currentTab = ref('itinerary');
+    const isLoading = ref(false);
 
-      const currentDay = ref(1);
-      const totalDays = ref(1);
+    const currentDay = ref(1);
+    const totalDays = ref(1);
 
-      const people = ref([]);
-      const itinerary = ref([]);
-      const expenses = ref([]);
+    const people = ref([]);
+    const itinerary = ref([]);
+    const expenses = ref([]);
 
-      const newPlace = ref('');
-      const newTime = ref('');
-      const newNote = ref('');
-      const newPerson = ref('');
-      const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食' });
-      const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
+    const newPlace = ref('');
+    const newTime = ref('');
+    const newNote = ref('');
+    const newPerson = ref('');
+    const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食' });
+    const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
 
-      const searchResults = ref([]);
-      const isSearching = ref(false);
-      const isCoordinateMode = ref(false);
-      const resolvedCoordName = ref('');
-      const selectedLat = ref(null);
-      const selectedLng = ref(null);
+    const searchResults = ref([]);
+    const isSearching = ref(false);
+    const isCoordinateMode = ref(false);
+    const resolvedCoordName = ref('');
+    const selectedLat = ref(null);
+    const selectedLng = ref(null);
+    const selectedPlaceData = ref(null);
 
-      const itineraryListEl = ref(null);
-      let sortable = null;
+    const mapSearchQuery = ref('');
+    const isMapReady = ref(false);
+    let mapInstance = null;
+    let markers = [];
+    let infoWindow = null;
+    let autocompleteService = null;
 
-      // day modal
-      const showDayModal = ref(false);
-      const modalDay = ref(1);
-      const dateInput = ref('');
-      const swapTarget = ref(2);
+    const itineraryListEl = ref(null);
+    let sortable = null;
 
-      // ---------------- JSONP (avoid CORS) ----------------
-      const jsonp = (url, timeoutMs = 15000) => {
-        return new Promise((resolve, reject) => {
-          const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-          const sep = url.includes('?') ? '&' : '?';
-          const full = `${url}${sep}callback=${cb}`;
+    const showDayModal = ref(false);
+    const modalDay = ref(1);
+    const dateInput = ref('');
+    const swapTargetDay = ref(0);
 
-          const s = document.createElement('script');
-          const t = setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')); }, timeoutMs);
+    const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
-          const cleanup = () => {
-            clearTimeout(t);
-            if (s.parentNode) s.parentNode.removeChild(s);
-            try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-          };
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    const parseYMD = (s) => {
+      if (!s) return null;
+      const p = String(s).split('-');
+      if (p.length !== 3) return null;
+      const y = parseInt(p[0],10), m = parseInt(p[1],10), d = parseInt(p[2],10);
+      if (!y || !m || !d) return null;
+      return new Date(y, m-1, d, 12, 0, 0);
+    };
+    const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
 
-          window[cb] = (data) => { cleanup(); resolve(data); };
-          s.onerror = () => { cleanup(); reject(new Error('JSONP load error')); };
-          s.src = full;
-          document.head.appendChild(s);
+    const dayLabel = (day) => {
+      const base = parseYMD(currentTrip.value?.start_date);
+      if (!base) return '';
+      const dt = addDays(base, day-1);
+      const wk = ['日','一','二','三','四','五','六'][dt.getDay()];
+      return `${dt.getFullYear()}/${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())} (${wk})`;
+    };
+
+    const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
+
+    const formatTime = (timeStr) => {
+      if (!timeStr) return '';
+      if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
+      try {
+        const date = new Date(timeStr);
+        if (isNaN(date.getTime())) return timeStr;
+        const h = date.getHours().toString().padStart(2, '0');
+        const m = date.getMinutes().toString().padStart(2, '0');
+        return `${h}:${m}`;
+      } catch (e) { return timeStr; }
+    };
+
+    const timeToNum = (t) => {
+      const s = formatTime(t);
+      if (!s) return 999999;
+      const p = s.split(':');
+      if (p.length !== 2) return 999999;
+      const hh = parseInt(p[0],10), mm = parseInt(p[1],10);
+      if (Number.isNaN(hh) || Number.isNaN(mm)) return 999999;
+      return hh*60+mm;
+    };
+
+    const jsonp = (url, timeoutMs = 15000) => new Promise((resolve, reject) => {
+      const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+      const sep = url.includes('?') ? '&' : '?';
+      const full = `${url}${sep}callback=${cb}`;
+
+      const s = document.createElement('script');
+      const t = setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')); }, timeoutMs);
+
+      const cleanup = () => {
+        clearTimeout(t);
+        if (s.parentNode) s.parentNode.removeChild(s);
+        try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+      };
+
+      window[cb] = (data) => { cleanup(); resolve(data); };
+      s.onerror = () => { cleanup(); reject(new Error('JSONP load error')); };
+      s.src = full;
+      document.head.appendChild(s);
+    });
+
+    const apiGet = async (paramsObj) => {
+      const qs = new URLSearchParams(paramsObj).toString();
+      return await jsonp(`${API_URL}?${qs}`);
+    };
+
+    const postJSON = async (payload) => {
+      const p = { ...payload };
+      if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
+      return await apiGet(p);
+    };
+
+    const orderKey = (tripId, day) => `trip_${tripId}_day_${day}_order`;
+    const setOrderIds = (tripId, day, ids) => localStorage.setItem(orderKey(tripId, day), JSON.stringify(ids || []));
+    const getOrderIds = (tripId, day) => {
+      try {
+        const raw = localStorage.getItem(orderKey(tripId, day));
+        const ids = JSON.parse(raw);
+        return Array.isArray(ids) ? ids : null;
+      } catch(e){ return null; }
+    };
+    const clearOrderIds = (tripId, day) => localStorage.removeItem(orderKey(tripId, day));
+
+    const saveOrderToDB = async (tripId, day, ids) => {
+      await postJSON({ action: 'save_order', tripId, day: String(day), order: (ids||[]).join(',') });
+    };
+
+    const escapeHtml = (s) => String(s)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+      .replaceAll('"','&quot;').replaceAll("'","&#39;");
+
+    const loadGoogleMaps = () => {
+      if (window.google && window.google.maps) {
+        try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){}
+        isMapReady.value = true;
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=zh-TW`;
+        s.async = true; s.defer = true;
+        s.onload = () => {
+          try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){}
+          isMapReady.value = true;
+          resolve();
+        };
+        s.onerror = () => resolve();
+        document.head.appendChild(s);
+      });
+    };
+
+    const initGoogleMap = () => {
+      if (!window.google) return;
+      const mapEl = document.getElementById('map'); if (!mapEl) return;
+      if (!mapInstance) {
+        mapInstance = new google.maps.Map(mapEl, {
+          center: { lat: 23.6, lng: 121 },
+          zoom: 8,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false
         });
-      };
+        infoWindow = new google.maps.InfoWindow();
+      }
+      updateMapMarkers();
+    };
 
-      const apiGet = async (paramsObj) => {
-        const qs = new URLSearchParams(paramsObj).toString();
-        return await jsonp(`${API_URL}?${qs}`);
-      };
+    const updateMapMarkers = () => {
+      if (!mapInstance || !window.google) return;
+      markers.forEach(m => m.setMap(null));
+      markers = [];
 
-      // ✅ 用 apiGet 取代原本的 POST
-      const postJSON = async (payload) => {
-        const action = payload.action;
-        const type = payload.type;
+      const bounds = new google.maps.LatLngBounds();
+      let hasPoint = false;
 
-        if (action === 'del') {
-          return await apiGet({ action: 'del', type, id: String(payload.id || '') });
+      itinerary.value.forEach(item => {
+        if (item.lat && item.lng) {
+          const d = item.day ? parseInt(item.day,10) : 1;
+
+          const marker = new google.maps.Marker({
+            position: { lat: Number(item.lat), lng: Number(item.lng) },
+            map: mapInstance,
+            label: { text: d.toString(), color: "white" },
+            title: item.name
+          });
+
+          marker.addListener("click", () => {
+            const link = item.place_id
+              ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
+              : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+
+            infoWindow.setContent(
+              `<div style="padding:6px; color:#111">
+                <b>${escapeHtml(item.name || '')}</b><br/>
+                <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</span><br/>
+                <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
+              </div>`
+            );
+            infoWindow.open(mapInstance, marker);
+          });
+
+          markers.push(marker);
+          bounds.extend(marker.getPosition());
+          hasPoint = true;
         }
-        if (action === 'add' || action === 'edit') {
-          return await apiGet({ action, type, data: JSON.stringify(payload.data || {}) });
-        }
-        if (action === 'set_trip_start_date') {
-          return await apiGet({ action: 'set_trip_start_date', type: 'trips', tripId: payload.tripId, start_date: payload.start_date });
-        }
-        if (action === 'swap_days') {
-          return await apiGet({ action: 'swap_days', type: 'itinerary', tripId: payload.tripId, dayA: String(payload.dayA), dayB: String(payload.dayB) });
-        }
-        if (action === 'save_order') {
-          return await apiGet({ action: 'save_order', type: 'orders', tripId: payload.tripId, day: String(payload.day), order: payload.order });
-        }
-        if (action === 'clear_order') {
-          return await apiGet({ action: 'clear_order', type: 'orders', tripId: payload.tripId, day: String(payload.day) });
-        }
+      });
 
-        throw new Error('unknown postJSON action: ' + action);
-      };
-
-      // ---------------- Date helpers (avoid -1 day) ----------------
-      const pad2 = (n) => String(n).padStart(2, '0');
-      const parseYMD = (s) => {
-        if (!s) return null;
-        const p = String(s).split('-');
-        if (p.length !== 3) return null;
-        const y = parseInt(p[0], 10), m = parseInt(p[1], 10), d = parseInt(p[2], 10);
-        if (!y || !m || !d) return null;
-        return new Date(y, m - 1, d, 12, 0, 0); // ✅ noon
-      };
-      const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-      const dayLabel = (day) => {
-        const base = parseYMD(currentTrip.value?.start_date);
-        if (!base) return '';
-        const dt = addDays(base, day - 1);
-        const wk = ['日','一','二','三','四','五','六'][dt.getDay()];
-        return `${dt.getFullYear()}/${pad2(dt.getMonth() + 1)}/${pad2(dt.getDate())} (${wk})`;
-      };
-
-      const formatTime = (timeStr) => {
-        if (!timeStr) return '';
-        if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
-        try {
-          const d = new Date(timeStr);
-          if (isNaN(d.getTime())) return String(timeStr);
-          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-        } catch { return String(timeStr); }
-      };
-      const timeToNum = (t) => {
-        const s = formatTime(t);
-        if (!s) return 999999;
-        const p = s.split(':');
-        if (p.length !== 2) return 999999;
-        const hh = parseInt(p[0],10), mm = parseInt(p[1],10);
-        if (Number.isNaN(hh) || Number.isNaN(mm)) return 999999;
-        return hh * 60 + mm;
-      };
-      const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
-
-      // ---------------- IDs ----------------
-      const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
-
-      // ---------------- Orders (DB) ----------------
-      const orderCache = ref({}); // key: `${tripId}_${day}` -> ids[]
-      const orderKey = (tripId, day) => `${tripId}_${day}`;
-      const getOrderIds = (tripId, day) => orderCache.value[orderKey(tripId, day)] || null;
-      const setOrderIds = (tripId, day, ids) => { orderCache.value[orderKey(tripId, day)] = ids; };
-
-      const loadOrderFromDB = async (tripId, day) => {
-        try {
-          const rows = await apiGet({ type: 'orders', tripId });
-          const hit = (Array.isArray(rows) ? rows : []).find(r => String(r.day) === String(day));
-          if (!hit || !hit.order) return null;
-          const ids = String(hit.order).split(',').map(s => s.trim()).filter(Boolean);
-          return ids.length ? ids : null;
-        } catch { return null; }
-      };
-
-      // ---------------- Trips ----------------
-      const fetchTrips = async () => {
-        isLoading.value = true;
-        try {
-          const data = await apiGet({ type: 'trips' });
-          trips.value = Array.isArray(data) ? data : [];
-        } finally {
-          isLoading.value = false;
-        }
-      };
-
-      const createTrip = async () => {
-        if (!newTripName.value.trim()) return;
-        isLoading.value = true;
-        try {
-          const id = generateId();
-          const nextNo = trips.value.length + 1;
-          const tripName = newTripName.value.trim() || `旅程 ${nextNo}`;
-          const obj = { id, name: tripName, city: newTripCity.value || '', start_date: '' };
-          trips.value.push(obj);
-
-          await postJSON({ action: 'add', type: 'trips', data: obj });
-
-          newTripName.value = '';
-          newTripCity.value = '';
-        } finally {
-          isLoading.value = false;
-        }
-      };
-
-      const selectTrip = async (trip) => {
-        currentTrip.value = trip;
-        currentView.value = 'app';
-        currentDay.value = 1;
-        totalDays.value = 1;
-        itinerary.value = [];
-        expenses.value = [];
-        people.value = [];
-        await fetchData(true);
-      };
-
-      const exitTrip = async () => {
-        currentView.value = 'lobby';
-        currentTrip.value = null;
-        await fetchTrips();
-      };
-
-      const deleteTripTotally = async () => {
-        if (!currentTrip.value) return;
-        if (!confirm('確定刪除此旅程？')) return;
-        isLoading.value = true;
-        try {
-          await postJSON({ action: 'del', type: 'trips', id: currentTrip.value.id });
-          await exitTrip();
-        } finally {
-          isLoading.value = false;
-        }
-      };
-
-      // ---------------- Load all trip data ----------------
-      const fetchData = async (alsoRefreshTrips) => {
-        if (!currentTrip.value) return;
-        isLoading.value = true;
-        const tripId = currentTrip.value.id;
-
-        try {
-          const [itinData, expData, pplData] = await Promise.all([
-            apiGet({ type: 'itinerary', tripId }),
-            apiGet({ type: 'expenses', tripId }),
-            apiGet({ type: 'people', tripId }),
-          ]);
-
-          itinerary.value = Array.isArray(itinData) ? itinData : [];
-          expenses.value = Array.isArray(expData) ? expData : [];
-          const ppl = Array.isArray(pplData) ? pplData : [];
-          people.value = ppl.length ? ppl : [{ id: 'default', name: '我' }];
-
-          if (people.value.length) {
-            newExpense.value.payer = people.value[0].name;
-            newExpense.value.involved = people.value.map(p => p.name);
+      if (hasPoint) mapInstance.fitBounds(bounds);
+      else if (currentTrip.value?.city && window.google) {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: currentTrip.value.city }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            mapInstance.setCenter(results[0].geometry.location);
+            mapInstance.setZoom(12);
           }
+        });
+      }
+    };
 
-          const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day, 10) : 1), 1);
-          totalDays.value = Math.max(1, maxDay, totalDays.value);
+    const fitBoundsToTrip = () => updateMapMarkers();
 
-          if (alsoRefreshTrips) {
-            const all = await apiGet({ type: 'trips' });
-            const t = (Array.isArray(all) ? all : []).find(x => String(x.id) === String(tripId));
-            if (t) currentTrip.value.start_date = t.start_date || '';
-          }
-
-          // load order current day
-          const key = orderKey(tripId, currentDay.value);
-          if (!orderCache.value[key]) {
-            const ids = await loadOrderFromDB(tripId, currentDay.value);
-            if (ids) setOrderIds(tripId, currentDay.value, ids);
-          }
-
-          await nextTick();
-          initSortable();
-        } finally {
-          isLoading.value = false;
+    const searchCityAndJump = () => {
+      if(!mapSearchQuery.value || !window.google || !mapInstance) return;
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: mapSearchQuery.value }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          mapInstance.setCenter(results[0].geometry.location);
+          mapInstance.setZoom(13);
         }
-      };
+      });
+    };
 
-      // ---------------- Day click/dblclick ----------------
-      const onDayClick = async (d) => {
-        currentDay.value = d;
+    const fetchTrips = async () => {
+      isLoading.value = true;
+      try {
+        const data = await apiGet({ type: 'trips' });
+        trips.value = Array.isArray(data) ? data : [];
+      } finally { isLoading.value = false; }
+    };
 
-        // lazy load order
-        if (currentTrip.value) {
-          const tripId = currentTrip.value.id;
-          const key = orderKey(tripId, d);
-          if (!orderCache.value[key]) {
-            const ids = await loadOrderFromDB(tripId, d);
-            if (ids) setOrderIds(tripId, d, ids);
-          }
+    const createTrip = async () => {
+      const name = newTripName.value.trim();
+      if(!name) return;
+
+      const id = generateId();
+      const newTrip = { id, name, city: newTripCity.value || '', start_date: '' };
+
+      trips.value.push(newTrip);
+      newTripName.value = ''; newTripCity.value = '';
+
+      await postJSON({ action: 'add', type: 'trips', data: newTrip });
+    };
+
+    const selectTrip = (trip) => {
+      if(!trip) return;
+      currentTrip.value = trip;
+      itinerary.value = [];
+      expenses.value = [];
+      people.value = [];
+      currentDay.value = 1;
+      totalDays.value = 1;
+      currentView.value = 'app';
+      fetchData();
+    };
+
+    const exitTrip = () => {
+      currentView.value = 'lobby';
+      currentTrip.value = null;
+      fetchTrips();
+    };
+
+    const deleteTripTotally = async () => {
+      if(!confirm('確定移除？')) return;
+      await postJSON({ action: 'del', type: 'trips', id: currentTrip.value.id });
+      exitTrip();
+      await fetchTrips();
+    };
+
+    const fetchData = async () => {
+      if(!currentTrip.value) return;
+      isLoading.value = true;
+      const tripId = currentTrip.value.id;
+
+      try {
+        const [itinData, expData, pplData, tripsAll] = await Promise.all([
+          apiGet({ type:'itinerary', tripId }),
+          apiGet({ type:'expenses', tripId }),
+          apiGet({ type:'people', tripId }),
+          apiGet({ type:'trips' })
+        ]);
+
+        itinerary.value = Array.isArray(itinData) ? itinData : [];
+        expenses.value = Array.isArray(expData) ? expData : [];
+        const ppl = Array.isArray(pplData) ? pplData : [];
+        people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
+
+        if (people.value.length) {
+          newExpense.value.payer = people.value[0].name;
+          newExpense.value.involved = people.value.map(p=>p.name);
         }
+
+        const t = (Array.isArray(tripsAll) ? tripsAll : []).find(x => String(x.id) === String(tripId));
+        if (t) {
+          currentTrip.value.start_date = t.start_date || '';
+          const idx = trips.value.findIndex(x => String(x.id) === String(tripId));
+          if (idx !== -1) trips.value[idx] = t;
+        }
+
+        const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
+        totalDays.value = Math.max(1, maxDay, totalDays.value);
 
         await nextTick();
         initSortable();
-      };
-
-      const onDayDblClick = (d) => {
-        modalDay.value = d;
-        if (d === 1) {
-          dateInput.value = currentTrip.value?.start_date || '';
-        } else {
-          dateInput.value = '';
+        if (currentTab.value === 'map') {
+          initGoogleMap();
+          if (mapInstance && window.google) {
+            google.maps.event.trigger(mapInstance, 'resize');
+          }
         }
-        swapTarget.value = (d === 1 && totalDays.value >= 2) ? 2 : 1;
-        if (swapTarget.value === d) swapTarget.value = (d === 1 ? 2 : 1);
-        showDayModal.value = true;
-      };
+        updateMapMarkers();
+      } finally {
+        isLoading.value = false;
+      }
+    };
 
-      const closeDayModal = () => { showDayModal.value = false; };
+    const onDayClick = async (d) => {
+      currentDay.value = d;
+      await nextTick();
+      initSortable();
+    };
 
-      const applyDayModal = async () => {
-        if (!currentTrip.value) return;
+    const onDayDblClick = (d) => {
+      modalDay.value = d;
+      if (d === 1) {
+        const base = parseYMD(currentTrip.value?.start_date);
+        dateInput.value = toYMD(base || new Date());
+      }
+      swapTargetDay.value = 0;
+      showDayModal.value = true;
+    };
 
-        isLoading.value = true;
-        try {
-          // Day1 only: set date
-          if (modalDay.value === 1) {
-            const ymd = String(dateInput.value || '').trim();
-            if (ymd) {
-              currentTrip.value.start_date = ymd;
-              await postJSON({ action: 'set_trip_start_date', tripId: currentTrip.value.id, start_date: ymd });
-            }
-          }
+    const closeDayModal = () => { showDayModal.value = false; };
 
-          // swap
-          const a = modalDay.value;
-          const b = Number(swapTarget.value || 0);
-          if (b && b !== a) {
-            if (confirm(`確定交換 Day ${a} 與 Day ${b} 的所有行程？`)) {
-              await postJSON({ action: 'swap_days', tripId: currentTrip.value.id, dayA: a, dayB: b });
+    const applyDay1Date = async () => {
+      const pick = parseYMD(dateInput.value);
+      if (!pick || !currentTrip.value) { showDayModal.value = false; return; }
 
-              // clear orders for both days
-              await postJSON({ action: 'clear_order', tripId: currentTrip.value.id, day: a });
-              await postJSON({ action: 'clear_order', tripId: currentTrip.value.id, day: b });
-              setOrderIds(currentTrip.value.id, a, null);
-              setOrderIds(currentTrip.value.id, b, null);
+      const ymd = toYMD(pick);
+      currentTrip.value.start_date = ymd;
 
-              currentDay.value = a;
-            }
-          }
+      const idx = trips.value.findIndex(t => String(t.id) === String(currentTrip.value.id));
+      if (idx !== -1) trips.value[idx].start_date = ymd;
 
-          showDayModal.value = false;
-          await fetchData(true);
-        } finally {
-          isLoading.value = false;
-        }
-      };
+      isLoading.value = true;
+      try {
+        await postJSON({ action:'set_trip_start_date', type:'trips', tripId: currentTrip.value.id, start_date: ymd });
+      } finally {
+        isLoading.value = false;
+        showDayModal.value = false;
+      }
+    };
 
-      const addNewDay = () => {
-        totalDays.value++;
-        currentDay.value = totalDays.value;
-        nextTick().then(initSortable);
-      };
+    const swapWithDay = async () => {
+      if (!currentTrip.value) return;
 
-      // ---------------- Sortable ----------------
-      const destroySortable = () => { if (sortable) { sortable.destroy(); sortable = null; } };
+      const dayA = parseInt(modalDay.value, 10);
+      const dayB = parseInt(swapTargetDay.value, 10);
+      if (!dayA || !dayB || dayA === dayB) return;
 
-      const initSortable = () => {
-        destroySortable();
-        if (!itineraryListEl.value) return;
-        if (currentTab.value !== 'itinerary') return;
-        if (!currentTrip.value) return;
-
-        sortable = new Sortable(itineraryListEl.value, {
-          animation: 150,
-          handle: '.drag-handle',
-          ghostClass: 'opacity-50',
-          onEnd: async () => {
-            try {
-              const ids = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
-                .map(el => el.getAttribute('data-id'))
-                .filter(Boolean);
-
-              setOrderIds(currentTrip.value.id, currentDay.value, ids);
-              await postJSON({
-                action: 'save_order',
-                tripId: currentTrip.value.id,
-                day: currentDay.value,
-                order: ids.join(',')
-              });
-            } catch (e) {}
-          }
+      isLoading.value = true;
+      try {
+        await postJSON({
+          action:'swap_days',
+          tripId: currentTrip.value.id,
+          dayA: String(dayA),
+          dayB: String(dayB)
         });
-      };
 
-      const filteredItinerary = computed(() => {
-        const day = currentDay.value;
-        const list = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === day);
+        const tripId = currentTrip.value.id;
+        const oA = getOrderIds(tripId, dayA);
+        const oB = getOrderIds(tripId, dayB);
 
-        const ids = currentTrip.value ? getOrderIds(currentTrip.value.id, day) : null;
-        if (ids && Array.isArray(ids) && ids.length) {
-          const map = new Map(list.map(x => [String(x.id), x]));
-          const ordered = [];
-          ids.forEach(id => { const it = map.get(String(id)); if (it) ordered.push(it); });
-          list.forEach(it => { if (!ids.includes(String(it.id))) ordered.push(it); });
-          return ordered;
+        if (oA) setOrderIds(tripId, dayB, oA); else clearOrderIds(tripId, dayB);
+        if (oB) setOrderIds(tripId, dayA, oB); else clearOrderIds(tripId, dayA);
+
+        await fetchData();
+        currentDay.value = dayA;
+      } finally {
+        isLoading.value = false;
+        showDayModal.value = false;
+      }
+    };
+
+    const addNewDay = () => {
+      totalDays.value++;
+      currentDay.value = totalDays.value;
+      nextTick().then(initSortable);
+    };
+
+    const deleteDay = async (d) => {
+      if (!currentTrip.value) return;
+      if (!confirm(`刪除 Day ${d} 的所有行程？`)) return;
+
+      isLoading.value = true;
+      try {
+        const tripId = currentTrip.value.id;
+
+        const toDelete = itinerary.value.filter(it => (it.day ? parseInt(it.day,10) : 1) === d);
+        for (const it of toDelete) {
+          await postJSON({ action:'del', type:'itinerary', id: it.id });
+        }
+        itinerary.value = itinerary.value.filter(it => (it.day ? parseInt(it.day,10) : 1) !== d);
+
+        const toShift = itinerary.value.filter(it => (it.day ? parseInt(it.day,10) : 1) > d);
+        for (const it of toShift) {
+          const newDay = (it.day ? parseInt(it.day,10) : 1) - 1;
+          it.day = newDay;
+          await postJSON({ action:'edit', type:'itinerary', data: { id: it.id, day: newDay }});
         }
 
-        return list.slice().sort((a,b) => {
-          const ta = timeToNum(a.time), tb = timeToNum(b.time);
-          if (ta !== tb) return ta - tb;
-          return (a.name||'').localeCompare(b.name||'');
-        });
+        clearOrderIds(tripId, d);
+        await postJSON({ action:'clear_order', tripId, day: String(d) });
+
+        for (let day = d+1; day <= totalDays.value; day++) {
+          const prev = getOrderIds(tripId, day);
+          if (prev) {
+            setOrderIds(tripId, day-1, prev);
+            clearOrderIds(tripId, day);
+            await postJSON({ action:'save_order', tripId, day: String(day-1), order: prev.join(',') });
+            await postJSON({ action:'clear_order', tripId, day: String(day) });
+          }
+        }
+
+        totalDays.value = Math.max(1, totalDays.value - 1);
+        if (currentDay.value > totalDays.value) currentDay.value = totalDays.value;
+
+        await nextTick();
+        initSortable();
+        updateMapMarkers();
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    const destroySortable = () => { if (sortable) { sortable.destroy(); sortable = null; } };
+
+    const initSortable = () => {
+      destroySortable();
+      if (!itineraryListEl.value) return;
+      if (currentTab.value !== 'itinerary') return;
+      if (!currentTrip.value) return;
+
+      sortable = new Sortable(itineraryListEl.value, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'opacity-50',
+        onEnd: async () => {
+          const ids = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
+            .map(el => el.getAttribute('data-id'))
+            .filter(Boolean);
+          setOrderIds(currentTrip.value.id, currentDay.value, ids);
+          try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
+        }
       });
+    };
 
-      // ---------------- Place input (fast) ----------------
-      const searchPlacesInput = () => {
-        const q = newPlace.value.trim();
-        if (!q) { searchResults.value = []; return; }
+    const filteredItinerary = computed(() => {
+      const day = currentDay.value;
+      const list = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === day);
 
-        const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
-        if (coordRegex.test(q)) {
-          isCoordinateMode.value = true;
+      const ids = currentTrip.value ? getOrderIds(currentTrip.value.id, day) : null;
+      if (ids && ids.length) {
+        const map = new Map(list.map(x => [String(x.id), x]));
+        const ordered = [];
+        ids.forEach(id => { const it = map.get(String(id)); if (it) ordered.push(it); });
+        list.forEach(it => { if (!ids.includes(String(it.id))) ordered.push(it); });
+        return ordered;
+      }
+
+      return list.slice().sort((a,b) => {
+        const ta = timeToNum(a.time), tb = timeToNum(b.time);
+        if (ta !== tb) return ta - tb;
+        return (a.name||'').localeCompare(b.name||'');
+      });
+    });
+
+    let searchTimeout = null;
+
+    const searchPlacesInput = () => {
+      const q = newPlace.value.trim();
+      if(!q) { searchResults.value = []; isCoordinateMode.value=false; return; }
+
+      const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
+      if (coordRegex.test(q)) {
+        isCoordinateMode.value = true;
+        isSearching.value = true;
+        const parts = q.split(',');
+        selectedLat.value = parseFloat(parts[0]);
+        selectedLng.value = parseFloat(parts[1]);
+
+        if(window.google) {
+          const geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ location: { lat: selectedLat.value, lng: selectedLng.value } }, (results, status) => {
+            if (status === "OK" && results && results[0]) {
+              resolvedCoordName.value = results[0].address_components?.[0]?.short_name || "未知地點";
+            } else {
+              resolvedCoordName.value = "座標";
+            }
+            isSearching.value = false;
+          });
+        } else {
+          resolvedCoordName.value = "座標";
           isSearching.value = false;
-          const parts = q.split(',');
-          selectedLat.value = parseFloat(parts[0]);
-          selectedLng.value = parseFloat(parts[1]);
-          resolvedCoordName.value = '座標';
-          return;
         }
+        return;
+      } else {
         isCoordinateMode.value = false;
         selectedLat.value = null;
         selectedLng.value = null;
         resolvedCoordName.value = '';
-        searchResults.value = [];
-      };
+      }
 
-      const useCoordinateInput = () => {
-        if (resolvedCoordName.value) newPlace.value = resolvedCoordName.value;
-        addPlace();
-      };
+      selectedPlaceData.value = null;
+      if (!autocompleteService) return;
 
-      const searchInGoogleMaps = () => {
-        const query = newPlace.value + (currentTrip.value?.city ? ' ' + currentTrip.value.city : '');
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-        searchResults.value = [];
-      };
+      isSearching.value = true;
+      if(searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        autocompleteService.getPlacePredictions({ input: q, language: 'zh-TW' }, (predictions, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && predictions) searchResults.value = predictions;
+          else searchResults.value = [];
+          isSearching.value = false;
+        });
+      }, 350);
+    };
 
-      // ---------------- Itinerary CRUD ----------------
-      const addPlace = async () => {
-        if (!currentTrip.value) return;
-        const name = newPlace.value.trim();
-        if (!name) return;
+    const useCoordinateInput = () => { if (resolvedCoordName.value) newPlace.value = resolvedCoordName.value; addPlace(); };
 
-        isLoading.value = true;
-        try {
-          const id = generateId();
-          const d = currentDay.value;
+    const selectPlace = (item) => {
+      newPlace.value = item.structured_formatting.main_text;
+      selectedPlaceData.value = item;
+      searchResults.value = [];
+    };
 
-          const item = {
-            id,
-            name,
-            day: d,
-            lat: selectedLat.value,
-            lng: selectedLng.value,
-            place_id: '',
-            message: newNote.value || '',
-            time: newTime.value || '',
-            trip_id: currentTrip.value.id
-          };
+    const searchInGoogleMaps = () => {
+      const query = newPlace.value + (currentTrip.value?.city ? ' ' + currentTrip.value.city : '');
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+      searchResults.value = [];
+    };
 
-          itinerary.value.push(item);
+    const addPlace = async () => {
+      if(!currentTrip.value) return;
+      const placeName = newPlace.value.trim();
+      if(!placeName) return;
 
-          newPlace.value = ''; newNote.value = ''; newTime.value = '';
-          selectedLat.value = null; selectedLng.value = null; resolvedCoordName.value = ''; isCoordinateMode.value = false;
+      isLoading.value = true;
+      try {
+        const id = generateId();
+        const d = currentDay.value;
 
-          await postJSON({ action: 'add', type: 'itinerary', data: item });
+        let lat = null, lng = null, placeId = '';
 
-          // append order
-          const oldIds = (getOrderIds(currentTrip.value.id, d) || filteredItinerary.value.map(x => String(x.id)));
-          const ids = oldIds.slice();
-          ids.push(String(id));
-          setOrderIds(currentTrip.value.id, d, ids);
-          await postJSON({ action: 'save_order', tripId: currentTrip.value.id, day: d, order: ids.join(',') });
+        if (selectedPlaceData.value && window.google) {
+          placeId = selectedPlaceData.value.place_id;
+          const dummyMap = new google.maps.Map(document.createElement('div'));
+          const service = new google.maps.places.PlacesService(dummyMap);
 
-          await nextTick();
-          initSortable();
-        } finally {
-          isLoading.value = false;
+          await new Promise((resolve) => {
+            service.getDetails({ placeId }, (place, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                lat = place.geometry.location.lat();
+                lng = place.geometry.location.lng();
+              }
+              resolve();
+            });
+          });
         }
-      };
-
-      const removePlace = async (id) => {
-        if (!currentTrip.value) return;
-        isLoading.value = true;
-        try {
-          const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
-          if (idx !== -1) itinerary.value.splice(idx, 1);
-
-          await postJSON({ action: 'del', type: 'itinerary', id: String(id) });
-
-          const ids = (getOrderIds(currentTrip.value.id, currentDay.value) || []).filter(x => String(x) !== String(id));
-          setOrderIds(currentTrip.value.id, currentDay.value, ids);
-          await postJSON({ action: 'save_order', tripId: currentTrip.value.id, day: currentDay.value, order: ids.join(',') });
-
-          await nextTick();
-          initSortable();
-        } finally {
-          isLoading.value = false;
+        else if (selectedLat.value != null && selectedLng.value != null) {
+          lat = selectedLat.value; lng = selectedLng.value;
+          placeId = '';
         }
-      };
-
-      const openGoogleMap = (p) => {
-        if (p.lat && p.lng) window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank');
-        else window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`, '_blank');
-      };
-
-      // ---------------- Expenses ----------------
-      const addExpense = async () => {
-        if (!currentTrip.value) return;
-        if (!newExpense.value.title || !newExpense.value.amount) return;
-
-        isLoading.value = true;
-        try {
-          const uid = generateId();
-          const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved], trip_id: currentTrip.value.id };
-          expenses.value.unshift(d);
-
-          await postJSON({ action: 'add', type: 'expenses', data: d });
-
-          newExpense.value = { title: '', amount: '', payer: people.value[0]?.name || '', involved: people.value.map(p=>p.name), category: '飲食' };
-        } finally {
-          isLoading.value = false;
+        else if (window.google) {
+          const geocoder = new google.maps.Geocoder();
+          await new Promise((resolve) => {
+            geocoder.geocode({ address: placeName + (currentTrip.value.city ? " " + currentTrip.value.city : "") }, (results, status) => {
+              if (status === 'OK' && results && results[0]) {
+                lat = results[0].geometry.location.lat();
+                lng = results[0].geometry.location.lng();
+                placeId = results[0].place_id || '';
+              }
+              resolve();
+            });
+          });
         }
-      };
 
-      const removeExpense = async (idx) => {
-        const item = expenses.value[idx];
-        if (!item?.id) return;
-        isLoading.value = true;
-        try {
-          expenses.value.splice(idx, 1);
-          await postJSON({ action: 'del', type: 'expenses', id: item.id });
-        } finally {
-          isLoading.value = false;
+        const item = {
+          id,
+          name: placeName,
+          day: d,
+          lat, lng,
+          place_id: placeId,
+          message: newNote.value || '',
+          time: newTime.value || '',
+          trip_id: currentTrip.value.id
+        };
+
+        itinerary.value.push(item);
+
+        newPlace.value = ''; newNote.value = ''; newTime.value = '';
+        selectedPlaceData.value = null; searchResults.value = [];
+        selectedLat.value = null; selectedLng.value = null;
+        isCoordinateMode.value = false; resolvedCoordName.value = '';
+
+        await postJSON({ action:'add', type:'itinerary', data: item });
+
+        const oldIds = getOrderIds(currentTrip.value.id, d) || filteredItinerary.value.map(x => String(x.id));
+        const ids = oldIds.slice();
+        ids.push(String(id));
+        setOrderIds(currentTrip.value.id, d, ids);
+        await saveOrderToDB(currentTrip.value.id, d, ids);
+
+        await nextTick();
+        initSortable();
+        updateMapMarkers();
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    const removePlace = async (id) => {
+      const i = itinerary.value.findIndex(x=>String(x.id)===String(id));
+      if(i!==-1) itinerary.value.splice(i,1);
+
+      await postJSON({ action:'del', type:'itinerary', id });
+
+      const ids = (getOrderIds(currentTrip.value.id, currentDay.value) || []).filter(x => String(x) !== String(id));
+      setOrderIds(currentTrip.value.id, currentDay.value, ids);
+      try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
+
+      await nextTick();
+      initSortable();
+      updateMapMarkers();
+    };
+
+    const openGoogleMap = (p) => {
+      if (p.place_id) {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank');
+        return;
+      }
+      if (p.lat && p.lng) {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank');
+        return;
+      }
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`, '_blank');
+    };
+
+    const addExpense = async () => {
+      if (!newExpense.value.title || !newExpense.value.amount) return;
+      const uid = generateId();
+      const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved], trip_id: currentTrip.value.id };
+      expenses.value.unshift(d);
+      await postJSON({ action:'add', type:'expenses', data: { ...d, involved: d.involved.join(',') } });
+      newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name), category: '飲食' };
+    };
+
+    const removeExpense = async (idx) => {
+      const item = expenses.value[idx];
+      if (!item?.id) return;
+      expenses.value.splice(idx, 1);
+      await postJSON({ action:'del', type:'expenses', id: item.id });
+    };
+
+    const addPerson = async () => {
+      const name = newPerson.value.trim();
+      if (!name) return;
+      const uid = generateId();
+      people.value.push({ id: uid, name, trip_id: currentTrip.value.id });
+      newExpense.value.involved.push(name);
+      newPerson.value = '';
+      await postJSON({ action:'add', type:'people', data: { id: uid, name, trip_id: currentTrip.value.id } });
+    };
+
+    const removePerson = async (idx) => {
+      const item = people.value[idx];
+      if (!item?.id || !confirm('移除？')) return;
+      people.value.splice(idx, 1);
+      await postJSON({ action:'del', type:'people', id: item.id });
+    };
+
+    const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
+
+    const balanceSheet = computed(() => {
+      if(!people.value.length) return [];
+      let b={};
+      people.value.forEach(p=>b[p.name]=0);
+      expenses.value.forEach(e=>{
+        const amt=Number(e.amount)||0;
+        if(b[e.payer]===undefined) return;
+        b[e.payer]+=amt;
+        const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name);
+        const v=inv.filter(n=>b[n]!==undefined);
+        if(v.length) {
+          const s=amt/v.length;
+          v.forEach(n=>b[n]-=s);
         }
-      };
+      });
+      return Object.keys(b).map(n=>({name:n, balance:b[n]}));
+    });
 
-      // ---------------- People ----------------
-      const addPerson = async () => {
-        if (!currentTrip.value) return;
-        const name = newPerson.value.trim();
-        if (!name) return;
+    const categoryAnalysis = computed(() => {
+      const stats = {};
+      expenses.value.forEach(e => {
+        const cat = e.category || '未分類';
+        stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
+      });
+      return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b)=>b.total-a.total);
+    });
 
-        isLoading.value = true;
-        try {
-          const uid = generateId();
-          const obj = { id: uid, name, trip_id: currentTrip.value.id };
-          people.value.push(obj);
-          newExpense.value.involved.push(name);
-          newPerson.value = '';
+    const exportItinerary = () => {
+      if(!currentTrip.value) return;
+      let text = `【${currentTrip.value.name}】行程表\n\n`;
+      for(let d = 1; d <= totalDays.value; d++) {
+        text += `📅 Day ${d}\n`;
+        const base = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
+        const ids = getOrderIds(currentTrip.value.id, d);
+        let dayItems = base.slice();
 
-          await postJSON({ action: 'add', type: 'people', data: obj });
-        } finally {
-          isLoading.value = false;
+        if (ids && ids.length) {
+          const map = new Map(dayItems.map(x => [String(x.id), x]));
+          const ordered = [];
+          ids.forEach(id => { const it = map.get(String(id)); if (it) ordered.push(it); });
+          dayItems.forEach(it => { if (!ids.includes(String(it.id))) ordered.push(it); });
+          dayItems = ordered;
+        } else {
+          dayItems = dayItems.sort((a,b)=>timeToNum(a.time)-timeToNum(b.time));
         }
-      };
 
-      const removePerson = async (idx) => {
-        const item = people.value[idx];
-        if (!item?.id || !confirm('移除？')) return;
+        if(dayItems.length === 0) { text += "  (無行程)\n\n"; continue; }
+        dayItems.forEach(item => {
+          text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name} ${item.message ? '('+item.message+')' : ''}\n`;
+        });
+        text += "\n";
+      }
+      navigator.clipboard.writeText(text);
+      alert('已複製到剪貼簿');
+    };
 
-        isLoading.value = true;
-        try {
-          people.value.splice(idx, 1);
-          await postJSON({ action: 'del', type: 'people', id: item.id });
-        } finally {
-          isLoading.value = false;
-        }
-      };
-
-      // ---------------- Others ----------------
-      const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
-      const balanceSheet = computed(() => {
-        if (!people.value.length) return [];
-        let b = {};
-        people.value.forEach(p => b[p.name] = 0);
-        expenses.value.forEach(e => {
-          const amt = Number(e.amount) || 0;
-          if (b[e.payer] === undefined) return;
-          b[e.payer] += amt;
-          const inv = (e.involved && e.involved.length) ? e.involved : people.value.map(p => p.name);
-          const v = inv.filter(n => b[n] !== undefined);
-          if (v.length) {
-            const s = amt / v.length;
-            v.forEach(n => b[n] -= s);
+    const switchTab = (tab) => {
+      currentTab.value = tab;
+      if(tab === 'map') {
+        setTimeout(() => {
+          initGoogleMap();
+          if(mapInstance && window.google) {
+            google.maps.event.trigger(mapInstance, 'resize');
+            updateMapMarkers();
           }
-        });
-        return Object.keys(b).map(n => ({ name: n, balance: b[n] }));
-      });
-      const categoryAnalysis = computed(() => {
-        const stats = {};
-        expenses.value.forEach(e => {
-          const cat = e.category || '未分類';
-          stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
-        });
-        return Object.entries(stats).map(([name,total]) => ({name,total})).sort((a,b)=>b.total-a.total);
-      });
+        }, 150);
+      }
+      nextTick().then(initSortable);
+    };
 
-      const exportItinerary = () => {
-        if (!currentTrip.value) return;
-        let text = `【${currentTrip.value.name}】行程表\n\n`;
-        for (let d = 1; d <= totalDays.value; d++) {
-          text += `📅 Day ${d}\n`;
-          const base = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
-          let dayItems = base.slice();
-          dayItems = dayItems.sort((a,b) => timeToNum(a.time) - timeToNum(b.time));
-          if (dayItems.length === 0) { text += "  (無行程)\n\n"; continue; }
-          dayItems.forEach(item => { text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name} ${item.message ? '('+item.message+')' : ''}\n`; });
-          text += "\n";
-        }
-        navigator.clipboard.writeText(text);
-        alert('已複製到剪貼簿');
-      };
+    watch(currentDay, () => nextTick().then(initSortable));
+    watch(currentTab, () => nextTick().then(initSortable));
+    watch(currentView, () => nextTick().then(initSortable));
 
-      const switchTab = (tab) => {
-        currentTab.value = tab;
-        nextTick().then(initSortable);
-      };
+    onMounted(async () => {
+      await fetchTrips();
+      await loadGoogleMaps();
+    });
 
-      watch(currentDay, () => nextTick().then(initSortable));
-      watch(currentTab, () => nextTick().then(initSortable));
-      watch(currentView, () => nextTick().then(initSortable));
+    return {
+      currentView, currentTrip, trips, newTripName, newTripCity,
+      currentTab, isLoading,
+      currentDay, totalDays,
+      people, itinerary, expenses, filteredItinerary,
+      newPlace, newTime, newNote, newPerson, newExpense, categories,
+      searchResults, isSearching, isCoordinateMode, resolvedCoordName,
+      mapSearchQuery, isMapReady,
 
-      onMounted(() => { fetchTrips(); });
+      createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
-      return {
-        currentView, currentTrip, trips, newTripName, newTripCity, createTrip, selectTrip, exitTrip, deleteTripTotally,
-        currentTab, switchTab, isLoading,
-        currentDay, totalDays, addNewDay,
-        people, itinerary, expenses, filteredItinerary,
-        newPlace, newTime, newNote, newPerson, newExpense, categories,
-        searchResults, isSearching, isCoordinateMode, resolvedCoordName,
-        searchPlacesInput, useCoordinateInput, searchInGoogleMaps,
-        addPlace, removePlace, openGoogleMap,
-        addExpense, removeExpense, addPerson, removePerson,
-        totalExpense, balanceSheet, categoryAnalysis,
-        exportItinerary, fetchData, formatInvolved, formatTime,
-        itineraryListEl,
-        showDayModal, modalDay, dateInput, swapTarget, closeDayModal, applyDayModal,
-        onDayClick, onDayDblClick, dayLabel
-      };
-    }
-  }).mount('#app');
+      switchTab, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
+
+      showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
+
+      searchPlacesInput, useCoordinateInput, selectPlace, searchInGoogleMaps,
+      addPlace, removePlace, openGoogleMap,
+      itineraryListEl, formatTime,
+
+      searchCityAndJump, fitBoundsToTrip,
+
+      addExpense, removeExpense, addPerson, removePerson,
+      totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
+
+      exportItinerary
+    };
+  }
+}).mount('#app');
 </script>
 
 </body>
 </html>
-
-
