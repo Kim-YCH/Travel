@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -18,7 +18,7 @@
     .content-fixed { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; }
     .card { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 16px; margin-bottom: 12px; flex-shrink: 0; }
 
-    input, select {
+    input, select, textarea {
       -webkit-user-select: text; user-select: text;
       border: 1px solid #e2e8f0;
       background-color: #ffffff;
@@ -30,7 +30,8 @@
       outline: none;
       transition: all 0.2s;
     }
-    input:focus, select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    textarea { height: auto; padding: 12px 16px; border-radius: 12px; }
+    input:focus, select:focus, textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
 
     .day-tab-active { background: #2563eb; color: white; border-color: #2563eb; }
     .day-tab-inactive { background: white; color: #64748b; border-color: #e2e8f0; }
@@ -52,7 +53,7 @@
     .drag-handle:active { cursor: grabbing; }
 
     .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-    .modal-card { width: 92%; max-width: 360px; background: #fff; border-radius: 18px; padding: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); }
+    .modal-card { width: 92%; max-width: 380px; background: #fff; border-radius: 18px; padding: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); }
 
     .day-btn-wrap { position: relative; }
     .day-x {
@@ -80,6 +81,20 @@
       align-items:center;
       justify-content:center;
     }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 18px;
+      background: #f1f5f9;
+      color: #334155;
+      transition: transform 0.08s ease;
+    }
+    .icon-btn:active { transform: scale(0.96); }
   </style>
 </head>
 <body>
@@ -87,6 +102,7 @@
 <div id="app" class="mobile-container">
   <div v-if="isLoading" class="loading-bar"></div>
 
+  <!-- Lobby -->
   <div v-if="currentView === 'lobby'" class="content-scroll p-6 justify-center bg-gray-50">
     <h1 class="text-3xl font-bold text-gray-900 mb-2">✈️ 出發囉</h1>
 
@@ -107,11 +123,14 @@
       <div class="flex flex-col gap-3">
         <input v-model="newTripName" placeholder="旅程名稱">
         <input v-model="newTripCity" placeholder="主要城市">
-        <button @click="createTrip" class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow active:scale-95 transition text-lg" :disabled="isLoading">建立</button>
+        <button @click="createTrip"
+                class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow active:scale-95 transition text-lg"
+                :disabled="isLoading">建立</button>
       </div>
     </div>
   </div>
 
+  <!-- App -->
   <div v-else class="flex flex-col h-full overflow-hidden">
     <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
       <div>
@@ -125,6 +144,7 @@
 
     <main :class="currentTab === 'map' ? 'content-fixed' : 'content-scroll'" class="bg-gray-50">
 
+      <!-- Itinerary -->
       <div v-if="currentTab === 'itinerary'" class="p-4 space-y-4 pb-24">
         <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0 relative z-50">
           <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
@@ -139,10 +159,7 @@
               </div>
             </button>
 
-            <div
-              class="day-x"
-              v-if="totalDays > 1"
-              @click.stop.prevent="deleteDay(d)">×</div>
+            <div class="day-x" v-if="totalDays > 1" @click.stop.prevent="deleteDay(d)">×</div>
           </div>
 
           <button @click="addNewDay" class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600">+</button>
@@ -199,7 +216,7 @@
                   <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{{ formatTime(place.time) }}</span>
                   <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
                 </div>
-                <div class="flex gap-2 items-center">
+                <div class="flex gap-2 items-center flex-wrap">
                   <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200">已定位</span>
                   <span v-else class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200">無座標</span>
                   <div v-if="place.message" class="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">📝 {{ place.message }}</div>
@@ -207,16 +224,10 @@
               </div>
             </div>
 
-            <!-- 右側按鈕：新增 ✏️ 編輯 -->
-            <div class="flex items-center gap-1 pl-3 border-l ml-2">
-              <button
-                @click.stop="openEditPlace(place)"
-                class="text-gray-300 hover:text-blue-600 px-2 text-lg font-bold"
-                :disabled="isLoading"
-                title="編輯"
-              >✏️</button>
-
-              <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
+            <!-- Right actions -->
+            <div class="flex items-center gap-2 pl-3 border-l ml-2">
+              <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
+              <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
             </div>
           </div>
 
@@ -224,6 +235,7 @@
         </div>
       </div>
 
+      <!-- Map -->
       <div v-if="currentTab === 'map'" class="content-fixed p-4 w-full">
         <div class="flex flex-col gap-2 flex-shrink-0">
           <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200">
@@ -241,6 +253,7 @@
         <div v-if="!isMapReady" class="text-center text-gray-400 mt-4 text-sm absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">正在載入地圖...</div>
       </div>
 
+      <!-- Money -->
       <div v-if="currentTab === 'money'" class="p-4 space-y-4 pb-24">
         <div class="card bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
           <div class="flex justify-between items-end mb-4"><span class="text-gray-400 text-sm">總支出</span><span class="text-3xl font-bold tracking-wider">${{ totalExpense }}</span></div>
@@ -313,6 +326,7 @@
         </div>
       </div>
 
+      <!-- Settings -->
       <div v-if="currentTab === 'settings'" class="p-4 space-y-4 pb-24">
         <button @click="exitTrip" class="w-full bg-gray-700 text-white h-[54px] rounded-lg font-bold mb-6 shadow text-lg">🔙 切換旅程</button>
 
@@ -346,7 +360,7 @@
     </nav>
   </div>
 
-  <!-- Day Modal -->
+  <!-- Day modal -->
   <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal">
     <div class="modal-card space-y-3">
       <div class="font-bold text-gray-800 text-lg">Day{{ modalDay }} 設定</div>
@@ -372,29 +386,25 @@
     </div>
   </div>
 
-  <!-- Edit Place Modal (新增：鉛筆編輯) -->
+  <!-- ✅ Edit itinerary modal -->
   <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal">
     <div class="modal-card space-y-3">
       <div class="font-bold text-gray-800 text-lg">編輯行程</div>
 
       <div class="space-y-2">
-        <div class="text-sm text-gray-500">地點 / 行程名稱</div>
-        <input v-model="editPlace.name" placeholder="行程名稱">
-      </div>
+        <div class="text-xs font-bold text-gray-500 ml-1">名稱</div>
+        <input v-model="editPlace.name" placeholder="地點名稱">
 
-      <div class="space-y-2">
-        <div class="text-sm text-gray-500">時間</div>
+        <div class="text-xs font-bold text-gray-500 ml-1">時間</div>
         <input v-model="editPlace.time" type="time">
-      </div>
 
-      <div class="space-y-2">
-        <div class="text-sm text-gray-500">備註</div>
-        <input v-model="editPlace.message" placeholder="備註...">
+        <div class="text-xs font-bold text-gray-500 ml-1">備註</div>
+        <textarea v-model="editPlace.message" rows="3" placeholder="備註..."></textarea>
       </div>
 
       <div class="flex gap-2 pt-2">
         <button class="flex-1 border text-gray-600 small-btn active:scale-95" @click="closeEditModal">取消</button>
-        <button class="flex-1 bg-blue-600 text-white small-btn active:scale-95" :disabled="isLoading" @click="saveEditPlace">儲存</button>
+        <button class="flex-1 bg-blue-600 text-white small-btn active:scale-95" @click="saveEditPlace" :disabled="isLoading">儲存</button>
       </div>
     </div>
   </div>
@@ -406,7 +416,7 @@ const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwYDtsU5BZ35LS7XNV2_pd4qrUfGwqaz0O_rMU45yyBBtjIJaUyYRxu_4cL0m1TJOJ8/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzvjNt-SBRWmUyUNkLBivN6w0tla9smS9x1iCpjyalTvIda7HHo8jMxPPDUd642OW2O/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -455,9 +465,10 @@ createApp({
     const dateInput = ref('');
     const swapTargetDay = ref(0);
 
-    // ====== 新增：編輯行程 modal 狀態 ======
+    // ✅ Edit modal state
     const showEditModal = ref(false);
-    const editPlace = ref({ id:'', name:'', time:'', message:'' });
+    const editPlaceId = ref('');
+    const editPlace = ref({ name: '', time: '', message: '' });
 
     const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
@@ -687,19 +698,7 @@ createApp({
       currentDay.value = 1;
       totalDays.value = 1;
 
-      // ✅ 先切到 app，讓畫面先渲染
       currentView.value = 'app';
-
-      // ✅ 立刻讀快取（有快取就秒顯示）
-      loadTripCache(trip.id);
-
-      // ✅ 快取塞完後，讓 sortable/marker 初始化一次
-      nextTick().then(() => {
-        initSortable();
-        updateMapMarkers();
-      });
-
-      // ✅ 背景同步最新（不要 await）
       fetchData();
     };
 
@@ -716,34 +715,38 @@ createApp({
       await fetchTrips();
     };
 
+    // ✅ 핵심：改成只打一支 API（tripData）
     const fetchData = async () => {
       if(!currentTrip.value) return;
       isLoading.value = true;
-      const tripId = currentTrip.value.id;
 
+      const tripId = currentTrip.value.id; // ⚠️ 這裡一定要帶完整 id（含 _xxx）
       try {
-        const [itinData, expData, pplData, tripsAll] = await Promise.all([
-          apiGet({ type:'itinerary', tripId }),
-          apiGet({ type:'expenses', tripId }),
-          apiGet({ type:'people', tripId }),
-          apiGet({ type:'trips' })
-        ]);
+        const data = await apiGet({ type:'tripData', tripId });
 
-        itinerary.value = Array.isArray(itinData) ? itinData : [];
-        expenses.value = Array.isArray(expData) ? expData : [];
-        const ppl = Array.isArray(pplData) ? pplData : [];
-        people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
+        const trip = data && data.trip ? data.trip : null;
+        const itin = Array.isArray(data?.itinerary) ? data.itinerary : [];
+        const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
+        const ppl  = Array.isArray(data?.people) ? data.people : [];
+        // orders 目前前端主要用 localStorage 排序；先保留不強依賴
+        // const ord  = Array.isArray(data?.orders) ? data.orders : [];
+
+        itinerary.value = itin;
+        expenses.value = exp;
+
+        const pplNorm = ppl.length ? ppl : [{id:'default', name:'我'}];
+        people.value = pplNorm;
 
         if (people.value.length) {
           newExpense.value.payer = people.value[0].name;
           newExpense.value.involved = people.value.map(p=>p.name);
         }
 
-        const t = (Array.isArray(tripsAll) ? tripsAll : []).find(x => String(x.id) === String(tripId));
-        if (t) {
-          currentTrip.value.start_date = t.start_date || '';
+        // 更新 start_date / city / name（以後端 trips 為準）
+        if (trip && String(trip.id) === String(tripId)) {
+          currentTrip.value = { ...currentTrip.value, ...trip };
           const idx = trips.value.findIndex(x => String(x.id) === String(tripId));
-          if (idx !== -1) trips.value[idx] = t;
+          if (idx !== -1) trips.value[idx] = { ...trips.value[idx], ...trip };
         }
 
         const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
@@ -751,14 +754,12 @@ createApp({
 
         await nextTick();
         initSortable();
+
         if (currentTab.value === 'map') {
           initGoogleMap();
-          if (mapInstance && window.google) {
-            google.maps.event.trigger(mapInstance, 'resize');
-          }
+          if (mapInstance && window.google) google.maps.event.trigger(mapInstance, 'resize');
         }
         updateMapMarkers();
-        saveTripCache(tripId);
       } finally {
         isLoading.value = false;
       }
@@ -810,12 +811,7 @@ createApp({
 
       isLoading.value = true;
       try {
-        await postJSON({
-          action:'swap_days',
-          tripId: currentTrip.value.id,
-          dayA: String(dayA),
-          dayB: String(dayB)
-        });
+        await postJSON({ action:'swap_days', tripId: currentTrip.value.id, dayA: String(dayA), dayB: String(dayB) });
 
         const tripId = currentTrip.value.id;
         const oA = getOrderIds(tripId, dayA);
@@ -856,7 +852,7 @@ createApp({
         for (const it of toShift) {
           const newDay = (it.day ? parseInt(it.day,10) : 1) - 1;
           it.day = newDay;
-          await postJSON({ action:'edit', type:'itinerary', data: { id: it.id, day: newDay }});
+          await postJSON({ action:'edit', type:'itinerary', data: { id: it.id, day: newDay, trip_id: tripId }});
         }
 
         clearOrderIds(tripId, d);
@@ -1095,14 +1091,14 @@ createApp({
       window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`, '_blank');
     };
 
-    // ====== 新增：鉛筆編輯功能 ======
-    const openEditPlace = (place) => {
-      if (!place) return;
+    // ✅ Edit itinerary
+    const openEditModal = (p) => {
+      if (!p || !p.id) return;
+      editPlaceId.value = String(p.id);
       editPlace.value = {
-        id: place.id,
-        name: place.name || '',
-        time: formatTime(place.time) || '',
-        message: place.message || ''
+        name: String(p.name || ''),
+        time: formatTime(p.time || ''),
+        message: String(p.message || '')
       };
       showEditModal.value = true;
     };
@@ -1111,12 +1107,14 @@ createApp({
 
     const saveEditPlace = async () => {
       if (!currentTrip.value) return;
+      const id = editPlaceId.value;
+      if (!id) return;
 
-      const id = editPlace.value.id;
       const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
-      if (idx === -1) { showEditModal.value = false; return; }
+      if (idx < 0) { showEditModal.value = false; return; }
 
-      itinerary.value[idx].name = (editPlace.value.name || '').trim();
+      // optimistic update
+      itinerary.value[idx].name = editPlace.value.name || '';
       itinerary.value[idx].time = editPlace.value.time || '';
       itinerary.value[idx].message = editPlace.value.message || '';
 
@@ -1127,21 +1125,21 @@ createApp({
           type: 'itinerary',
           data: {
             id,
+            trip_id: currentTrip.value.id,
             name: itinerary.value[idx].name,
             time: itinerary.value[idx].time,
             message: itinerary.value[idx].message
           }
         });
-        
+
         await nextTick();
         initSortable();
         updateMapMarkers();
       } finally {
         isLoading.value = false;
-        showEditModal.value = false;
+        showEditModal.value = false; // ✅ 儲存後視窗自動消失
       }
     };
-    // ====== /新增：鉛筆編輯功能 ======
 
     const addExpense = async () => {
       if (!newExpense.value.title || !newExpense.value.amount) return;
@@ -1283,8 +1281,9 @@ createApp({
 
       exportItinerary,
 
-      // 新增：編輯行程
-      showEditModal, editPlace, openEditPlace, closeEditModal, saveEditPlace
+      // ✅ Edit modal
+      showEditModal, editPlace,
+      openEditModal, closeEditModal, saveEditPlace
     };
   }
 }).mount('#app');
