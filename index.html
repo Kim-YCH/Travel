@@ -207,7 +207,15 @@
               </div>
             </div>
 
+            <!-- 右側按鈕：新增 ✏️ 編輯 -->
             <div class="flex items-center gap-1 pl-3 border-l ml-2">
+              <button
+                @click.stop="openEditPlace(place)"
+                class="text-gray-300 hover:text-blue-600 px-2 text-lg font-bold"
+                :disabled="isLoading"
+                title="編輯"
+              >✏️</button>
+
               <button @click.stop="removePlace(place.id)" class="text-gray-300 hover:text-red-500 px-2 text-xl font-bold" :disabled="isLoading">×</button>
             </div>
           </div>
@@ -338,6 +346,7 @@
     </nav>
   </div>
 
+  <!-- Day Modal -->
   <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal">
     <div class="modal-card space-y-3">
       <div class="font-bold text-gray-800 text-lg">Day{{ modalDay }} 設定</div>
@@ -357,10 +366,36 @@
           </select>
           <button class="w-[120px] bg-gray-900 text-white small-btn active:scale-95" @click="swapWithDay">交換</button>
         </div>
-
       </div>
 
       <button class="w-full border text-gray-600 small-btn active:scale-95" @click="closeDayModal">關閉</button>
+    </div>
+  </div>
+
+  <!-- Edit Place Modal (新增：鉛筆編輯) -->
+  <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal">
+    <div class="modal-card space-y-3">
+      <div class="font-bold text-gray-800 text-lg">編輯行程</div>
+
+      <div class="space-y-2">
+        <div class="text-sm text-gray-500">地點 / 行程名稱</div>
+        <input v-model="editPlace.name" placeholder="行程名稱">
+      </div>
+
+      <div class="space-y-2">
+        <div class="text-sm text-gray-500">時間</div>
+        <input v-model="editPlace.time" type="time">
+      </div>
+
+      <div class="space-y-2">
+        <div class="text-sm text-gray-500">備註</div>
+        <input v-model="editPlace.message" placeholder="備註...">
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button class="flex-1 border text-gray-600 small-btn active:scale-95" @click="closeEditModal">取消</button>
+        <button class="flex-1 bg-blue-600 text-white small-btn active:scale-95" :disabled="isLoading" @click="saveEditPlace">儲存</button>
+      </div>
     </div>
   </div>
 
@@ -419,6 +454,10 @@ createApp({
     const modalDay = ref(1);
     const dateInput = ref('');
     const swapTargetDay = ref(0);
+
+    // ====== 新增：編輯行程 modal 狀態 ======
+    const showEditModal = ref(false);
+    const editPlace = ref({ id:'', name:'', time:'', message:'' });
 
     const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
@@ -641,12 +680,26 @@ createApp({
     const selectTrip = (trip) => {
       if(!trip) return;
       currentTrip.value = trip;
+
       itinerary.value = [];
       expenses.value = [];
       people.value = [];
       currentDay.value = 1;
       totalDays.value = 1;
+
+      // ✅ 先切到 app，讓畫面先渲染
       currentView.value = 'app';
+
+      // ✅ 立刻讀快取（有快取就秒顯示）
+      loadTripCache(trip.id);
+
+      // ✅ 快取塞完後，讓 sortable/marker 初始化一次
+      nextTick().then(() => {
+        initSortable();
+        updateMapMarkers();
+      });
+
+      // ✅ 背景同步最新（不要 await）
       fetchData();
     };
 
@@ -705,6 +758,7 @@ createApp({
           }
         }
         updateMapMarkers();
+        saveTripCache(tripId);
       } finally {
         isLoading.value = false;
       }
@@ -1041,6 +1095,54 @@ createApp({
       window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`, '_blank');
     };
 
+    // ====== 新增：鉛筆編輯功能 ======
+    const openEditPlace = (place) => {
+      if (!place) return;
+      editPlace.value = {
+        id: place.id,
+        name: place.name || '',
+        time: formatTime(place.time) || '',
+        message: place.message || ''
+      };
+      showEditModal.value = true;
+    };
+
+    const closeEditModal = () => { showEditModal.value = false; };
+
+    const saveEditPlace = async () => {
+      if (!currentTrip.value) return;
+
+      const id = editPlace.value.id;
+      const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+      if (idx === -1) { showEditModal.value = false; return; }
+
+      itinerary.value[idx].name = (editPlace.value.name || '').trim();
+      itinerary.value[idx].time = editPlace.value.time || '';
+      itinerary.value[idx].message = editPlace.value.message || '';
+
+      isLoading.value = true;
+      try {
+        await postJSON({
+          action: 'edit',
+          type: 'itinerary',
+          data: {
+            id,
+            name: itinerary.value[idx].name,
+            time: itinerary.value[idx].time,
+            message: itinerary.value[idx].message
+          }
+        });
+        
+        await nextTick();
+        initSortable();
+        updateMapMarkers();
+      } finally {
+        isLoading.value = false;
+        showEditModal.value = false;
+      }
+    };
+    // ====== /新增：鉛筆編輯功能 ======
+
     const addExpense = async () => {
       if (!newExpense.value.title || !newExpense.value.amount) return;
       const uid = generateId();
@@ -1179,7 +1281,10 @@ createApp({
       addExpense, removeExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
 
-      exportItinerary
+      exportItinerary,
+
+      // 新增：編輯行程
+      showEditModal, editPlace, openEditPlace, closeEditModal, saveEditPlace
     };
   }
 }).mount('#app');
