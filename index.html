@@ -415,8 +415,8 @@
 const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
-  setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzvjNt-SBRWmUyUNkLBivN6w0tla9smS9x1iCpjyalTvIda7HHo8jMxPPDUd642OW2O/exec';
+  setup() {        
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzGx-mZflVr7qNVDp8p9stzQHZSdiWHc0DO7D9ce9x9Zb8YJqaJfVek7uSjvBA-W-N5/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -540,13 +540,68 @@ createApp({
       const qs = new URLSearchParams(paramsObj).toString();
       return await jsonp(`${API_URL}?${qs}`);
     };
+    const cacheKey = (tripId) => `trip_cache_${tripId}`;
 
+    const saveTripCache = (tripId) => {
+      try {
+        localStorage.setItem(cacheKey(tripId), JSON.stringify({
+          itinerary: itinerary.value,
+          expenses: expenses.value,
+          people: people.value,
+          trip: currentTrip.value,
+          ts: Date.now()
+        }));
+      } catch(e){}
+    };
+
+    const loadTripCache = (tripId) => {
+      try {
+        const raw = localStorage.getItem(cacheKey(tripId));
+        if (!raw) return false;
+
+        const c = JSON.parse(raw);
+
+        itinerary.value = Array.isArray(c.itinerary) ? c.itinerary : [];
+        expenses.value  = Array.isArray(c.expenses) ? c.expenses : [];
+        people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
+
+        if (c.trip) currentTrip.value = { ...currentTrip.value, ...c.trip };
+
+        const maxDay = itinerary.value.reduce((m, it) =>
+          Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
+
+        totalDays.value = Math.max(1, maxDay);
+
+        return true;
+      } catch(e){
+        return false;
+      }
+    };
     const postJSON = async (payload) => {
       const p = { ...payload };
       if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
       return await apiGet(p);
     };
+    const saveTripsCache = () => {
+      try {
+        localStorage.setItem('trips_cache', JSON.stringify({
+          ts: Date.now(),
+          data: trips.value
+        }));
+      } catch(e) {}
+    };
 
+    const loadTripsCache = () => {
+      try {
+        const raw = localStorage.getItem('trips_cache');
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        trips.value = Array.isArray(parsed?.data) ? parsed.data : [];
+        return trips.value.length > 0;
+      } catch(e) {
+        return false;
+      }
+    };
     const orderKey = (tripId, day) => `trip_${tripId}_day_${day}_order`;
     const setOrderIds = (tripId, day, ids) => localStorage.setItem(orderKey(tripId, day), JSON.stringify(ids || []));
     const getOrderIds = (tripId, day) => {
@@ -668,13 +723,25 @@ createApp({
     };
 
     const fetchTrips = async () => {
+      const t0 = performance.now();
       isLoading.value = true;
       try {
+        const t_api0 = performance.now();
         const data = await apiGet({ type: 'trips' });
-        trips.value = Array.isArray(data) ? data : [];
-      } finally { isLoading.value = false; }
-    };
+        const t_api1 = performance.now();
 
+        console.log('fetchTrips api ms =', Math.round(t_api1 - t_api0), data);
+
+        trips.value = Array.isArray(data) ? data : [];
+        saveTripsCache();
+
+        const t_assign = performance.now();
+        console.log('fetchTrips assign ms =', Math.round(t_assign - t_api1));
+      } finally {
+        console.log('fetchTrips total ms =', Math.round(performance.now() - t0));
+        isLoading.value = false;
+      }
+    };
     const createTrip = async () => {
       const name = newTripName.value.trim();
       if(!name) return;
@@ -688,8 +755,9 @@ createApp({
       await postJSON({ action: 'add', type: 'trips', data: newTrip });
     };
 
-    const selectTrip = (trip) => {
+    const selectTrip = async (trip) => {
       if(!trip) return;
+
       currentTrip.value = trip;
 
       itinerary.value = [];
@@ -699,6 +767,18 @@ createApp({
       totalDays.value = 1;
 
       currentView.value = 'app';
+
+      const tripId = trip.id;
+
+      // ⭐ 先讀 local cache（秒顯示）
+      const hasCache = loadTripCache(tripId);
+
+      await nextTick();
+
+      initSortable();
+      updateMapMarkers();
+
+      // ⭐ 背景同步最新資料
       fetchData();
     };
 
@@ -715,52 +795,90 @@ createApp({
       await fetchTrips();
     };
 
-    // ✅ 핵심：改成只打一支 API（tripData）
     const fetchData = async () => {
       if(!currentTrip.value) return;
+
+      const tripId = currentTrip.value.id;
+
+      const t_start = performance.now();
+
       isLoading.value = true;
 
-      const tripId = currentTrip.value.id; // ⚠️ 這裡一定要帶完整 id（含 _xxx）
       try {
+
+        const t_api_start = performance.now();
+
         const data = await apiGet({ type:'tripData', tripId });
 
-        const trip = data && data.trip ? data.trip : null;
+        const t_api_end = performance.now();
+
+        console.log(
+          "tripData response ms =",
+          Math.round(t_api_end - t_api_start),
+          data
+        );
+
+        const trip = data?.trip || null;
         const itin = Array.isArray(data?.itinerary) ? data.itinerary : [];
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
-        // orders 目前前端主要用 localStorage 排序；先保留不強依賴
-        // const ord  = Array.isArray(data?.orders) ? data.orders : [];
+
+        const t_assign_start = performance.now();
 
         itinerary.value = itin;
         expenses.value = exp;
+        people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
 
-        const pplNorm = ppl.length ? ppl : [{id:'default', name:'我'}];
-        people.value = pplNorm;
-
-        if (people.value.length) {
-          newExpense.value.payer = people.value[0].name;
-          newExpense.value.involved = people.value.map(p=>p.name);
-        }
-
-        // 更新 start_date / city / name（以後端 trips 為準）
-        if (trip && String(trip.id) === String(tripId)) {
+        if (trip) {
           currentTrip.value = { ...currentTrip.value, ...trip };
-          const idx = trips.value.findIndex(x => String(x.id) === String(tripId));
-          if (idx !== -1) trips.value[idx] = { ...trips.value[idx], ...trip };
         }
 
-        const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
-        totalDays.value = Math.max(1, maxDay, totalDays.value);
+        const maxDay = itinerary.value.reduce((m, it) =>
+          Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
+
+        totalDays.value = Math.max(1, maxDay);
+
+        const t_assign_end = performance.now();
+
+        console.log(
+          "state assign ms =",
+          Math.round(t_assign_end - t_assign_start)
+        );
+
+        const t_dom_start = performance.now();
 
         await nextTick();
-        initSortable();
 
-        if (currentTab.value === 'map') {
-          initGoogleMap();
-          if (mapInstance && window.google) google.maps.event.trigger(mapInstance, 'resize');
-        }
+        const t_dom_end = performance.now();
+
+        console.log(
+          "dom render ms =",
+          Math.round(t_dom_end - t_dom_start)
+        );
+
+        const t_init_start = performance.now();
+
+        initSortable();
         updateMapMarkers();
+
+        const t_init_end = performance.now();
+
+        console.log(
+          "init components ms =",
+          Math.round(t_init_end - t_init_start)
+        );
+
+        saveTripCache(tripId);
+
       } finally {
+
+        const t_end = performance.now();
+
+        console.log(
+          "fetchData total ms =",
+          Math.round(t_end - t_start)
+        );
+
         isLoading.value = false;
       }
     };
@@ -1251,8 +1369,10 @@ createApp({
     watch(currentView, () => nextTick().then(initSortable));
 
     onMounted(async () => {
-      await fetchTrips();
-      await loadGoogleMaps();
+      const hasTripsCache = loadTripsCache();
+      console.log('loadTripsCache =', hasTripsCache);
+
+      fetchTrips(); // 背景更新
     });
 
     return {
