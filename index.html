@@ -1041,10 +1041,23 @@ createApp({
 
     let searchTimeout = null;
 
-    const searchPlacesInput = () => {
+    const searchPlacesInput = async () => {
+    
+      if (!window.google || !window.google.maps) {
+        await loadGoogleMaps();
+      }
+    
+      if (!autocompleteService) {
+        autocompleteService = new google.maps.places.AutocompleteService();
+      }
+    
       const q = newPlace.value.trim();
-      if(!q) { searchResults.value = []; isCoordinateMode.value=false; return; }
-
+      if(!q) { 
+        searchResults.value = []; 
+        isCoordinateMode.value=false; 
+        return; 
+      }
+    
       const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
       if (coordRegex.test(q)) {
         isCoordinateMode.value = true;
@@ -1350,17 +1363,21 @@ createApp({
       alert('已複製到剪貼簿');
     };
 
-    const switchTab = (tab) => {
+    const switchTab = async (tab) => {
       currentTab.value = tab;
-      if(tab === 'map') {
-        setTimeout(() => {
+    
+      if (tab === 'map') {
+        setTimeout(async () => {
+          await loadGoogleMaps();   // ✅ 先載入 Google Maps API
           initGoogleMap();
-          if(mapInstance && window.google) {
+    
+          if (mapInstance && window.google) {
             google.maps.event.trigger(mapInstance, 'resize');
             updateMapMarkers();
           }
         }, 150);
       }
+    
       nextTick().then(initSortable);
     };
 
@@ -1411,3 +1428,4 @@ createApp({
 
 </body>
 </html>
+
