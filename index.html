@@ -189,10 +189,10 @@
                 </div>
               </div>
 
-              <div v-if="!isCoordinateMode" @click="searchInGoogleMaps" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
+              <div v-if="!isCoordinateMode" @click="searchInExternalMap" class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer">
                 <span class="text-xl">🔎</span>
                 <div class="flex-1">
-                  <div class="font-bold text-blue-600 text-sm">找不到？去 Google Maps 找</div>
+                  <div class="font-bold text-blue-600 text-sm">找不到？去 {{ isKoreaTrip ? 'Naver Map' : 'Google Maps' }} 找</div>
                   <div class="text-xs text-gray-400">可複製座標貼回來</div>
                 </div>
                 <span class="text-gray-300 text-lg">➜</span>
@@ -211,7 +211,7 @@
             <div class="flex items-start gap-2 flex-1">
               <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1">≡</div>
 
-              <div class="flex-1" @click="openGoogleMap(place)">
+              <div class="flex-1" @click="openExternalMap(place)">
                 <div class="flex items-center gap-2 flex-wrap mb-1">
                   <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{{ formatTime(place.time) }}</span>
                   <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
@@ -224,7 +224,6 @@
               </div>
             </div>
 
-            <!-- Right actions -->
             <div class="flex items-center gap-2 pl-3 border-l ml-2">
               <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
               <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
@@ -386,7 +385,7 @@
     </div>
   </div>
 
-  <!-- ✅ Edit itinerary modal -->
+  <!-- Edit itinerary modal -->
   <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal">
     <div class="modal-card space-y-3">
       <div class="font-bold text-gray-800 text-lg">編輯行程</div>
@@ -408,15 +407,14 @@
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
 const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
-  setup() {        
-    const API_URL = 'https://script.google.com/macros/s/AKfycbzGx-mZflVr7qNVDp8p9stzQHZSdiWHc0DO7D9ce9x9Zb8YJqaJfVek7uSjvBA-W-N5/exec';
+  setup() {
+    const API_URL = 'https://script.google.com/macros/s/AKfycbw2txxGD6irPf-jRYYzDVmDqfe0WFGwiQf8wOYFIN7KmD42qslKHL-hBD3OpdiHkJOK/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -465,12 +463,22 @@ createApp({
     const dateInput = ref('');
     const swapTargetDay = ref(0);
 
-    // ✅ Edit modal state
     const showEditModal = ref(false);
     const editPlaceId = ref('');
     const editPlace = ref({ name: '', time: '', message: '' });
 
     const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
+
+    const isKoreaCity = (city) => {
+      const s = String(city || '').trim().toLowerCase();
+      const koreaKeywords = [
+        '韓國', '首爾', '釜山', '濟州', '大邱', '仁川', '水原', '江南', '明洞', '弘大',
+        'seoul', 'busan', 'jeju', 'daegu', 'incheon', 'suwon', 'gangnam', 'myeongdong', 'hongdae', 'korea'
+      ];
+      return koreaKeywords.some(k => s.includes(k.toLowerCase()));
+    };
+
+    const isKoreaTrip = computed(() => isKoreaCity(currentTrip.value?.city || ''));
 
     const pad2 = (n) => String(n).padStart(2, '0');
     const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -513,11 +521,11 @@ createApp({
       if (p.length !== 2) return 999999;
       const hh = parseInt(p[0],10), mm = parseInt(p[1],10);
       if (Number.isNaN(hh) || Number.isNaN(mm)) return 999999;
-      return hh*60+mm;
+      return hh * 60 + mm;
     };
 
-    const jsonp = (url, timeoutMs = 15000) => new Promise((resolve, reject) => {
-      const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+    const jsonp = (url, timeoutMs = 30000) => new Promise((resolve, reject) => {
+      const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
       const sep = url.includes('?') ? '&' : '?';
       const full = `${url}${sep}callback=${cb}`;
 
@@ -540,6 +548,7 @@ createApp({
       const qs = new URLSearchParams(paramsObj).toString();
       return await jsonp(`${API_URL}?${qs}`);
     };
+
     const cacheKey = (tripId) => `trip_cache_${tripId}`;
 
     const saveTripCache = (tripId) => {
@@ -577,11 +586,13 @@ createApp({
         return false;
       }
     };
+
     const postJSON = async (payload) => {
       const p = { ...payload };
       if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
       return await apiGet(p);
     };
+
     const saveTripsCache = () => {
       try {
         localStorage.setItem('trips_cache', JSON.stringify({
@@ -602,6 +613,7 @@ createApp({
         return false;
       }
     };
+
     const orderKey = (tripId, day) => `trip_${tripId}_day_${day}_order`;
     const setOrderIds = (tripId, day, ids) => localStorage.setItem(orderKey(tripId, day), JSON.stringify(ids || []));
     const getOrderIds = (tripId, day) => {
@@ -643,7 +655,8 @@ createApp({
 
     const initGoogleMap = () => {
       if (!window.google) return;
-      const mapEl = document.getElementById('map'); if (!mapEl) return;
+      const mapEl = document.getElementById('map');
+      if (!mapEl) return;
       if (!mapInstance) {
         mapInstance = new google.maps.Map(mapEl, {
           center: { lat: 23.6, lng: 121 },
@@ -737,20 +750,29 @@ createApp({
 
         const t_assign = performance.now();
         console.log('fetchTrips assign ms =', Math.round(t_assign - t_api1));
+      } catch (err) {
+        console.error('fetchTrips failed:', err);
       } finally {
         console.log('fetchTrips total ms =', Math.round(performance.now() - t0));
         isLoading.value = false;
       }
     };
+
     const createTrip = async () => {
       const name = newTripName.value.trim();
       if(!name) return;
 
       const id = generateId();
-      const newTrip = { id, name, city: newTripCity.value || '', start_date: '' };
+      const newTrip = {
+        id,
+        name,
+        city: newTripCity.value.trim() || '',
+        start_date: ''
+      };
 
       trips.value.push(newTrip);
-      newTripName.value = ''; newTripCity.value = '';
+      newTripName.value = '';
+      newTripCity.value = '';
 
       await postJSON({ action: 'add', type: 'trips', data: newTrip });
     };
@@ -769,16 +791,12 @@ createApp({
       currentView.value = 'app';
 
       const tripId = trip.id;
-
-      // ⭐ 先讀 local cache（秒顯示）
-      const hasCache = loadTripCache(tripId);
+      loadTripCache(tripId);
 
       await nextTick();
-
       initSortable();
       updateMapMarkers();
 
-      // ⭐ 背景同步最新資料
       fetchData();
     };
 
@@ -799,31 +817,20 @@ createApp({
       if(!currentTrip.value) return;
 
       const tripId = currentTrip.value.id;
-
       const t_start = performance.now();
-
       isLoading.value = true;
 
       try {
-
         const t_api_start = performance.now();
-
         const data = await apiGet({ type:'tripData', tripId });
-
         const t_api_end = performance.now();
 
-        console.log(
-          "tripData response ms =",
-          Math.round(t_api_end - t_api_start),
-          data
-        );
+        console.log("tripData response ms =", Math.round(t_api_end - t_api_start), data);
 
         const trip = data?.trip || null;
         const itin = Array.isArray(data?.itinerary) ? data.itinerary : [];
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
-
-        const t_assign_start = performance.now();
 
         itinerary.value = itin;
         expenses.value = exp;
@@ -838,47 +845,13 @@ createApp({
 
         totalDays.value = Math.max(1, maxDay);
 
-        const t_assign_end = performance.now();
-
-        console.log(
-          "state assign ms =",
-          Math.round(t_assign_end - t_assign_start)
-        );
-
-        const t_dom_start = performance.now();
-
         await nextTick();
-
-        const t_dom_end = performance.now();
-
-        console.log(
-          "dom render ms =",
-          Math.round(t_dom_end - t_dom_start)
-        );
-
-        const t_init_start = performance.now();
-
         initSortable();
         updateMapMarkers();
 
-        const t_init_end = performance.now();
-
-        console.log(
-          "init components ms =",
-          Math.round(t_init_end - t_init_start)
-        );
-
         saveTripCache(tripId);
-
       } finally {
-
-        const t_end = performance.now();
-
-        console.log(
-          "fetchData total ms =",
-          Math.round(t_end - t_start)
-        );
-
+        console.log("fetchData total ms =", Math.round(performance.now() - t_start));
         isLoading.value = false;
       }
     };
@@ -1042,44 +1015,23 @@ createApp({
     let searchTimeout = null;
 
     const searchPlacesInput = async () => {
-    
-      if (!window.google || !window.google.maps) {
-        await loadGoogleMaps();
-      }
-    
-      if (!autocompleteService) {
-        autocompleteService = new google.maps.places.AutocompleteService();
-      }
-    
       const q = newPlace.value.trim();
-      if(!q) { 
-        searchResults.value = []; 
-        isCoordinateMode.value=false; 
-        return; 
+
+      if (!q) {
+        searchResults.value = [];
+        isCoordinateMode.value = false;
+        return;
       }
-    
+
       const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
       if (coordRegex.test(q)) {
         isCoordinateMode.value = true;
-        isSearching.value = true;
+        isSearching.value = false;
+
         const parts = q.split(',');
         selectedLat.value = parseFloat(parts[0]);
         selectedLng.value = parseFloat(parts[1]);
-
-        if(window.google) {
-          const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: selectedLat.value, lng: selectedLng.value } }, (results, status) => {
-            if (status === "OK" && results && results[0]) {
-              resolvedCoordName.value = results[0].address_components?.[0]?.short_name || "未知地點";
-            } else {
-              resolvedCoordName.value = "座標";
-            }
-            isSearching.value = false;
-          });
-        } else {
-          resolvedCoordName.value = "座標";
-          isSearching.value = false;
-        }
+        resolvedCoordName.value = '座標';
         return;
       } else {
         isCoordinateMode.value = false;
@@ -1089,30 +1041,80 @@ createApp({
       }
 
       selectedPlaceData.value = null;
-      if (!autocompleteService) return;
-
       isSearching.value = true;
-      if(searchTimeout) clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        autocompleteService.getPlacePredictions({ input: q, language: 'zh-TW' }, (predictions, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && predictions) searchResults.value = predictions;
-          else searchResults.value = [];
-          isSearching.value = false;
-        });
-      }, 350);
+
+      if (searchTimeout) clearTimeout(searchTimeout);
+
+      searchTimeout = setTimeout(async () => {
+        try {
+          if (isKoreaTrip.value) {
+            const keyword = q;
+            const res = await apiGet({
+              action: 'naver_local_search',
+              keyword
+            });
+
+            searchResults.value = Array.isArray(res?.items) ? res.items : [];
+          } else {
+            if (!window.google || !window.google.maps) {
+              await loadGoogleMaps();
+            }
+
+            if (!autocompleteService) {
+              autocompleteService = new google.maps.places.AutocompleteService();
+            }
+
+            autocompleteService.getPlacePredictions(
+              { input: q, language: 'zh-TW' },
+              (predictions, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                  searchResults.value = predictions;
+                } else {
+                  searchResults.value = [];
+                }
+                isSearching.value = false;
+              }
+            );
+            return;
+          }
+        } catch (err) {
+          console.error(err);
+          searchResults.value = [];
+        } finally {
+          if (isKoreaTrip.value) {
+            isSearching.value = false;
+          }
+        }
+      }, 300);
     };
 
-    const useCoordinateInput = () => { if (resolvedCoordName.value) newPlace.value = resolvedCoordName.value; addPlace(); };
+    const useCoordinateInput = () => {
+      if (resolvedCoordName.value) newPlace.value = resolvedCoordName.value;
+      addPlace();
+    };
 
     const selectPlace = (item) => {
+      if (item?.source === 'naver') {
+        newPlace.value = item.name || '';
+        selectedPlaceData.value = item;
+        searchResults.value = [];
+        return;
+      }
+
       newPlace.value = item.structured_formatting.main_text;
       selectedPlaceData.value = item;
       searchResults.value = [];
     };
 
-    const searchInGoogleMaps = () => {
-      const query = newPlace.value + (currentTrip.value?.city ? ' ' + currentTrip.value.city : '');
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+    const searchInExternalMap = () => {
+      const query = newPlace.value.trim();
+
+      if (isKoreaTrip.value) {
+        window.open(`https://map.naver.com/v5/search/${encodeURIComponent(query)}`, '_blank');
+      } else {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+      }
+
       searchResults.value = [];
     };
 
@@ -1128,7 +1130,12 @@ createApp({
 
         let lat = null, lng = null, placeId = '';
 
-        if (selectedPlaceData.value && window.google) {
+        if (isKoreaTrip.value && selectedPlaceData.value?.source === 'naver') {
+          lat = selectedPlaceData.value.lat ?? null;
+          lng = selectedPlaceData.value.lng ?? null;
+          placeId = '';
+        }
+        else if (selectedPlaceData.value && window.google && !isKoreaTrip.value) {
           placeId = selectedPlaceData.value.place_id;
           const dummyMap = new google.maps.Map(document.createElement('div'));
           const service = new google.maps.places.PlacesService(dummyMap);
@@ -1144,20 +1151,24 @@ createApp({
           });
         }
         else if (selectedLat.value != null && selectedLng.value != null) {
-          lat = selectedLat.value; lng = selectedLng.value;
+          lat = selectedLat.value;
+          lng = selectedLng.value;
           placeId = '';
         }
-        else if (window.google) {
+        else if (window.google && !isKoreaTrip.value) {
           const geocoder = new google.maps.Geocoder();
           await new Promise((resolve) => {
-            geocoder.geocode({ address: placeName + (currentTrip.value.city ? " " + currentTrip.value.city : "") }, (results, status) => {
-              if (status === 'OK' && results && results[0]) {
-                lat = results[0].geometry.location.lat();
-                lng = results[0].geometry.location.lng();
-                placeId = results[0].place_id || '';
+            geocoder.geocode(
+              { address: placeName + (currentTrip.value.city ? " " + currentTrip.value.city : "") },
+              (results, status) => {
+                if (status === 'OK' && results && results[0]) {
+                  lat = results[0].geometry.location.lat();
+                  lng = results[0].geometry.location.lng();
+                  placeId = results[0].place_id || '';
+                }
+                resolve();
               }
-              resolve();
-            });
+            );
           });
         }
 
@@ -1174,10 +1185,15 @@ createApp({
 
         itinerary.value.push(item);
 
-        newPlace.value = ''; newNote.value = ''; newTime.value = '';
-        selectedPlaceData.value = null; searchResults.value = [];
-        selectedLat.value = null; selectedLng.value = null;
-        isCoordinateMode.value = false; resolvedCoordName.value = '';
+        newPlace.value = '';
+        newNote.value = '';
+        newTime.value = '';
+        selectedPlaceData.value = null;
+        searchResults.value = [];
+        selectedLat.value = null;
+        selectedLng.value = null;
+        isCoordinateMode.value = false;
+        resolvedCoordName.value = '';
 
         await postJSON({ action:'add', type:'itinerary', data: item });
 
@@ -1196,8 +1212,8 @@ createApp({
     };
 
     const removePlace = async (id) => {
-      const i = itinerary.value.findIndex(x=>String(x.id)===String(id));
-      if(i!==-1) itinerary.value.splice(i,1);
+      const i = itinerary.value.findIndex(x => String(x.id) === String(id));
+      if(i !== -1) itinerary.value.splice(i, 1);
 
       await postJSON({ action:'del', type:'itinerary', id });
 
@@ -1210,7 +1226,13 @@ createApp({
       updateMapMarkers();
     };
 
-    const openGoogleMap = (p) => {
+    const openExternalMap = (p) => {
+      if (isKoreaTrip.value) {
+        const q = p.name || '';
+        window.open(`https://map.naver.com/v5/search/${encodeURIComponent(q)}`, '_blank');
+        return;
+      }
+
       if (p.place_id) {
         window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank');
         return;
@@ -1222,7 +1244,6 @@ createApp({
       window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`, '_blank');
     };
 
-    // ✅ Edit itinerary
     const openEditModal = (p) => {
       if (!p || !p.id) return;
       editPlaceId.value = String(p.id);
@@ -1244,7 +1265,6 @@ createApp({
       const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
       if (idx < 0) { showEditModal.value = false; return; }
 
-      // optimistic update
       itinerary.value[idx].name = editPlace.value.name || '';
       itinerary.value[idx].time = editPlace.value.time || '';
       itinerary.value[idx].message = editPlace.value.message || '';
@@ -1268,7 +1288,7 @@ createApp({
         updateMapMarkers();
       } finally {
         isLoading.value = false;
-        showEditModal.value = false; // ✅ 儲存後視窗自動消失
+        showEditModal.value = false;
       }
     };
 
@@ -1278,7 +1298,7 @@ createApp({
       const d = { id: uid, ...newExpense.value, involved: [...newExpense.value.involved], trip_id: currentTrip.value.id };
       expenses.value.unshift(d);
       await postJSON({ action:'add', type:'expenses', data: { ...d, involved: d.involved.join(',') } });
-      newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p=>p.name), category: '飲食' };
+      newExpense.value = { title: '', amount: '', payer: people.value[0]?.name||'', involved: people.value.map(p => p.name), category: '飲食' };
     };
 
     const removeExpense = async (idx) => {
@@ -1305,24 +1325,24 @@ createApp({
       await postJSON({ action:'del', type:'people', id: item.id });
     };
 
-    const totalExpense = computed(() => expenses.value.reduce((s,i)=>s+(Number(i.amount)||0),0));
+    const totalExpense = computed(() => expenses.value.reduce((s,i) => s + (Number(i.amount) || 0), 0));
 
     const balanceSheet = computed(() => {
       if(!people.value.length) return [];
-      let b={};
-      people.value.forEach(p=>b[p.name]=0);
-      expenses.value.forEach(e=>{
-        const amt=Number(e.amount)||0;
-        if(b[e.payer]===undefined) return;
-        b[e.payer]+=amt;
-        const inv=(e.involved&&e.involved.length)?e.involved:people.value.map(p=>p.name);
-        const v=inv.filter(n=>b[n]!==undefined);
+      let b = {};
+      people.value.forEach(p => b[p.name] = 0);
+      expenses.value.forEach(e => {
+        const amt = Number(e.amount) || 0;
+        if(b[e.payer] === undefined) return;
+        b[e.payer] += amt;
+        const inv = (e.involved && e.involved.length) ? e.involved : people.value.map(p => p.name);
+        const v = inv.filter(n => b[n] !== undefined);
         if(v.length) {
-          const s=amt/v.length;
-          v.forEach(n=>b[n]-=s);
+          const s = amt / v.length;
+          v.forEach(n => b[n] -= s);
         }
       });
-      return Object.keys(b).map(n=>({name:n, balance:b[n]}));
+      return Object.keys(b).map(n => ({name:n, balance:b[n]}));
     });
 
     const categoryAnalysis = computed(() => {
@@ -1331,7 +1351,7 @@ createApp({
         const cat = e.category || '未分類';
         stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
       });
-      return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b)=>b.total-a.total);
+      return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b) => b.total - a.total);
     });
 
     const exportItinerary = () => {
@@ -1350,7 +1370,7 @@ createApp({
           dayItems.forEach(it => { if (!ids.includes(String(it.id))) ordered.push(it); });
           dayItems = ordered;
         } else {
-          dayItems = dayItems.sort((a,b)=>timeToNum(a.time)-timeToNum(b.time));
+          dayItems = dayItems.sort((a,b) => timeToNum(a.time) - timeToNum(b.time));
         }
 
         if(dayItems.length === 0) { text += "  (無行程)\n\n"; continue; }
@@ -1365,19 +1385,19 @@ createApp({
 
     const switchTab = async (tab) => {
       currentTab.value = tab;
-    
+
       if (tab === 'map') {
         setTimeout(async () => {
-          await loadGoogleMaps();   // ✅ 先載入 Google Maps API
+          await loadGoogleMaps();
           initGoogleMap();
-    
+
           if (mapInstance && window.google) {
             google.maps.event.trigger(mapInstance, 'resize');
             updateMapMarkers();
           }
         }, 150);
       }
-    
+
       nextTick().then(initSortable);
     };
 
@@ -1388,8 +1408,7 @@ createApp({
     onMounted(async () => {
       const hasTripsCache = loadTripsCache();
       console.log('loadTripsCache =', hasTripsCache);
-
-      fetchTrips(); // 背景更新
+      fetchTrips();
     });
 
     return {
@@ -1407,8 +1426,8 @@ createApp({
 
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
-      searchPlacesInput, useCoordinateInput, selectPlace, searchInGoogleMaps,
-      addPlace, removePlace, openGoogleMap,
+      searchPlacesInput, useCoordinateInput, selectPlace, searchInExternalMap,
+      addPlace, removePlace, openExternalMap,
       itineraryListEl, formatTime,
 
       searchCityAndJump, fitBoundsToTrip,
@@ -1416,9 +1435,8 @@ createApp({
       addExpense, removeExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
 
-      exportItinerary,
+      exportItinerary, isKoreaTrip,
 
-      // ✅ Edit modal
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace
     };
@@ -1428,4 +1446,3 @@ createApp({
 
 </body>
 </html>
-
