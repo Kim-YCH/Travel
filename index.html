@@ -216,6 +216,7 @@
                   <span v-if="place.time" class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{{ formatTime(place.time) }}</span>
                   <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
                 </div>
+                <div v-if="place.name_ko" class="text-xs text-gray-500 mb-1">{{ place.name_ko }}</div>
                 <div class="flex gap-2 items-center flex-wrap">
                   <span v-if="place.lat && place.lng" class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200">已定位</span>
                   <span v-else class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200">無座標</span>
@@ -653,6 +654,32 @@ createApp({
       });
     };
 
+    const getPlaceDetails = (placeId, language = 'zh-TW') => {
+      return new Promise(async (resolve) => {
+        if (!window.google || !window.google.maps) {
+          await loadGoogleMaps();
+        }
+
+        const dummyMap = new google.maps.Map(document.createElement('div'));
+        const service = new google.maps.places.PlacesService(dummyMap);
+
+        service.getDetails(
+          {
+            placeId,
+            fields: ['place_id', 'name', 'formatted_address', 'geometry'],
+            language
+          },
+          (place, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+              resolve(place);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+    };
+
     const initGoogleMap = () => {
       if (!window.google) return;
       const mapEl = document.getElementById('map');
@@ -1020,6 +1047,7 @@ createApp({
       if (!q) {
         searchResults.value = [];
         isCoordinateMode.value = false;
+        isSearching.value = false;
         return;
       }
 
@@ -1047,43 +1075,29 @@ createApp({
 
       searchTimeout = setTimeout(async () => {
         try {
-          if (isKoreaTrip.value) {
-            const keyword = q;
-            const res = await apiGet({
-              action: 'naver_local_search',
-              keyword
-            });
-
-            searchResults.value = Array.isArray(res?.items) ? res.items : [];
-          } else {
-            if (!window.google || !window.google.maps) {
-              await loadGoogleMaps();
-            }
-
-            if (!autocompleteService) {
-              autocompleteService = new google.maps.places.AutocompleteService();
-            }
-
-            autocompleteService.getPlacePredictions(
-              { input: q, language: 'zh-TW' },
-              (predictions, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-                  searchResults.value = predictions;
-                } else {
-                  searchResults.value = [];
-                }
-                isSearching.value = false;
-              }
-            );
-            return;
+          if (!window.google || !window.google.maps) {
+            await loadGoogleMaps();
           }
+
+          if (!autocompleteService) {
+            autocompleteService = new google.maps.places.AutocompleteService();
+          }
+
+          autocompleteService.getPlacePredictions(
+            { input: q, language: 'zh-TW' },
+            (predictions, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                searchResults.value = predictions;
+              } else {
+                searchResults.value = [];
+              }
+              isSearching.value = false;
+            }
+          );
         } catch (err) {
           console.error(err);
           searchResults.value = [];
-        } finally {
-          if (isKoreaTrip.value) {
-            isSearching.value = false;
-          }
+          isSearching.value = false;
         }
       }, 300);
     };
@@ -1094,13 +1108,6 @@ createApp({
     };
 
     const selectPlace = (item) => {
-      if (item?.source === 'naver') {
-        newPlace.value = item.name || '';
-        selectedPlaceData.value = item;
-        searchResults.value = [];
-        return;
-      }
-
       newPlace.value = item.structured_formatting.main_text;
       selectedPlaceData.value = item;
       searchResults.value = [];
@@ -1129,33 +1136,41 @@ createApp({
         const d = currentDay.value;
 
         let lat = null, lng = null, placeId = '';
+        let displayName = placeName;
+        let nameKo = '';
+        let address = '';
 
-        if (isKoreaTrip.value && selectedPlaceData.value?.source === 'naver') {
-          lat = selectedPlaceData.value.lat ?? null;
-          lng = selectedPlaceData.value.lng ?? null;
-          placeId = '';
-        }
-        else if (selectedPlaceData.value && window.google && !isKoreaTrip.value) {
+        if (selectedPlaceData.value?.place_id) {
           placeId = selectedPlaceData.value.place_id;
-          const dummyMap = new google.maps.Map(document.createElement('div'));
-          const service = new google.maps.places.PlacesService(dummyMap);
 
-          await new Promise((resolve) => {
-            service.getDetails({ placeId }, (place, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                lat = place.geometry.location.lat();
-                lng = place.geometry.location.lng();
+          const normalPlace = await getPlaceDetails(placeId, 'zh-TW');
+          if (normalPlace) {
+            displayName = normalPlace.name || placeName;
+            address = normalPlace.formatted_address || '';
+            if (normalPlace.geometry?.location) {
+              lat = normalPlace.geometry.location.lat();
+              lng = normalPlace.geometry.location.lng();
+            }
+          }
+
+          if (isKoreaTrip.value) {
+            const koPlace = await getPlaceDetails(placeId, 'ko');
+            if (koPlace) {
+              nameKo = koPlace.name || '';
+              if (!address) address = koPlace.formatted_address || '';
+              if ((lat == null || lng == null) && koPlace.geometry?.location) {
+                lat = koPlace.geometry.location.lat();
+                lng = koPlace.geometry.location.lng();
               }
-              resolve();
-            });
-          });
+            }
+          }
         }
         else if (selectedLat.value != null && selectedLng.value != null) {
           lat = selectedLat.value;
           lng = selectedLng.value;
           placeId = '';
         }
-        else if (window.google && !isKoreaTrip.value) {
+        else if (window.google) {
           const geocoder = new google.maps.Geocoder();
           await new Promise((resolve) => {
             geocoder.geocode(
@@ -1165,6 +1180,7 @@ createApp({
                   lat = results[0].geometry.location.lat();
                   lng = results[0].geometry.location.lng();
                   placeId = results[0].place_id || '';
+                  address = results[0].formatted_address || '';
                 }
                 resolve();
               }
@@ -1174,7 +1190,9 @@ createApp({
 
         const item = {
           id,
-          name: placeName,
+          name: displayName || placeName,
+          name_ko: nameKo || '',
+          address: address || '',
           day: d,
           lat, lng,
           place_id: placeId,
@@ -1228,8 +1246,25 @@ createApp({
 
     const openExternalMap = (p) => {
       if (isKoreaTrip.value) {
-        const q = p.name || '';
-        window.open(`https://map.naver.com/v5/search/${encodeURIComponent(q)}`, '_blank');
+        const displayName = encodeURIComponent(p.name_ko || p.name || '');
+        const searchName = encodeURIComponent(p.name_ko || p.name || '');
+        const lat = p.lat;
+        const lng = p.lng;
+
+        if (lat && lng) {
+          const naverAppLink = `nmap://place?lat=${lat}&lng=${lng}&name=${displayName}&appname=tripplanner`;
+          const naverWebSearch = `https://map.naver.com/v5/search/${searchName}`;
+
+          window.location.href = naverAppLink;
+
+          setTimeout(() => {
+            window.open(naverWebSearch, "_blank");
+          }, 1200);
+
+          return;
+        }
+
+        window.open(`https://map.naver.com/v5/search/${searchName}`, '_blank');
         return;
       }
 
