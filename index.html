@@ -687,6 +687,11 @@
         <div class="text-xs font-bold text-gray-500 ml-1">名稱</div>
         <input v-model="editPlace.name" placeholder="地點名稱">
 
+        <div class="text-xs font-bold text-gray-500 ml-1">Day</div>
+        <select v-model.number="editPlace.day">
+          <option v-for="d in totalDays" :key="'edit-day-' + d" :value="d">Day {{ d }}</option>
+        </select>
+
         <div class="text-xs font-bold text-gray-500 ml-1">時間</div>
         <input v-model="editPlace.time" type="time">
 
@@ -759,7 +764,7 @@ createApp({
 
     const showEditModal = ref(false);
     const editPlaceId = ref('');
-    const editPlace = ref({ name: '', time: '', message: '' });
+    const editPlace = ref({ name: '', time: '', message: '', day: 1 });
 
     const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
@@ -1664,7 +1669,8 @@ createApp({
       editPlace.value = {
         name: String(p.name || ''),
         time: formatTime(p.time || ''),
-        message: String(p.message || '')
+        message: String(p.message || ''),
+        day: p.day ? parseInt(p.day, 10) : 1
       };
       showEditModal.value = true;
     };
@@ -1684,9 +1690,13 @@ createApp({
         return;
       }
 
+      const newDay = editPlace.value.day ? parseInt(editPlace.value.day, 10) : 1;
+      const oldDay = itinerary.value[idx].day ? parseInt(itinerary.value[idx].day, 10) : 1;
+
       itinerary.value[idx].name = editPlace.value.name || '';
       itinerary.value[idx].time = editPlace.value.time || '';
       itinerary.value[idx].message = editPlace.value.message || '';
+      itinerary.value[idx].day = newDay;
 
       isLoading.value = true;
       try {
@@ -1698,9 +1708,25 @@ createApp({
             trip_id: currentTrip.value.id,
             name: itinerary.value[idx].name,
             time: itinerary.value[idx].time,
-            message: itinerary.value[idx].message
+            message: itinerary.value[idx].message,
+            day: newDay
           }
         });
+
+        if (oldDay !== newDay) {
+          const oldIds = (getOrderIds(currentTrip.value.id, oldDay) || []).filter(x => String(x) !== String(id));
+          setOrderIds(currentTrip.value.id, oldDay, oldIds);
+          try { await saveOrderToDB(currentTrip.value.id, oldDay, oldIds); } catch(e) {}
+
+          const newIds = getOrderIds(currentTrip.value.id, newDay) || [];
+          if (!newIds.includes(String(id))) {
+            newIds.push(String(id));
+          }
+          setOrderIds(currentTrip.value.id, newDay, newIds);
+          try { await saveOrderToDB(currentTrip.value.id, newDay, newIds); } catch(e) {}
+
+          currentDay.value = newDay;
+        }
 
         await nextTick();
         initSortable();
