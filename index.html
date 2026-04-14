@@ -324,9 +324,21 @@
       color: #6b7280;
       font-size: 14px;
       line-height: 1.55;
-      white-space: pre-wrap;
+      white-space: normal;
       overflow-wrap: anywhere;
       word-break: break-word;
+    }
+
+    .itinerary-message a {
+      color: #2563eb;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .itinerary-message a:active {
+      opacity: 0.8;
     }
 
     .itinerary-actions {
@@ -498,7 +510,7 @@
             <div class="itinerary-main flex items-start gap-2">
               <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
 
-              <div class="itinerary-content" @click="openExternalMap(place)">
+              <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
                 <div class="itinerary-title-row">
                   <span
                     v-if="place.time"
@@ -519,9 +531,7 @@
                     class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
                   >無座標</span>
 
-                  <div v-if="place.message" class="itinerary-message">
-                    <span class="mr-1">📝</span>{{ place.message }}
-                  </div>
+                  <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
                 </div>
               </div>
             </div>
@@ -1032,6 +1042,25 @@ createApp({
       .replaceAll('>','&gt;')
       .replaceAll('"','&quot;')
       .replaceAll("'","&#39;");
+
+    const linkifyMessage = (text) => {
+      const raw = String(text || '');
+      if (!raw) return '';
+
+      const escaped = escapeHtml(raw);
+      const urlRegex = /(https?:\/\/[^\s<]+[^\s<.,!?;:])/gi;
+
+      const linked = escaped.replace(urlRegex, (url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+      });
+
+      return `📝 ${linked.replace(/\n/g, '<br>')}`;
+    };
+
+    const handleItineraryContentClick = (event, place) => {
+      if (event?.target?.closest && event.target.closest('a')) return;
+      openExternalMap(place);
+    };
 
     const loadGoogleMaps = () => {
       if (window.google && window.google.maps) {
@@ -1977,7 +2006,7 @@ createApp({
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
       searchPlacesInput, useCoordinateInput, selectPlace, searchInExternalMap,
-      addPlace, removePlace, openExternalMap,
+      addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
       itineraryListEl, formatTime,
 
       searchCityAndJump, fitBoundsToTrip,
