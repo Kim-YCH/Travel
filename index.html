@@ -260,6 +260,79 @@
     .tab-panel {
       min-height: 0;
     }
+
+    .itinerary-card {
+      overflow: hidden;
+      align-items: flex-start;
+    }
+
+    .itinerary-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .itinerary-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .itinerary-title-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+      min-width: 0;
+    }
+
+    .itinerary-title {
+      font-weight: 700;
+      font-size: 1.125rem;
+      line-height: 1.5rem;
+      color: #1f2937;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
+      flex: 1 1 220px;
+    }
+
+    .itinerary-subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 4px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
+    }
+
+    .itinerary-tags {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .itinerary-message {
+      width: 100%;
+      min-width: 0;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: #f3f4f6;
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .itinerary-actions {
+      flex-shrink: 0;
+      align-self: flex-start;
+    }
   </style>
 </head>
 <body>
@@ -404,9 +477,14 @@
             </div>
           </div>
 
-          <div class="flex gap-2">
+          <div class="flex gap-2 items-start">
             <input v-model="newTime" type="time" class="w-1/3 text-center font-mono">
-            <input v-model="newNote" type="text" placeholder="備註..." class="flex-1">
+            <textarea
+              v-model="newNote"
+              rows="2"
+              placeholder="備註..."
+              class="flex-1 resize-none"
+            ></textarea>
           </div>
         </div>
 
@@ -415,40 +493,40 @@
             v-for="place in filteredItinerary"
             :key="place.id"
             :data-id="place.id"
-            class="card flex justify-between items-start active:scale-[0.99] transition"
+            class="card itinerary-card flex justify-between items-start gap-3 active:scale-[0.99] transition"
           >
-            <div class="flex items-start gap-2 flex-1">
-              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1">≡</div>
+            <div class="itinerary-main flex items-start gap-2">
+              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
 
-              <div class="flex-1" @click="openExternalMap(place)">
-                <div class="flex items-center gap-2 flex-wrap mb-1">
+              <div class="itinerary-content" @click="openExternalMap(place)">
+                <div class="itinerary-title-row">
                   <span
                     v-if="place.time"
-                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100"
+                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
                   >{{ formatTime(place.time) }}</span>
-                  <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
+                  <span class="itinerary-title">{{ place.name }}</span>
                 </div>
 
-                <div v-if="place.name_ko" class="text-xs text-gray-500 mb-1">{{ place.name_ko }}</div>
+                <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
 
-                <div class="flex gap-2 items-center flex-wrap">
+                <div class="itinerary-tags">
                   <span
                     v-if="place.lat && place.lng"
-                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200"
+                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
                   >已定位</span>
                   <span
                     v-else
-                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200"
+                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
                   >無座標</span>
 
-                  <div v-if="place.message" class="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                    📝 {{ place.message }}
+                  <div v-if="place.message" class="itinerary-message">
+                    <span class="mr-1">📝</span>{{ place.message }}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="flex items-center gap-2 pl-3 border-l ml-2">
+            <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
               <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
               <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
             </div>
