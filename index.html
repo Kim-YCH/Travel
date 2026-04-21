@@ -618,32 +618,15 @@
             </div>
           </div>
 
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <div class="text-xs font-bold text-gray-500 ml-1">地圖顯示</div>
-              <div class="text-[11px] text-gray-400">目前：{{ mapMarkerMode === 'all' ? '全部行程' : mapMarkerMode === 'day' ? 'Day ' + currentDay : '搜尋結果' }}</div>
-            </div>
-
-            <div class="flex overflow-x-auto gap-2 no-scrollbar pb-1">
-              <button
-                v-for="d in totalDays"
-                :key="'map-day-chip-' + d"
-                @click="setMapDay(d)"
-                class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition flex-shrink-0"
-                :class="currentDay === d && mapMarkerMode === 'day' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'"
-              >Day {{ d }}</button>
-            </div>
-
-            <div class="grid grid-cols-3 gap-2">
-              <button @click="setMapMarkerMode('all')" class="map-mode-btn" :class="mapMarkerMode === 'all' ? 'map-mode-btn-active' : ''">全部</button>
-              <button @click="setMapMarkerMode('day')" class="map-mode-btn" :class="mapMarkerMode === 'day' ? 'map-mode-btn-active' : ''">當天</button>
-              <button @click="setMapMarkerMode('search')" class="map-mode-btn" :class="mapMarkerMode === 'search' ? 'map-mode-btn-active' : ''">搜尋</button>
-            </div>
-
-            <button @click="fitBoundsToTrip" class="map-mode-btn w-full">重新定位</button>
+          <div class="flex gap-2 items-center">
+            <select v-model="mapDisplayFilter" @change="applyMapDisplayFilter" class="flex-1 h-[46px] text-sm font-bold">
+              <option value="all">全部</option>
+              <option v-for="d in totalDays" :key="'map-filter-' + d" :value="'day-' + d">Day {{ d }}</option>
+            </select>
+            <button @click="fitBoundsToTrip" class="map-mode-btn px-4 shrink-0">顯示行程</button>
           </div>
 
-          <div v-if="mapLatestResult" class="card p-3 space-y-3">
+          <div v-if="mapLatestResult && mapSearchQuery.trim().length > 0" class="card p-3 space-y-3">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="font-bold text-gray-800 break-words">{{ mapLatestResult.name || '搜尋結果' }}</div>
@@ -937,7 +920,7 @@ createApp({
     const mapSelectedPlaceData = ref(null);
     const mapLatestResult = ref(null);
     const mapAddDay = ref(1);
-    const mapMarkerMode = ref('all');
+    const mapDisplayFilter = ref('all');
     const isMapReady = ref(false);
     let mapInstance = null;
     let mapElementRef = null;
@@ -1388,6 +1371,14 @@ createApp({
       }
     };
 
+    const clearMapSearchResult = () => {
+      clearMapSearchDropdown();
+      clearMapSearchMarker();
+      mapLatestResult.value = null;
+      if (infoWindow) infoWindow.close();
+      if (currentTab.value === 'map') updateMapMarkers();
+    };
+
     const clearMapRouteLine = () => {
       if (mapRouteLine) {
         mapRouteLine.setMap(null);
@@ -1415,15 +1406,19 @@ createApp({
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
     };
 
-    const setMapMarkerMode = (mode) => {
-      mapMarkerMode.value = mode;
-      updateMapMarkers();
+    const getMapDisplayDay = () => {
+      const raw = String(mapDisplayFilter.value || 'all');
+      if (!raw.startsWith('day-')) return null;
+      const day = parseInt(raw.replace('day-', ''), 10);
+      return Number.isFinite(day) && day > 0 ? day : null;
     };
 
-    const setMapDay = (day) => {
-      currentDay.value = Number(day) || 1;
-      mapAddDay.value = currentDay.value;
-      mapMarkerMode.value = 'day';
+    const applyMapDisplayFilter = () => {
+      const day = getMapDisplayDay();
+      if (day) {
+        currentDay.value = day;
+        mapAddDay.value = day;
+      }
       updateMapMarkers();
     };
 
@@ -1439,7 +1434,6 @@ createApp({
         lng: Number(lng),
         place_id: place_id || ''
       };
-      mapMarkerMode.value = 'search';
 
       mapSearchMarker = new google.maps.Marker({
         position: { lat: Number(lat), lng: Number(lng) },
@@ -1465,7 +1459,6 @@ createApp({
       mapInstance.setCenter({ lat: Number(lat), lng: Number(lng) });
       mapInstance.setZoom(15);
       openInfo();
-      updateMapMarkers();
     };
 
     const updateMapMarkers = () => {
@@ -1475,13 +1468,11 @@ createApp({
       markers = [];
       clearMapRouteLine();
 
-      const mode = mapMarkerMode.value;
+      const displayDay = getMapDisplayDay();
       let itemsToRender = itinerary.value.filter(item => item.lat && item.lng);
 
-      if (mode === 'day') {
-        itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === currentDay.value);
-      } else if (mode === 'search') {
-        itemsToRender = [];
+      if (displayDay) {
+        itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
       }
 
       const bounds = new google.maps.LatLngBounds();
@@ -1533,7 +1524,7 @@ createApp({
         });
       }
 
-      if (mode === 'search' && mapLatestResult.value) {
+      if (!hasPoint && mapLatestResult.value) {
         hasPoint = true;
         bounds.extend({ lat: Number(mapLatestResult.value.lat), lng: Number(mapLatestResult.value.lng) });
       }
@@ -1589,7 +1580,7 @@ createApp({
         await saveOrderToDB(currentTrip.value.id, d, ids);
 
         currentDay.value = d;
-        mapMarkerMode.value = 'day';
+        mapDisplayFilter.value = `day-${d}`;
         scheduleSortableInit();
         updateMapMarkers();
       } finally {
@@ -1601,7 +1592,7 @@ createApp({
       const q = mapSearchQuery.value.trim();
 
       if (!q) {
-        clearMapSearchDropdown();
+        clearMapSearchResult();
         return;
       }
 
@@ -1685,7 +1676,10 @@ createApp({
 
     const searchCityAndJump = async () => {
       const q = mapSearchQuery.value.trim();
-      if (!q) return;
+      if (!q) {
+        clearMapSearchResult();
+        return;
+      }
 
       if (!window.google || !window.google.maps) {
         await loadGoogleMaps();
@@ -1797,10 +1791,8 @@ createApp({
       totalDays.value = 1;
       mapSearchQuery.value = '';
       mapAddDay.value = 1;
-      mapLatestResult.value = null;
-      mapMarkerMode.value = 'all';
-      clearMapSearchDropdown();
-      clearMapSearchMarker();
+      mapDisplayFilter.value = 'all';
+      clearMapSearchResult();
 
       currentView.value = 'app';
 
@@ -1824,8 +1816,8 @@ createApp({
       currentView.value = 'lobby';
       currentTrip.value = null;
       mapSearchQuery.value = '';
-      clearMapSearchDropdown();
-      clearMapSearchMarker();
+      mapDisplayFilter.value = 'all';
+      clearMapSearchResult();
       fetchTrips();
     };
 
@@ -2596,6 +2588,9 @@ createApp({
     watch(currentDay, () => {
       mapAddDay.value = currentDay.value || 1;
       newExpense.value.day = currentDay.value || 1;
+      if (getMapDisplayDay()) {
+        mapDisplayFilter.value = `day-${currentDay.value || 1}`;
+      }
       scheduleSortableInit();
       if (currentTab.value === 'map') updateMapMarkers();
     });
@@ -2608,6 +2603,11 @@ createApp({
     });
 
     watch(currentView, () => scheduleSortableInit());
+    watch(mapSearchQuery, (val) => {
+      if (!String(val || '').trim()) {
+        clearMapSearchResult();
+      }
+    });
     watch([itinerary, expenses, people], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
@@ -2626,7 +2626,7 @@ createApp({
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
       searchResults, isSearching, isCoordinateMode, resolvedCoordName,
       mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
-      mapLatestResult, mapAddDay, mapMarkerMode,
+      mapLatestResult, mapAddDay, mapDisplayFilter,
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
@@ -2639,7 +2639,7 @@ createApp({
       itineraryListEl, formatTime,
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
-      searchCityAndJump, fitBoundsToTrip, setMapMarkerMode, setMapDay, addMapSearchResultToItinerary,
+      searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
 
       addExpense, removeExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
