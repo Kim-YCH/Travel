@@ -618,11 +618,29 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-4 gap-2">
-            <button @click="setMapMarkerMode('all')" class="map-mode-btn" :class="mapMarkerMode === 'all' ? 'map-mode-btn-active' : ''">全部</button>
-            <button @click="setMapMarkerMode('day')" class="map-mode-btn" :class="mapMarkerMode === 'day' ? 'map-mode-btn-active' : ''">Day {{ currentDay }}</button>
-            <button @click="setMapMarkerMode('search')" class="map-mode-btn" :class="mapMarkerMode === 'search' ? 'map-mode-btn-active' : ''">搜尋</button>
-            <button @click="fitBoundsToTrip" class="map-mode-btn">顯示</button>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-xs font-bold text-gray-500 ml-1">地圖顯示</div>
+              <div class="text-[11px] text-gray-400">目前：{{ mapMarkerMode === 'all' ? '全部行程' : mapMarkerMode === 'day' ? 'Day ' + currentDay : '搜尋結果' }}</div>
+            </div>
+
+            <div class="flex overflow-x-auto gap-2 no-scrollbar pb-1">
+              <button
+                v-for="d in totalDays"
+                :key="'map-day-chip-' + d"
+                @click="setMapDay(d)"
+                class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition flex-shrink-0"
+                :class="currentDay === d && mapMarkerMode === 'day' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'"
+              >Day {{ d }}</button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <button @click="setMapMarkerMode('all')" class="map-mode-btn" :class="mapMarkerMode === 'all' ? 'map-mode-btn-active' : ''">全部</button>
+              <button @click="setMapMarkerMode('day')" class="map-mode-btn" :class="mapMarkerMode === 'day' ? 'map-mode-btn-active' : ''">當天</button>
+              <button @click="setMapMarkerMode('search')" class="map-mode-btn" :class="mapMarkerMode === 'search' ? 'map-mode-btn-active' : ''">搜尋</button>
+            </div>
+
+            <button @click="fitBoundsToTrip" class="map-mode-btn w-full">重新定位</button>
           </div>
 
           <div v-if="mapLatestResult" class="card p-3 space-y-3">
@@ -672,69 +690,21 @@
           </div>
         </div>
 
-        <div class="card space-y-3">
-          <div class="font-bold text-gray-700 text-sm">🔍 消費篩選</div>
-          <div class="grid grid-cols-3 gap-2">
-            <select v-model="expenseFilter.day" class="h-[46px]">
-              <option value="all">全部天數</option>
-              <option v-for="d in moneyDays" :key="'filter-day-' + d" :value="String(d)">Day {{ d }}</option>
-            </select>
-            <select v-model="expenseFilter.category" class="h-[46px]">
-              <option value="all">全部分類</option>
-              <option v-for="cat in categories" :key="'filter-cat-' + cat" :value="cat">{{ cat }}</option>
-            </select>
-            <select v-model="expenseFilter.payer" class="h-[46px]">
-              <option value="all">全部付款人</option>
-              <option v-for="p in people" :key="'filter-payer-' + p.id" :value="p.name">{{ p.name }}</option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div class="bg-gray-50 rounded-xl p-3">
-              <div class="text-xs text-gray-500">篩選金額</div>
-              <div class="text-xl font-bold text-gray-800 mt-1">${{ filteredExpenseTotal }}</div>
-            </div>
-            <div class="bg-gray-50 rounded-xl p-3">
-              <div class="text-xs text-gray-500">篩選筆數</div>
-              <div class="text-xl font-bold text-gray-800 mt-1">{{ filteredExpenses.length }}</div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3 text-xs">
-            <div class="bg-gray-50 rounded-xl p-3">
-              <div class="font-bold text-gray-600 mb-2">依天數</div>
-              <div v-if="filteredDayExpenseAnalysis.length === 0" class="text-gray-400">尚無資料</div>
-              <div v-for="item in filteredDayExpenseAnalysis" :key="'day-total-' + item.day" class="flex justify-between py-1">
-                <span>Day {{ item.day }}</span>
-                <span class="font-bold">${{ item.total }}</span>
-              </div>
-            </div>
-            <div class="bg-gray-50 rounded-xl p-3">
-              <div class="font-bold text-gray-600 mb-2">依付款人</div>
-              <div v-if="filteredPayerExpenseAnalysis.length === 0" class="text-gray-400">尚無資料</div>
-              <div v-for="item in filteredPayerExpenseAnalysis" :key="'payer-total-' + item.name" class="flex justify-between py-1">
-                <span>{{ item.name }}</span>
-                <span class="font-bold">${{ item.total }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="filteredCategoryAnalysis.length > 0" class="card">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-gray-700 text-sm">📊 消費分析</h3>
-            <span v-if="hasExpenseFilters" class="text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">已套用篩選</span>
-          </div>
+        <div v-if="categoryAnalysis.length > 0" class="card">
+          <h3 class="font-bold text-gray-700 text-sm mb-3">📊 消費分析</h3>
           <div class="space-y-3">
-            <div v-for="cat in filteredCategoryAnalysis" :key="cat.name" class="text-xs">
+            <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
               <div class="flex justify-between mb-1">
                 <span class="text-gray-600">{{ cat.name }}</span>
                 <span class="font-bold text-gray-800">
-                  ${{ cat.total }} ({{ filteredExpenseTotal ? ((cat.total/filteredExpenseTotal)*100).toFixed(0) : 0 }}%)
+                  ${{ cat.total }} ({{ totalExpense ? ((cat.total/totalExpense)*100).toFixed(0) : 0 }}%)
                 </span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-2">
-                <div class="bg-blue-500 h-2 rounded-full stat-bar" :style="{ width: filteredExpenseTotal ? (cat.total/filteredExpenseTotal)*100 + '%' : '0%' }"></div>
+                <div
+                  class="bg-blue-500 h-2 rounded-full stat-bar"
+                  :style="{ width: totalExpense ? (cat.total/totalExpense)*100 + '%' : '0%' }"
+                ></div>
               </div>
             </div>
           </div>
@@ -756,12 +726,10 @@
             >{{ cat }}</button>
           </div>
 
-          <div class="grid grid-cols-2 gap-3 mb-3">
-            <select v-model.number="newExpense.day" class="h-[54px]">
-              <option v-for="d in totalDays" :key="'expense-day-' + d" :value="d">Day {{ d }}</option>
-            </select>
-            <select v-model="newExpense.payer" class="h-[54px]">
-              <option disabled value="">請選擇付款人</option>
+          <div class="mb-3 flex gap-2 items-center">
+            <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
+            <select v-model="newExpense.payer" class="flex-1">
+              <option disabled value="">請選擇</option>
               <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
             </select>
           </div>
@@ -787,7 +755,7 @@
 
         <div class="space-y-2">
           <div
-            v-for="exp in filteredExpenses"
+            v-for="(exp, idx) in expenses"
             :key="exp.id"
             class="card flex justify-between items-center py-3 border-l-4 border-gray-300"
           >
@@ -795,7 +763,6 @@
               <div class="font-bold text-gray-800 text-lg break-words">
                 {{ exp.title }}
                 <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span>
-                <span class="text-xs font-normal text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-100">Day {{ exp.day || 1 }}</span>
               </div>
               <div class="text-xs text-gray-500 mt-1 break-words">
                 {{ exp.payer }} 先付 <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤
@@ -804,7 +771,7 @@
 
             <div class="flex flex-col items-end gap-1 shrink-0 pl-2">
               <span class="font-bold text-xl text-gray-800 font-mono">${{ exp.amount }}</span>
-              <button @click="removeExpense(exp.id)" class="text-gray-300 hover:text-red-500 px-2">×</button>
+              <button @click="removeExpense(idx)" class="text-gray-300 hover:text-red-500 px-2">×</button>
             </div>
           </div>
         </div>
@@ -818,17 +785,10 @@
         >🔙 切換旅程</button>
 
         <h3 class="font-bold text-gray-700 ml-1">📋 資料管理</h3>
-        <div class="grid grid-cols-2 gap-3">
-          <button
-            @click="exportItinerary"
-            class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
-          ><span>📋</span> 複製行程</button>
-
-          <button
-            @click="downloadItineraryTxt"
-            class="w-full bg-white text-gray-700 border border-gray-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
-          ><span>📄</span> 下載 TXT</button>
-        </div>
+        <button
+          @click="exportItinerary"
+          class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
+        ><span>📋</span> 複製行程</button>
 
         <h3 class="font-bold text-gray-700 mt-6 ml-1">👥 成員管理</h3>
         <div class="flex gap-2">
@@ -1370,6 +1330,13 @@ createApp({
 
     const setMapMarkerMode = (mode) => {
       mapMarkerMode.value = mode;
+      updateMapMarkers();
+    };
+
+    const setMapDay = (day) => {
+      currentDay.value = Number(day) || 1;
+      mapAddDay.value = currentDay.value;
+      mapMarkerMode.value = 'day';
       updateMapMarkers();
     };
 
@@ -2420,8 +2387,13 @@ createApp({
       };
     };
 
-    const removeExpense = async (expenseId) => {
-      const idx = expenses.value.findIndex(item => String(item.id) === String(expenseId));
+    const removeExpense = async (expenseRef) => {
+      let idx = -1;
+      if (typeof expenseRef === 'number') {
+        idx = expenseRef;
+      } else {
+        idx = expenses.value.findIndex(item => String(item.id) === String(expenseRef));
+      }
       const item = idx >= 0 ? expenses.value[idx] : null;
       if (!item?.id) return;
       expenses.value.splice(idx, 1);
@@ -2609,14 +2581,14 @@ createApp({
       itineraryListEl, formatTime,
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
-      searchCityAndJump, fitBoundsToTrip, setMapMarkerMode, addMapSearchResultToItinerary,
+      searchCityAndJump, fitBoundsToTrip, setMapMarkerMode, setMapDay, addMapSearchResultToItinerary,
 
       addExpense, removeExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
-      exportItinerary, downloadItineraryTxt, isKoreaTrip,
+      exportItinerary, isKoreaTrip,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace
