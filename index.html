@@ -260,6 +260,107 @@
     .tab-panel {
       min-height: 0;
     }
+
+    .itinerary-card {
+      overflow: hidden;
+    }
+
+    .itinerary-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .itinerary-content {
+      flex: 1;
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    .itinerary-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+      margin-bottom: 4px;
+    }
+
+    .itinerary-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f2937;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
+    }
+
+    .itinerary-subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 4px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
+    }
+
+    .itinerary-tags {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .itinerary-message {
+      width: 100%;
+      min-width: 0;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: #f3f4f6;
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .itinerary-message a {
+      color: #2563eb;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .itinerary-message a:active {
+      opacity: 0.8;
+    }
+
+    .itinerary-actions {
+      flex-shrink: 0;
+      align-self: flex-start;
+    }
+
+    .map-mode-btn {
+      height: 44px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      color: #64748b;
+      transition: all 0.2s ease;
+    }
+
+    .map-mode-btn-active {
+      background: #2563eb;
+      color: white;
+      border-color: #2563eb;
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
+    }
   </style>
 </head>
 <body>
@@ -404,9 +505,9 @@
             </div>
           </div>
 
-          <div class="flex gap-2">
+          <div class="flex gap-2 items-start">
             <input v-model="newTime" type="time" class="w-1/3 text-center font-mono">
-            <input v-model="newNote" type="text" placeholder="備註..." class="flex-1">
+            <textarea v-model="newNote" rows="2" placeholder="備註..." class="flex-1 min-h-[54px] resize-none"></textarea>
           </div>
         </div>
 
@@ -415,40 +516,38 @@
             v-for="place in filteredItinerary"
             :key="place.id"
             :data-id="place.id"
-            class="card flex justify-between items-start active:scale-[0.99] transition"
+            class="card itinerary-card flex justify-between items-start gap-3 active:scale-[0.99] transition"
           >
-            <div class="flex items-start gap-2 flex-1">
-              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1">≡</div>
+            <div class="itinerary-main flex items-start gap-2">
+              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
 
-              <div class="flex-1" @click="openExternalMap(place)">
-                <div class="flex items-center gap-2 flex-wrap mb-1">
+              <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
+                <div class="itinerary-title-row">
                   <span
                     v-if="place.time"
-                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100"
+                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
                   >{{ formatTime(place.time) }}</span>
-                  <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
+                  <span class="itinerary-title">{{ place.name }}</span>
                 </div>
 
-                <div v-if="place.name_ko" class="text-xs text-gray-500 mb-1">{{ place.name_ko }}</div>
+                <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
 
-                <div class="flex gap-2 items-center flex-wrap">
+                <div class="itinerary-tags">
                   <span
                     v-if="place.lat && place.lng"
-                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200"
+                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
                   >已定位</span>
                   <span
                     v-else
-                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200"
+                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
                   >無座標</span>
 
-                  <div v-if="place.message" class="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                    📝 {{ place.message }}
-                  </div>
+                  <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
                 </div>
               </div>
             </div>
 
-            <div class="flex items-center gap-2 pl-3 border-l ml-2">
+            <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
               <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
               <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
             </div>
@@ -519,12 +618,29 @@
             </div>
           </div>
 
-          <button
-            @click="fitBoundsToTrip"
-            class="bg-white text-gray-700 font-bold py-2.5 rounded-xl shadow-sm border border-gray-200 active:scale-95 text-sm flex justify-center items-center gap-1"
-          >
-            <span>🔄</span> 顯示行程
-          </button>
+          <div class="grid grid-cols-4 gap-2">
+            <button @click="setMapMarkerMode('all')" class="map-mode-btn" :class="mapMarkerMode === 'all' ? 'map-mode-btn-active' : ''">全部</button>
+            <button @click="setMapMarkerMode('day')" class="map-mode-btn" :class="mapMarkerMode === 'day' ? 'map-mode-btn-active' : ''">Day {{ currentDay }}</button>
+            <button @click="setMapMarkerMode('search')" class="map-mode-btn" :class="mapMarkerMode === 'search' ? 'map-mode-btn-active' : ''">搜尋</button>
+            <button @click="fitBoundsToTrip" class="map-mode-btn">顯示</button>
+          </div>
+
+          <div v-if="mapLatestResult" class="card p-3 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-800 break-words">{{ mapLatestResult.name || '搜尋結果' }}</div>
+                <div class="text-xs text-gray-500 mt-1 break-words">{{ mapLatestResult.address || '已標在地圖上' }}</div>
+              </div>
+              <span class="text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100 shrink-0">搜尋結果</span>
+            </div>
+
+            <div class="flex gap-2">
+              <select v-model.number="mapAddDay" class="flex-1 h-[46px]">
+                <option v-for="d in totalDays" :key="'map-add-day-' + d" :value="d">加入 Day {{ d }}</option>
+              </select>
+              <button @click="addMapSearchResultToItinerary" class="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm shrink-0">加入行程</button>
+            </div>
+          </div>
         </div>
 
         <div class="flex-1 min-h-0 mt-2 relative">
@@ -556,21 +672,69 @@
           </div>
         </div>
 
-        <div v-if="categoryAnalysis.length > 0" class="card">
-          <h3 class="font-bold text-gray-700 text-sm mb-3">📊 消費分析</h3>
+        <div class="card space-y-3">
+          <div class="font-bold text-gray-700 text-sm">🔍 消費篩選</div>
+          <div class="grid grid-cols-3 gap-2">
+            <select v-model="expenseFilter.day" class="h-[46px]">
+              <option value="all">全部天數</option>
+              <option v-for="d in moneyDays" :key="'filter-day-' + d" :value="String(d)">Day {{ d }}</option>
+            </select>
+            <select v-model="expenseFilter.category" class="h-[46px]">
+              <option value="all">全部分類</option>
+              <option v-for="cat in categories" :key="'filter-cat-' + cat" :value="cat">{{ cat }}</option>
+            </select>
+            <select v-model="expenseFilter.payer" class="h-[46px]">
+              <option value="all">全部付款人</option>
+              <option v-for="p in people" :key="'filter-payer-' + p.id" :value="p.name">{{ p.name }}</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-gray-50 rounded-xl p-3">
+              <div class="text-xs text-gray-500">篩選金額</div>
+              <div class="text-xl font-bold text-gray-800 mt-1">${{ filteredExpenseTotal }}</div>
+            </div>
+            <div class="bg-gray-50 rounded-xl p-3">
+              <div class="text-xs text-gray-500">篩選筆數</div>
+              <div class="text-xl font-bold text-gray-800 mt-1">{{ filteredExpenses.length }}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="bg-gray-50 rounded-xl p-3">
+              <div class="font-bold text-gray-600 mb-2">依天數</div>
+              <div v-if="filteredDayExpenseAnalysis.length === 0" class="text-gray-400">尚無資料</div>
+              <div v-for="item in filteredDayExpenseAnalysis" :key="'day-total-' + item.day" class="flex justify-between py-1">
+                <span>Day {{ item.day }}</span>
+                <span class="font-bold">${{ item.total }}</span>
+              </div>
+            </div>
+            <div class="bg-gray-50 rounded-xl p-3">
+              <div class="font-bold text-gray-600 mb-2">依付款人</div>
+              <div v-if="filteredPayerExpenseAnalysis.length === 0" class="text-gray-400">尚無資料</div>
+              <div v-for="item in filteredPayerExpenseAnalysis" :key="'payer-total-' + item.name" class="flex justify-between py-1">
+                <span>{{ item.name }}</span>
+                <span class="font-bold">${{ item.total }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="filteredCategoryAnalysis.length > 0" class="card">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-gray-700 text-sm">📊 消費分析</h3>
+            <span v-if="hasExpenseFilters" class="text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100">已套用篩選</span>
+          </div>
           <div class="space-y-3">
-            <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
+            <div v-for="cat in filteredCategoryAnalysis" :key="cat.name" class="text-xs">
               <div class="flex justify-between mb-1">
                 <span class="text-gray-600">{{ cat.name }}</span>
                 <span class="font-bold text-gray-800">
-                  ${{ cat.total }} ({{ totalExpense ? ((cat.total/totalExpense)*100).toFixed(0) : 0 }}%)
+                  ${{ cat.total }} ({{ filteredExpenseTotal ? ((cat.total/filteredExpenseTotal)*100).toFixed(0) : 0 }}%)
                 </span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-2">
-                <div
-                  class="bg-blue-500 h-2 rounded-full stat-bar"
-                  :style="{ width: totalExpense ? (cat.total/totalExpense)*100 + '%' : '0%' }"
-                ></div>
+                <div class="bg-blue-500 h-2 rounded-full stat-bar" :style="{ width: filteredExpenseTotal ? (cat.total/filteredExpenseTotal)*100 + '%' : '0%' }"></div>
               </div>
             </div>
           </div>
@@ -592,10 +756,12 @@
             >{{ cat }}</button>
           </div>
 
-          <div class="mb-3 flex gap-2 items-center">
-            <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
-            <select v-model="newExpense.payer" class="flex-1">
-              <option disabled value="">請選擇</option>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <select v-model.number="newExpense.day" class="h-[54px]">
+              <option v-for="d in totalDays" :key="'expense-day-' + d" :value="d">Day {{ d }}</option>
+            </select>
+            <select v-model="newExpense.payer" class="h-[54px]">
+              <option disabled value="">請選擇付款人</option>
               <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
             </select>
           </div>
@@ -621,23 +787,24 @@
 
         <div class="space-y-2">
           <div
-            v-for="(exp, idx) in expenses"
+            v-for="exp in filteredExpenses"
             :key="exp.id"
             class="card flex justify-between items-center py-3 border-l-4 border-gray-300"
           >
-            <div>
-              <div class="font-bold text-gray-800 text-lg">
+            <div class="min-w-0">
+              <div class="font-bold text-gray-800 text-lg break-words">
                 {{ exp.title }}
                 <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span>
+                <span class="text-xs font-normal text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1 border border-blue-100">Day {{ exp.day || 1 }}</span>
               </div>
-              <div class="text-xs text-gray-500 mt-1">
+              <div class="text-xs text-gray-500 mt-1 break-words">
                 {{ exp.payer }} 先付 <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤
               </div>
             </div>
 
-            <div class="flex flex-col items-end gap-1">
+            <div class="flex flex-col items-end gap-1 shrink-0 pl-2">
               <span class="font-bold text-xl text-gray-800 font-mono">${{ exp.amount }}</span>
-              <button @click="removeExpense(idx)" class="text-gray-300 hover:text-red-500 px-2">×</button>
+              <button @click="removeExpense(exp.id)" class="text-gray-300 hover:text-red-500 px-2">×</button>
             </div>
           </div>
         </div>
@@ -651,10 +818,17 @@
         >🔙 切換旅程</button>
 
         <h3 class="font-bold text-gray-700 ml-1">📋 資料管理</h3>
-        <button
-          @click="exportItinerary"
-          class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
-        ><span>📤</span> 匯出純文字行程</button>
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            @click="exportItinerary"
+            class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
+          ><span>📋</span> 複製行程</button>
+
+          <button
+            @click="downloadItineraryTxt"
+            class="w-full bg-white text-gray-700 border border-gray-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
+          ><span>📄</span> 下載 TXT</button>
+        </div>
 
         <h3 class="font-bold text-gray-700 mt-6 ml-1">👥 成員管理</h3>
         <div class="flex gap-2">
@@ -781,7 +955,8 @@ createApp({
     const newTime = ref('');
     const newNote = ref('');
     const newPerson = ref('');
-    const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食' });
+    const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
+    const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
 
     const searchResults = ref([]);
@@ -800,11 +975,15 @@ createApp({
     const mapSelectedLat = ref(null);
     const mapSelectedLng = ref(null);
     const mapSelectedPlaceData = ref(null);
+    const mapLatestResult = ref(null);
+    const mapAddDay = ref(1);
+    const mapMarkerMode = ref('all');
     const isMapReady = ref(false);
     let mapInstance = null;
     let mapElementRef = null;
     let markers = [];
     let mapSearchMarker = null;
+    let mapRouteLine = null;
     let infoWindow = null;
     let autocompleteService = null;
     let mapSearchTimeout = null;
@@ -858,7 +1037,27 @@ createApp({
       return `${dt.getFullYear()}/${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())} (${wk})`;
     };
 
-    const formatInvolved = (list) => (!list || list.length === 0) ? '全員' : (Array.isArray(list) ? list.join(', ') : list);
+    const normalizeInvolved = (list) => {
+      if (Array.isArray(list)) return list.filter(Boolean);
+      if (typeof list === 'string') {
+        return list.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      return [];
+    };
+
+    const normalizeExpenseRecord = (item) => ({
+      ...item,
+      amount: Number(item?.amount) || 0,
+      day: item?.day ? parseInt(item.day, 10) || 1 : 1,
+      involved: normalizeInvolved(item?.involved),
+      category: item?.category || '其他',
+      payer: item?.payer || ''
+    });
+
+    const formatInvolved = (list) => {
+      const arr = normalizeInvolved(list);
+      return arr.length === 0 ? '全員' : arr.join(', ');
+    };
 
     const formatTime = (timeStr) => {
       if (!timeStr) return '';
@@ -943,7 +1142,7 @@ createApp({
         const c = JSON.parse(raw);
 
         itinerary.value = Array.isArray(c.itinerary) ? c.itinerary : [];
-        expenses.value  = Array.isArray(c.expenses) ? c.expenses : [];
+        expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
         people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
 
         if (c.trip) currentTrip.value = { ...currentTrip.value, ...c.trip };
@@ -986,6 +1185,23 @@ createApp({
       }
     };
 
+    let tripCacheSaveTimer = null;
+    const scheduleTripCacheSave = () => {
+      if (!currentTrip.value?.id) return;
+      clearTimeout(tripCacheSaveTimer);
+      tripCacheSaveTimer = setTimeout(() => {
+        saveTripCache(currentTrip.value.id);
+      }, 250);
+    };
+
+    let tripsCacheSaveTimer = null;
+    const scheduleTripsCacheSave = () => {
+      clearTimeout(tripsCacheSaveTimer);
+      tripsCacheSaveTimer = setTimeout(() => {
+        saveTripsCache();
+      }, 250);
+    };
+
     const orderKey = (tripId, day) => `trip_${tripId}_day_${day}_order`;
     const setOrderIds = (tripId, day, ids) => localStorage.setItem(orderKey(tripId, day), JSON.stringify(ids || []));
     const getOrderIds = (tripId, day) => {
@@ -1009,6 +1225,25 @@ createApp({
       .replaceAll('>','&gt;')
       .replaceAll('"','&quot;')
       .replaceAll("'","&#39;");
+
+    const linkifyMessage = (text) => {
+      const raw = String(text || '');
+      if (!raw) return '';
+
+      const escaped = escapeHtml(raw);
+      const urlRegex = /(https?:\/\/[^\s<]+[^\s<.,!?;:])/gi;
+
+      const linked = escaped.replace(urlRegex, (url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+      });
+
+      return `📝 ${linked.replace(/\n/g, '<br>')}`;
+    };
+
+    const handleItineraryContentClick = (event, place) => {
+      if (event?.target?.closest && event.target.closest('a')) return;
+      openExternalMap(place);
+    };
 
     const loadGoogleMaps = () => {
       if (window.google && window.google.maps) {
@@ -1106,6 +1341,13 @@ createApp({
       }
     };
 
+    const clearMapRouteLine = () => {
+      if (mapRouteLine) {
+        mapRouteLine.setMap(null);
+        mapRouteLine = null;
+      }
+    };
+
     const clearMapSearchDropdown = () => {
       mapSearchResults.value = [];
       mapIsSearching.value = false;
@@ -1126,10 +1368,24 @@ createApp({
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
     };
 
+    const setMapMarkerMode = (mode) => {
+      mapMarkerMode.value = mode;
+      updateMapMarkers();
+    };
+
     const showSearchResultOnMap = ({ name = '', address = '', lat = null, lng = null, place_id = '' }) => {
       if (!mapInstance || !window.google || lat == null || lng == null) return;
 
       clearMapSearchMarker();
+
+      mapLatestResult.value = {
+        name: name || '搜尋結果',
+        address: address || '',
+        lat: Number(lat),
+        lng: Number(lng),
+        place_id: place_id || ''
+      };
+      mapMarkerMode.value = 'search';
 
       mapSearchMarker = new google.maps.Marker({
         position: { lat: Number(lat), lng: Number(lng) },
@@ -1155,6 +1411,7 @@ createApp({
       mapInstance.setCenter({ lat: Number(lat), lng: Number(lng) });
       mapInstance.setZoom(15);
       openInfo();
+      updateMapMarkers();
     };
 
     const updateMapMarkers = () => {
@@ -1162,41 +1419,70 @@ createApp({
 
       markers.forEach(m => m.setMap(null));
       markers = [];
+      clearMapRouteLine();
+
+      const mode = mapMarkerMode.value;
+      let itemsToRender = itinerary.value.filter(item => item.lat && item.lng);
+
+      if (mode === 'day') {
+        itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === currentDay.value);
+      } else if (mode === 'search') {
+        itemsToRender = [];
+      }
 
       const bounds = new google.maps.LatLngBounds();
       let hasPoint = false;
 
-      itinerary.value.forEach(item => {
-        if (item.lat && item.lng) {
-          const d = item.day ? parseInt(item.day,10) : 1;
+      itemsToRender.forEach(item => {
+        const d = item.day ? parseInt(item.day,10) : 1;
 
-          const marker = new google.maps.Marker({
-            position: { lat: Number(item.lat), lng: Number(item.lng) },
-            map: mapInstance,
-            label: { text: d.toString(), color: "white" },
-            title: item.name
-          });
+        const marker = new google.maps.Marker({
+          position: { lat: Number(item.lat), lng: Number(item.lng) },
+          map: mapInstance,
+          label: { text: d.toString(), color: "white" },
+          title: item.name
+        });
 
-          marker.addListener("click", () => {
-            const link = item.place_id
-              ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
-              : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+        marker.addListener("click", () => {
+          const link = item.place_id
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
+            : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
 
-            infoWindow.setContent(
-              `<div style="padding:6px; color:#111">
-                <b>${escapeHtml(item.name || '')}</b><br/>
-                <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</span><br/>
-                <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
-              </div>`
-            );
-            infoWindow.open(mapInstance, marker);
-          });
+          infoWindow.setContent(
+            `<div style="padding:6px; color:#111">
+              <b>${escapeHtml(item.name || '')}</b><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</span><br/>
+              <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
+            </div>`
+          );
+          infoWindow.open(mapInstance, marker);
+        });
 
-          markers.push(marker);
-          bounds.extend(marker.getPosition());
-          hasPoint = true;
-        }
+        markers.push(marker);
+        bounds.extend(marker.getPosition());
+        hasPoint = true;
       });
+
+      const routeItems = itemsToRender.slice().sort((a, b) => {
+        const dayDiff = (a.day ? parseInt(a.day,10) : 1) - (b.day ? parseInt(b.day,10) : 1);
+        if (dayDiff !== 0) return dayDiff;
+        return timeToNum(a.time) - timeToNum(b.time);
+      });
+
+      if (routeItems.length >= 2) {
+        mapRouteLine = new google.maps.Polyline({
+          path: routeItems.map(item => ({ lat: Number(item.lat), lng: Number(item.lng) })),
+          map: mapInstance,
+          strokeColor: '#2563eb',
+          strokeOpacity: 0.65,
+          strokeWeight: 3
+        });
+      }
+
+      if (mode === 'search' && mapLatestResult.value) {
+        hasPoint = true;
+        bounds.extend({ lat: Number(mapLatestResult.value.lat), lng: Number(mapLatestResult.value.lng) });
+      }
 
       if (hasPoint) {
         mapInstance.fitBounds(bounds);
@@ -1213,6 +1499,48 @@ createApp({
 
     const fitBoundsToTrip = () => {
       updateMapMarkers();
+    };
+
+    const addMapSearchResultToItinerary = async () => {
+      if (!currentTrip.value || !mapLatestResult.value) return;
+
+      const id = generateId();
+      const d = mapAddDay.value || currentDay.value || 1;
+      const item = {
+        id,
+        name: mapLatestResult.value.name || mapSearchQuery.value || '搜尋結果',
+        name_ko: '',
+        address: mapLatestResult.value.address || '',
+        day: d,
+        lat: Number(mapLatestResult.value.lat),
+        lng: Number(mapLatestResult.value.lng),
+        place_id: mapLatestResult.value.place_id || '',
+        message: '',
+        time: '',
+        trip_id: currentTrip.value.id
+      };
+
+      isLoading.value = true;
+      try {
+        itinerary.value.push(item);
+        await postJSON({ action:'add', type:'itinerary', data: item });
+
+        const oldIds = getOrderIds(currentTrip.value.id, d) || itinerary.value
+          .filter(x => (x.day ? parseInt(x.day,10) : 1) === d)
+          .map(x => String(x.id))
+          .filter(x => x !== String(id));
+        const ids = oldIds.slice();
+        ids.push(String(id));
+        setOrderIds(currentTrip.value.id, d, ids);
+        await saveOrderToDB(currentTrip.value.id, d, ids);
+
+        currentDay.value = d;
+        mapMarkerMode.value = 'day';
+        scheduleSortableInit();
+        updateMapMarkers();
+      } finally {
+        isLoading.value = false;
+      }
     };
 
     const searchMapPlacesInput = async () => {
@@ -1414,6 +1742,9 @@ createApp({
       currentDay.value = 1;
       totalDays.value = 1;
       mapSearchQuery.value = '';
+      mapAddDay.value = 1;
+      mapLatestResult.value = null;
+      mapMarkerMode.value = 'all';
       clearMapSearchDropdown();
       clearMapSearchMarker();
 
@@ -1423,7 +1754,7 @@ createApp({
       loadTripCache(tripId);
 
       await nextTick();
-      initSortable();
+      scheduleSortableInit();
 
       if (currentTab.value === 'map') {
         await loadGoogleMaps();
@@ -1471,7 +1802,7 @@ createApp({
         const ppl  = Array.isArray(data?.people) ? data.people : [];
 
         itinerary.value = itin;
-        expenses.value = exp;
+        expenses.value = exp.map(normalizeExpenseRecord);
         people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
 
         if (trip) {
@@ -1484,7 +1815,7 @@ createApp({
         totalDays.value = Math.max(1, maxDay);
 
         await nextTick();
-        initSortable();
+        scheduleSortableInit();
 
         if (currentTab.value === 'map') {
           await loadGoogleMaps();
@@ -1509,7 +1840,7 @@ createApp({
     const onDayClick = async (d) => {
       currentDay.value = d;
       await nextTick();
-      initSortable();
+      scheduleSortableInit();
     };
 
     const onDayDblClick = (d) => {
@@ -1577,7 +1908,7 @@ createApp({
     const addNewDay = () => {
       totalDays.value++;
       currentDay.value = totalDays.value;
-      nextTick().then(initSortable);
+      scheduleSortableInit();
     };
 
     const deleteDay = async (d) => {
@@ -1618,7 +1949,7 @@ createApp({
         if (currentDay.value > totalDays.value) currentDay.value = totalDays.value;
 
         await nextTick();
-        initSortable();
+        scheduleSortableInit();
         updateMapMarkers();
       } finally {
         isLoading.value = false;
@@ -1632,11 +1963,27 @@ createApp({
       }
     };
 
+    let lastSortableSignature = '';
     const initSortable = () => {
+      if (!itineraryListEl.value) {
+        destroySortable();
+        return;
+      }
+      if (currentTab.value !== 'itinerary' || !currentTrip.value) {
+        destroySortable();
+        return;
+      }
+
+      const currentIds = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
+        .map(el => el.getAttribute('data-id'))
+        .filter(Boolean)
+        .join('|');
+      const signature = `${currentTrip.value.id}__${currentDay.value}__${currentIds}`;
+
+      if (sortable && lastSortableSignature === signature) return;
+
       destroySortable();
-      if (!itineraryListEl.value) return;
-      if (currentTab.value !== 'itinerary') return;
-      if (!currentTrip.value) return;
+      lastSortableSignature = signature;
 
       sortable = new Sortable(itineraryListEl.value, {
         animation: 150,
@@ -1648,8 +1995,18 @@ createApp({
             .filter(Boolean);
           setOrderIds(currentTrip.value.id, currentDay.value, ids);
           try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
+          lastSortableSignature = `${currentTrip.value.id}__${currentDay.value}__${ids.join('|')}`;
         }
       });
+    };
+
+    let sortableInitTimer = null;
+    const scheduleSortableInit = () => {
+      clearTimeout(sortableInitTimer);
+      sortableInitTimer = setTimeout(async () => {
+        await nextTick();
+        scheduleSortableInit();
+      }, 30);
     };
 
     const filteredItinerary = computed(() => {
@@ -1859,7 +2216,7 @@ createApp({
         await saveOrderToDB(currentTrip.value.id, d, ids);
 
         await nextTick();
-        initSortable();
+        scheduleSortableInit();
         updateMapMarkers();
       } finally {
         isLoading.value = false;
@@ -1877,7 +2234,7 @@ createApp({
       try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
 
       await nextTick();
-      initSortable();
+      scheduleSortableInit();
       updateMapMarkers();
     };
 
@@ -1982,7 +2339,7 @@ createApp({
         }
 
         await nextTick();
-        initSortable();
+        scheduleSortableInit();
         updateMapMarkers();
       } finally {
         isLoading.value = false;
@@ -1990,15 +2347,67 @@ createApp({
       }
     };
 
+    const hasExpenseFilters = computed(() =>
+      expenseFilter.value.day !== 'all' ||
+      expenseFilter.value.category !== 'all' ||
+      expenseFilter.value.payer !== 'all'
+    );
+
+    const moneyDays = computed(() => {
+      const set = new Set();
+      for (let d = 1; d <= totalDays.value; d++) set.add(d);
+      expenses.value.forEach(e => set.add(e.day ? parseInt(e.day, 10) || 1 : 1));
+      return Array.from(set).sort((a, b) => a - b);
+    });
+
+    const filteredExpenses = computed(() => {
+      return expenses.value.filter(e => {
+        const dayOk = expenseFilter.value.day === 'all' || String(e.day || 1) === String(expenseFilter.value.day);
+        const catOk = expenseFilter.value.category === 'all' || (e.category || '其他') === expenseFilter.value.category;
+        const payerOk = expenseFilter.value.payer === 'all' || e.payer === expenseFilter.value.payer;
+        return dayOk && catOk && payerOk;
+      });
+    });
+
+    const filteredExpenseTotal = computed(() => filteredExpenses.value.reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+
+    const filteredCategoryAnalysis = computed(() => {
+      const stats = {};
+      filteredExpenses.value.forEach(e => {
+        const cat = e.category || '未分類';
+        stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
+      });
+      return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    });
+
+    const filteredDayExpenseAnalysis = computed(() => {
+      const stats = {};
+      filteredExpenses.value.forEach(e => {
+        const day = e.day ? parseInt(e.day, 10) || 1 : 1;
+        stats[day] = (stats[day] || 0) + (Number(e.amount) || 0);
+      });
+      return Object.entries(stats).map(([day, total]) => ({ day: Number(day), total })).sort((a, b) => a.day - b.day);
+    });
+
+    const filteredPayerExpenseAnalysis = computed(() => {
+      const stats = {};
+      filteredExpenses.value.forEach(e => {
+        const payer = e.payer || '未指定';
+        stats[payer] = (stats[payer] || 0) + (Number(e.amount) || 0);
+      });
+      return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    });
+
     const addExpense = async () => {
       if (!newExpense.value.title || !newExpense.value.amount) return;
       const uid = generateId();
-      const d = {
+      const d = normalizeExpenseRecord({
         id: uid,
         ...newExpense.value,
+        day: newExpense.value.day || currentDay.value || 1,
         involved: [...newExpense.value.involved],
         trip_id: currentTrip.value.id
-      };
+      });
       expenses.value.unshift(d);
       await postJSON({ action:'add', type:'expenses', data: { ...d, involved: d.involved.join(',') } });
       newExpense.value = {
@@ -2006,12 +2415,14 @@ createApp({
         amount: '',
         payer: people.value[0]?.name || '',
         involved: people.value.map(p => p.name),
-        category: '飲食'
+        category: '飲食',
+        day: currentDay.value || 1
       };
     };
 
-    const removeExpense = async (idx) => {
-      const item = expenses.value[idx];
+    const removeExpense = async (expenseId) => {
+      const idx = expenses.value.findIndex(item => String(item.id) === String(expenseId));
+      const item = idx >= 0 ? expenses.value[idx] : null;
       if (!item?.id) return;
       expenses.value.splice(idx, 1);
       await postJSON({ action:'del', type:'expenses', id: item.id });
@@ -2022,7 +2433,8 @@ createApp({
       if (!name) return;
       const uid = generateId();
       people.value.push({ id: uid, name, trip_id: currentTrip.value.id });
-      newExpense.value.involved.push(name);
+      if (!newExpense.value.involved.includes(name)) newExpense.value.involved.push(name);
+      if (!newExpense.value.payer) newExpense.value.payer = name;
       newPerson.value = '';
       await postJSON({ action:'add', type:'people', data: { id: uid, name, trip_id: currentTrip.value.id } });
     };
@@ -2046,12 +2458,13 @@ createApp({
         if(b[e.payer] === undefined) return;
 
         b[e.payer] += amt;
-        const inv = (e.involved && e.involved.length) ? e.involved : people.value.map(p => p.name);
-        const v = inv.filter(n => b[n] !== undefined);
+        const inv = normalizeInvolved(e.involved);
+        const targets = inv.length ? inv : people.value.map(p => p.name);
+        const v = targets.filter(n => b[n] !== undefined);
 
         if(v.length) {
-          const s = amt / v.length;
-          v.forEach(n => b[n] -= s);
+          const share = amt / v.length;
+          v.forEach(n => b[n] -= share);
         }
       });
 
@@ -2067,12 +2480,15 @@ createApp({
       return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b) => b.total - a.total);
     });
 
-    const exportItinerary = () => {
-      if(!currentTrip.value) return;
+    const buildItineraryText = () => {
+      if(!currentTrip.value) return '';
 
       let text = `【${currentTrip.value.name}】行程表\n\n`;
       for(let d = 1; d <= totalDays.value; d++) {
-        text += `📅 Day ${d}\n`;
+        text += `📅 Day ${d}`;
+        const label = dayLabel(d);
+        if (label) text += ` | ${label}`;
+        text += `\n`;
         const base = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
         const ids = getOrderIds(currentTrip.value.id, d);
         let dayItems = base.slice();
@@ -2098,13 +2514,34 @@ createApp({
         }
 
         dayItems.forEach(item => {
-          text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name} ${item.message ? '('+item.message+')' : ''}\n`;
+          const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
+          text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
         });
         text += "\n";
       }
 
+      return text;
+    };
+
+    const exportItinerary = () => {
+      const text = buildItineraryText();
+      if (!text) return;
       navigator.clipboard.writeText(text);
       alert('已複製到剪貼簿');
+    };
+
+    const downloadItineraryTxt = () => {
+      const text = buildItineraryText();
+      if (!text) return;
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      const safeName = String(currentTrip.value?.name || 'itinerary').replace(/[\\/:*?"<>|]+/g, '_');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${safeName}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 500);
     };
 
     const switchTab = async (tab) => {
@@ -2123,12 +2560,27 @@ createApp({
         }, 100);
       }
 
-      initSortable();
+      scheduleSortableInit();
     };
 
-    watch(currentDay, () => nextTick().then(initSortable));
-    watch(currentTab, () => nextTick().then(initSortable));
-    watch(currentView, () => nextTick().then(initSortable));
+    watch(currentDay, () => {
+      mapAddDay.value = currentDay.value || 1;
+      newExpense.value.day = currentDay.value || 1;
+      scheduleSortableInit();
+      if (currentTab.value === 'map') updateMapMarkers();
+    });
+
+    watch(currentTab, () => {
+      scheduleSortableInit();
+      if (currentTab.value === 'map') {
+        setTimeout(() => updateMapMarkers(), 80);
+      }
+    });
+
+    watch(currentView, () => scheduleSortableInit());
+    watch([itinerary, expenses, people], () => scheduleTripCacheSave(), { deep: true });
+    watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
+    watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
     onMounted(async () => {
       const hasTripsCache = loadTripsCache();
@@ -2141,9 +2593,10 @@ createApp({
       currentTab, isLoading,
       currentDay, totalDays,
       people, itinerary, expenses, filteredItinerary,
-      newPlace, newTime, newNote, newPerson, newExpense, categories,
+      newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
       searchResults, isSearching, isCoordinateMode, resolvedCoordName,
       mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
+      mapLatestResult, mapAddDay, mapMarkerMode,
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
@@ -2152,16 +2605,18 @@ createApp({
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
       searchPlacesInput, useCoordinateInput, selectPlace, searchInExternalMap,
-      addPlace, removePlace, openExternalMap,
+      addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
       itineraryListEl, formatTime,
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
-      searchCityAndJump, fitBoundsToTrip,
+      searchCityAndJump, fitBoundsToTrip, setMapMarkerMode, addMapSearchResultToItinerary,
 
       addExpense, removeExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
+      filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
+      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
-      exportItinerary, isKoreaTrip,
+      exportItinerary, downloadItineraryTxt, isKoreaTrip,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace
