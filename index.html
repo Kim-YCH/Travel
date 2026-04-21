@@ -260,91 +260,6 @@
     .tab-panel {
       min-height: 0;
     }
-
-    .itinerary-card {
-      overflow: hidden;
-      align-items: flex-start;
-    }
-
-    .itinerary-main {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .itinerary-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .itinerary-title-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 4px;
-      min-width: 0;
-    }
-
-    .itinerary-title {
-      font-weight: 700;
-      font-size: 1.125rem;
-      line-height: 1.5rem;
-      color: #1f2937;
-      min-width: 0;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      white-space: normal;
-      flex: 1 1 220px;
-    }
-
-    .itinerary-subtitle {
-      font-size: 12px;
-      color: #6b7280;
-      margin-bottom: 4px;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      white-space: normal;
-    }
-
-    .itinerary-tags {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      min-width: 0;
-    }
-
-    .itinerary-message {
-      width: 100%;
-      min-width: 0;
-      margin-top: 4px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background: #f3f4f6;
-      color: #6b7280;
-      font-size: 14px;
-      line-height: 1.55;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .itinerary-message a {
-      color: #2563eb;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .itinerary-message a:active {
-      opacity: 0.8;
-    }
-
-    .itinerary-actions {
-      flex-shrink: 0;
-      align-self: flex-start;
-    }
   </style>
 </head>
 <body>
@@ -489,14 +404,9 @@
             </div>
           </div>
 
-          <div class="flex gap-2 items-start">
+          <div class="flex gap-2">
             <input v-model="newTime" type="time" class="w-1/3 text-center font-mono">
-            <textarea
-              v-model="newNote"
-              rows="2"
-              placeholder="備註..."
-              class="flex-1 resize-none"
-            ></textarea>
+            <input v-model="newNote" type="text" placeholder="備註..." class="flex-1">
           </div>
         </div>
 
@@ -505,38 +415,40 @@
             v-for="place in filteredItinerary"
             :key="place.id"
             :data-id="place.id"
-            class="card itinerary-card flex justify-between items-start gap-3 active:scale-[0.99] transition"
+            class="card flex justify-between items-start active:scale-[0.99] transition"
           >
-            <div class="itinerary-main flex items-start gap-2">
-              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
+            <div class="flex items-start gap-2 flex-1">
+              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1">≡</div>
 
-              <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
-                <div class="itinerary-title-row">
+              <div class="flex-1" @click="openExternalMap(place)">
+                <div class="flex items-center gap-2 flex-wrap mb-1">
                   <span
                     v-if="place.time"
-                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
+                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100"
                   >{{ formatTime(place.time) }}</span>
-                  <span class="itinerary-title">{{ place.name }}</span>
+                  <span class="font-bold text-lg text-gray-800">{{ place.name }}</span>
                 </div>
 
-                <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
+                <div v-if="place.name_ko" class="text-xs text-gray-500 mb-1">{{ place.name_ko }}</div>
 
-                <div class="itinerary-tags">
+                <div class="flex gap-2 items-center flex-wrap">
                   <span
                     v-if="place.lat && place.lng"
-                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
+                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200"
                   >已定位</span>
                   <span
                     v-else
-                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
+                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200"
                   >無座標</span>
 
-                  <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
+                  <div v-if="place.message" class="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                    📝 {{ place.message }}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
+            <div class="flex items-center gap-2 pl-3 border-l ml-2">
               <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
               <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
             </div>
@@ -548,17 +460,63 @@
 
       <!-- Map -->
       <div v-show="currentTab === 'map'" class="content-fixed p-4 w-full flex flex-col min-h-0">
-        <div class="flex flex-col gap-2 flex-shrink-0">
-          <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200">
-            <input
-              v-model="mapSearchQuery"
-              @keyup.enter="searchCityAndJump"
-              type="text"
-              :placeholder="'跳轉至 ' + (currentTrip.city || '') + '...'"
-              class="flex-1 p-3 border-0 outline-none h-[54px] text-gray-900 bg-white"
-              style="border-radius: 0;"
-            >
-            <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-[54px]">前往</button>
+        <div class="flex flex-col gap-2 flex-shrink-0 relative z-40">
+          <div class="relative">
+            <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200 bg-white">
+              <input
+                v-model="mapSearchQuery"
+                @input="searchMapPlacesInput"
+                @focus="searchMapPlacesInput"
+                @keyup.enter="searchCityAndJump"
+                type="text"
+                :placeholder="'搜尋 ' + (currentTrip.city || '') + ' 地點...'"
+                class="flex-1 p-3 border-0 outline-none h-[54px] text-gray-900 bg-white"
+                style="border-radius: 0;"
+              >
+              <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-[54px] shrink-0">前往</button>
+            </div>
+
+            <div v-if="mapSearchQuery.length > 0 && (mapSearchResults.length > 0 || mapIsSearching || mapIsCoordinateMode)" class="suggestions-list">
+              <div v-if="mapIsSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+
+              <div
+                v-if="mapIsCoordinateMode"
+                @click="useMapCoordinateInput"
+                class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200"
+              >
+                <span class="text-xl">📍</span>
+                <div>
+                  <div class="font-bold text-green-700 text-sm">{{ mapResolvedCoordName || '座標模式' }}</div>
+                  <div class="text-xs text-green-600">點擊後直接標在地圖上</div>
+                </div>
+              </div>
+
+              <div
+                v-for="item in mapSearchResults"
+                :key="'map-' + item.place_id"
+                @click="selectMapPlace(item)"
+                class="suggestion-item hover:bg-blue-50"
+              >
+                <span class="text-xl">🗺️</span>
+                <div class="overflow-hidden">
+                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                </div>
+              </div>
+
+              <div
+                v-if="!mapIsCoordinateMode"
+                @click="searchMapInExternalMap"
+                class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer"
+              >
+                <span class="text-xl">🔎</span>
+                <div class="flex-1">
+                  <div class="font-bold text-blue-600 text-sm">找不到？去 {{ isKoreaTrip ? 'Naver Map' : 'Google Maps' }} 找</div>
+                  <div class="text-xs text-gray-400">也可複製座標貼回這裡</div>
+                </div>
+                <span class="text-gray-300 text-lg">➜</span>
+              </div>
+            </div>
           </div>
 
           <button
@@ -835,12 +793,21 @@ createApp({
     const selectedPlaceData = ref(null);
 
     const mapSearchQuery = ref('');
+    const mapSearchResults = ref([]);
+    const mapIsSearching = ref(false);
+    const mapIsCoordinateMode = ref(false);
+    const mapResolvedCoordName = ref('');
+    const mapSelectedLat = ref(null);
+    const mapSelectedLng = ref(null);
+    const mapSelectedPlaceData = ref(null);
     const isMapReady = ref(false);
     let mapInstance = null;
     let mapElementRef = null;
     let markers = [];
+    let mapSearchMarker = null;
     let infoWindow = null;
     let autocompleteService = null;
+    let mapSearchTimeout = null;
 
     const itineraryListEl = ref(null);
     let sortable = null;
@@ -1043,25 +1010,6 @@ createApp({
       .replaceAll('"','&quot;')
       .replaceAll("'","&#39;");
 
-    const linkifyMessage = (text) => {
-      const raw = String(text || '');
-      if (!raw) return '';
-
-      const escaped = escapeHtml(raw);
-      const urlRegex = /(https?:\/\/[^\s<]+[^\s<.,!?;:])/gi;
-
-      const linked = escaped.replace(urlRegex, (url) => {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-      });
-
-      return `📝 ${linked.replace(/\n/g, '<br>')}`;
-    };
-
-    const handleItineraryContentClick = (event, place) => {
-      if (event?.target?.closest && event.target.closest('a')) return;
-      openExternalMap(place);
-    };
-
     const loadGoogleMaps = () => {
       if (window.google && window.google.maps) {
         try { autocompleteService = new google.maps.places.AutocompleteService(); } catch(e){}
@@ -1151,6 +1099,64 @@ createApp({
       updateMapMarkers();
     };
 
+    const clearMapSearchMarker = () => {
+      if (mapSearchMarker) {
+        mapSearchMarker.setMap(null);
+        mapSearchMarker = null;
+      }
+    };
+
+    const clearMapSearchDropdown = () => {
+      mapSearchResults.value = [];
+      mapIsSearching.value = false;
+      mapIsCoordinateMode.value = false;
+      mapResolvedCoordName.value = '';
+      mapSelectedLat.value = null;
+      mapSelectedLng.value = null;
+      mapSelectedPlaceData.value = null;
+    };
+
+    const getExternalMapLink = ({ name = '', lat = null, lng = null, place_id = '' }) => {
+      if (place_id) {
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${place_id}`;
+      }
+      if (lat != null && lng != null) {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
+    };
+
+    const showSearchResultOnMap = ({ name = '', address = '', lat = null, lng = null, place_id = '' }) => {
+      if (!mapInstance || !window.google || lat == null || lng == null) return;
+
+      clearMapSearchMarker();
+
+      mapSearchMarker = new google.maps.Marker({
+        position: { lat: Number(lat), lng: Number(lng) },
+        map: mapInstance,
+        title: name || '搜尋結果',
+        label: { text: '搜', color: 'white' },
+        zIndex: 999
+      });
+
+      const openInfo = () => {
+        const link = getExternalMapLink({ name, lat, lng, place_id });
+        infoWindow.setContent(
+          `<div style="padding:6px; color:#111; max-width:220px;">
+            <b>${escapeHtml(name || '搜尋結果')}</b><br/>
+            <span style="font-size:12px; color:#555">${escapeHtml(address || '')}</span><br/>
+            <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
+          </div>`
+        );
+        infoWindow.open(mapInstance, mapSearchMarker);
+      };
+
+      mapSearchMarker.addListener('click', openInfo);
+      mapInstance.setCenter({ lat: Number(lat), lng: Number(lng) });
+      mapInstance.setZoom(15);
+      openInfo();
+    };
+
     const updateMapMarkers = () => {
       if (!mapInstance || !window.google) return;
 
@@ -1209,15 +1215,149 @@ createApp({
       updateMapMarkers();
     };
 
-    const searchCityAndJump = () => {
-      if(!mapSearchQuery.value || !window.google || !mapInstance) return;
+    const searchMapPlacesInput = async () => {
+      const q = mapSearchQuery.value.trim();
+
+      if (!q) {
+        clearMapSearchDropdown();
+        return;
+      }
+
+      const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
+      if (coordRegex.test(q)) {
+        mapIsCoordinateMode.value = true;
+        mapIsSearching.value = false;
+        const parts = q.split(',');
+        mapSelectedLat.value = parseFloat(parts[0]);
+        mapSelectedLng.value = parseFloat(parts[1]);
+        mapResolvedCoordName.value = `座標 ${parts[0].trim()}, ${parts[1].trim()}`;
+        mapSearchResults.value = [];
+        mapSelectedPlaceData.value = null;
+        return;
+      }
+
+      mapIsCoordinateMode.value = false;
+      mapSelectedLat.value = null;
+      mapSelectedLng.value = null;
+      mapResolvedCoordName.value = '';
+      mapSelectedPlaceData.value = null;
+      mapIsSearching.value = true;
+
+      if (mapSearchTimeout) clearTimeout(mapSearchTimeout);
+
+      mapSearchTimeout = setTimeout(async () => {
+        try {
+          if (!window.google || !window.google.maps) {
+            await loadGoogleMaps();
+          }
+
+          if (!autocompleteService) {
+            autocompleteService = new google.maps.places.AutocompleteService();
+          }
+
+          const req = { input: q, language: 'zh-TW' };
+          if (mapInstance && typeof mapInstance.getBounds === 'function') {
+            const bounds = mapInstance.getBounds();
+            if (bounds) req.bounds = bounds;
+          }
+
+          autocompleteService.getPlacePredictions(req, (predictions, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+              mapSearchResults.value = predictions;
+            } else {
+              mapSearchResults.value = [];
+            }
+            mapIsSearching.value = false;
+          });
+        } catch (err) {
+          console.error(err);
+          mapSearchResults.value = [];
+          mapIsSearching.value = false;
+        }
+      }, 250);
+    };
+
+    const useMapCoordinateInput = async () => {
+      await searchCityAndJump();
+    };
+
+    const selectMapPlace = async (item) => {
+      mapSearchQuery.value = item.description || item.structured_formatting?.main_text || '';
+      mapSelectedPlaceData.value = item;
+      mapSearchResults.value = [];
+      mapIsSearching.value = false;
+      mapIsCoordinateMode.value = false;
+      await searchCityAndJump();
+    };
+
+    const searchMapInExternalMap = () => {
+      const query = mapSearchQuery.value.trim();
+      if (!query) return;
+
+      if (isKoreaTrip.value) {
+        window.open(`https://map.naver.com/v5/search/${encodeURIComponent(query)}`, '_blank');
+      } else {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+      }
+    };
+
+    const searchCityAndJump = async () => {
+      const q = mapSearchQuery.value.trim();
+      if (!q) return;
+
+      if (!window.google || !window.google.maps) {
+        await loadGoogleMaps();
+      }
+      if (!mapInstance) {
+        initGoogleMap();
+      }
+      if (!window.google || !mapInstance) return;
+
+      if (mapIsCoordinateMode.value && mapSelectedLat.value != null && mapSelectedLng.value != null) {
+        showSearchResultOnMap({
+          name: mapResolvedCoordName.value || q,
+          address: '座標搜尋',
+          lat: mapSelectedLat.value,
+          lng: mapSelectedLng.value,
+          place_id: ''
+        });
+        mapSearchResults.value = [];
+        return;
+      }
+
+      if (mapSelectedPlaceData.value?.place_id) {
+        const place = await getPlaceDetails(mapSelectedPlaceData.value.place_id, 'zh-TW');
+        if (place?.geometry?.location) {
+          showSearchResultOnMap({
+            name: place.name || q,
+            address: place.formatted_address || '',
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+            place_id: mapSelectedPlaceData.value.place_id
+          });
+          mapSearchResults.value = [];
+          return;
+        }
+      }
 
       const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({ address: mapSearchQuery.value }, (results, status) => {
+      const city = String(currentTrip.value?.city || '').trim();
+      const geocodeQuery = city && !q.includes(city) ? `${q} ${city}` : q;
+
+      geocoder.geocode({ address: geocodeQuery }, (results, status) => {
         if (status === 'OK' && results[0]) {
-          mapInstance.setCenter(results[0].geometry.location);
-          mapInstance.setZoom(13);
+          const r = results[0];
+          showSearchResultOnMap({
+            name: r.address_components?.[0]?.long_name || q,
+            address: r.formatted_address || geocodeQuery,
+            lat: r.geometry.location.lat(),
+            lng: r.geometry.location.lng(),
+            place_id: r.place_id || ''
+          });
+          mapSearchResults.value = [];
+          return;
         }
+        alert('找不到這個地點');
       });
     };
 
@@ -1273,6 +1413,9 @@ createApp({
       people.value = [];
       currentDay.value = 1;
       totalDays.value = 1;
+      mapSearchQuery.value = '';
+      clearMapSearchDropdown();
+      clearMapSearchMarker();
 
       currentView.value = 'app';
 
@@ -1295,6 +1438,9 @@ createApp({
     const exitTrip = () => {
       currentView.value = 'lobby';
       currentTrip.value = null;
+      mapSearchQuery.value = '';
+      clearMapSearchDropdown();
+      clearMapSearchMarker();
       fetchTrips();
     };
 
@@ -1997,7 +2143,7 @@ createApp({
       people, itinerary, expenses, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, categories,
       searchResults, isSearching, isCoordinateMode, resolvedCoordName,
-      mapSearchQuery, isMapReady,
+      mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
@@ -2006,9 +2152,10 @@ createApp({
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
       searchPlacesInput, useCoordinateInput, selectPlace, searchInExternalMap,
-      addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
+      addPlace, removePlace, openExternalMap,
       itineraryListEl, formatTime,
 
+      searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
       searchCityAndJump, fitBoundsToTrip,
 
       addExpense, removeExpense, addPerson, removePerson,
