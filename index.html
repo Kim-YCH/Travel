@@ -1014,6 +1014,91 @@ createApp({
       payer: item?.payer || ''
     });
 
+    const normalizeOrderValue = (value) => {
+      if (value === '' || value == null) return null;
+      const num = Number(value);
+      return Number.isFinite(num) && num > 0 ? num : null;
+    };
+
+    const normalizeItineraryRecord = (item) => ({
+      ...item,
+      day: item?.day ? parseInt(item.day, 10) || 1 : 1,
+      order: normalizeOrderValue(item?.order)
+    });
+
+    const sortDayItemsByStoredOrder = (list) => {
+      return list.slice().sort((a, b) => {
+        const oa = normalizeOrderValue(a?.order);
+        const ob = normalizeOrderValue(b?.order);
+
+        if (oa != null && ob != null && oa !== ob) return oa - ob;
+        if (oa != null && ob == null) return -1;
+        if (oa == null && ob != null) return 1;
+
+        const ta = timeToNum(a?.time);
+        const tb = timeToNum(b?.time);
+        if (ta !== tb) return ta - tb;
+
+        return String(a?.name || '').localeCompare(String(b?.name || ''));
+      });
+    };
+
+    const getDayOrderedItems = (day) => {
+      const targetDay = parseInt(day, 10) || 1;
+      const list = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === targetDay);
+      return sortDayItemsByStoredOrder(list);
+    };
+
+    const applyOrderToLocalItinerary = (day, ids) => {
+      const targetDay = parseInt(day, 10) || 1;
+      const idOrder = Array.isArray(ids) ? ids.map(String) : [];
+      const dayItems = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === targetDay);
+      const map = new Map(dayItems.map(item => [String(item.id), item]));
+
+      let order = 1;
+      idOrder.forEach((id) => {
+        const item = map.get(String(id));
+        if (item) {
+          item.order = order++;
+          map.delete(String(id));
+        }
+      });
+
+      sortDayItemsByStoredOrder(Array.from(map.values())).forEach((item) => {
+        item.order = order++;
+      });
+    };
+
+    const hasCompleteSequentialOrder = (day) => {
+      const items = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === (parseInt(day, 10) || 1));
+      if (!items.length) return true;
+
+      const orders = items.map(item => normalizeOrderValue(item.order));
+      if (orders.some(v => v == null)) return false;
+
+      const sorted = orders.slice().sort((a, b) => a - b);
+      if (new Set(sorted).size !== sorted.length) return false;
+
+      return sorted.every((value, index) => value === index + 1);
+    };
+
+    const ensureAllDayOrdersSynced = async (tripId) => {
+      if (!tripId) return;
+      const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
+
+      for (let day = 1; day <= maxDay; day++) {
+        const items = getDayOrderedItems(day);
+        if (!items.length) continue;
+        if (hasCompleteSequentialOrder(day)) continue;
+
+        const ids = items.map(item => String(item.id));
+        applyOrderToLocalItinerary(day, ids);
+        try {
+          await saveOrderToDB(tripId, day, ids);
+        } catch (e) {}
+      }
+    };
+
     const formatInvolved = (list) => {
       const arr = normalizeInvolved(list);
       return arr.length === 0 ? '全員' : arr.join(', ');
@@ -1101,7 +1186,7 @@ createApp({
 
         const c = JSON.parse(raw);
 
-        itinerary.value = Array.isArray(c.itinerary) ? c.itinerary : [];
+        itinerary.value = Array.isArray(c.itinerary) ? c.itinerary.map(normalizeItineraryRecord) : [];
         expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
         people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
 
@@ -1162,18 +1247,20 @@ createApp({
       }, 250);
     };
 
-    const orderKey = (tripId, day) => `trip_${tripId}_day_${day}_order`;
-    const setOrderIds = (tripId, day, ids) => localStorage.setItem(orderKey(tripId, day), JSON.stringify(ids || []));
-    const getOrderIds = (tripId, day) => {
-      try {
-        const raw = localStorage.getItem(orderKey(tripId, day));
-        const ids = JSON.parse(raw);
-        return Array.isArray(ids) ? ids : null;
-      } catch(e){
-        return null;
-      }
+    const setOrderIds = (tripId, day, ids) => {
+      applyOrderToLocalItinerary(day, ids);
+      scheduleTripCacheSave();
     };
-    const clearOrderIds = (tripId, day) => localStorage.removeItem(orderKey(tripId, day));
+    const getOrderIds = (tripId, day) => getDayOrderedItems(day).map(item => String(item.id));
+    const clearOrderIds = (tripId, day) => {
+      const targetDay = parseInt(day, 10) || 1;
+      itinerary.value.forEach((item) => {
+        if ((item.day ? parseInt(item.day,10) : 1) === targetDay) {
+          item.order = null;
+        }
+      });
+      scheduleTripCacheSave();
+    };
 
     const saveOrderToDB = async (tripId, day, ids) => {
       await postJSON({ action: 'save_order', tripId, day: String(day), order: (ids||[]).join(',') });
@@ -1768,7 +1855,7 @@ createApp({
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
 
-        itinerary.value = itin;
+        itinerary.value = itin.map(normalizeItineraryRecord);
         expenses.value = exp.map(normalizeExpenseRecord);
         people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
 
@@ -1780,6 +1867,8 @@ createApp({
           Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
 
         totalDays.value = Math.max(1, maxDay);
+
+        await ensureAllDayOrdersSynced(tripId);
 
         await nextTick();
         scheduleSortableInit();
@@ -1861,8 +1950,17 @@ createApp({
         const oA = getOrderIds(tripId, dayA);
         const oB = getOrderIds(tripId, dayB);
 
-        if (oA) setOrderIds(tripId, dayB, oA); else clearOrderIds(tripId, dayB);
-        if (oB) setOrderIds(tripId, dayA, oB); else clearOrderIds(tripId, dayA);
+        if (oB) {
+          await saveOrderToDB(tripId, dayA, oB);
+        } else {
+          await postJSON({ action:'clear_order', tripId, day: String(dayA) });
+        }
+
+        if (oA) {
+          await saveOrderToDB(tripId, dayB, oA);
+        } else {
+          await postJSON({ action:'clear_order', tripId, day: String(dayB) });
+        }
 
         await fetchData();
         currentDay.value = dayA;
@@ -1899,18 +1997,18 @@ createApp({
           await postJSON({ action:'edit', type:'itinerary', data: { id: it.id, day: newDay, trip_id: tripId }});
         }
 
-        clearOrderIds(tripId, d);
         await postJSON({ action:'clear_order', tripId, day: String(d) });
 
-        for (let day = d+1; day <= totalDays.value; day++) {
-          const prev = getOrderIds(tripId, day);
-          if (prev) {
-            setOrderIds(tripId, day-1, prev);
-            clearOrderIds(tripId, day);
-            await postJSON({ action:'save_order', tripId, day: String(day-1), order: prev.join(',') });
+        for (let day = d; day <= totalDays.value - 1; day++) {
+          const ids = getOrderIds(tripId, day);
+          if (ids.length) {
+            await saveOrderToDB(tripId, day, ids);
+          } else {
             await postJSON({ action:'clear_order', tripId, day: String(day) });
           }
         }
+
+        await postJSON({ action:'clear_order', tripId, day: String(totalDays.value) });
 
         totalDays.value = Math.max(1, totalDays.value - 1);
         if (currentDay.value > totalDays.value) currentDay.value = totalDays.value;
@@ -1962,6 +2060,7 @@ createApp({
             .filter(Boolean);
           setOrderIds(currentTrip.value.id, currentDay.value, ids);
           try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
+          scheduleTripCacheSave();
           lastSortableSignature = `${currentTrip.value.id}__${currentDay.value}__${ids.join('|')}`;
         }
       });
@@ -1972,35 +2071,11 @@ createApp({
       clearTimeout(sortableInitTimer);
       sortableInitTimer = setTimeout(async () => {
         await nextTick();
-        scheduleSortableInit();
+        initSortable();
       }, 30);
     };
 
-    const filteredItinerary = computed(() => {
-      const day = currentDay.value;
-      const list = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === day);
-
-      const ids = currentTrip.value ? getOrderIds(currentTrip.value.id, day) : null;
-      if (ids && ids.length) {
-        const map = new Map(list.map(x => [String(x.id), x]));
-        const ordered = [];
-        ids.forEach(id => {
-          const it = map.get(String(id));
-          if (it) ordered.push(it);
-        });
-        list.forEach(it => {
-          if (!ids.includes(String(it.id))) ordered.push(it);
-        });
-        return ordered;
-      }
-
-      return list.slice().sort((a,b) => {
-        const ta = timeToNum(a.time);
-        const tb = timeToNum(b.time);
-        if (ta !== tb) return ta - tb;
-        return (a.name||'').localeCompare(b.name||'');
-      });
-    });
+    const filteredItinerary = computed(() => getDayOrderedItems(currentDay.value));
 
     let searchTimeout = null;
 
@@ -2176,7 +2251,7 @@ createApp({
 
         await postJSON({ action:'add', type:'itinerary', data: item });
 
-        const oldIds = getOrderIds(currentTrip.value.id, d) || filteredItinerary.value.map(x => String(x.id));
+        const oldIds = getOrderIds(currentTrip.value.id, d);
         const ids = oldIds.slice();
         ids.push(String(id));
         setOrderIds(currentTrip.value.id, d, ids);
@@ -2192,13 +2267,14 @@ createApp({
 
     const removePlace = async (id) => {
       const i = itinerary.value.findIndex(x => String(x.id) === String(id));
+      const removedDay = i !== -1 ? (itinerary.value[i].day ? parseInt(itinerary.value[i].day,10) : 1) : currentDay.value;
       if(i !== -1) itinerary.value.splice(i, 1);
 
       await postJSON({ action:'del', type:'itinerary', id });
 
-      const ids = (getOrderIds(currentTrip.value.id, currentDay.value) || []).filter(x => String(x) !== String(id));
-      setOrderIds(currentTrip.value.id, currentDay.value, ids);
-      try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
+      const ids = getOrderIds(currentTrip.value.id, removedDay).filter(x => String(x) !== String(id));
+      setOrderIds(currentTrip.value.id, removedDay, ids);
+      try { await saveOrderToDB(currentTrip.value.id, removedDay, ids); } catch(e){}
 
       await nextTick();
       scheduleSortableInit();
@@ -2274,6 +2350,7 @@ createApp({
       itinerary.value[idx].time = editPlace.value.time || '';
       itinerary.value[idx].message = editPlace.value.message || '';
       itinerary.value[idx].day = newDay;
+      if (oldDay !== newDay) itinerary.value[idx].order = null;
 
       isLoading.value = true;
       try {
@@ -2291,14 +2368,12 @@ createApp({
         });
 
         if (oldDay !== newDay) {
-          const oldIds = (getOrderIds(currentTrip.value.id, oldDay) || []).filter(x => String(x) !== String(id));
+          const oldIds = getOrderIds(currentTrip.value.id, oldDay).filter(x => String(x) !== String(id));
           setOrderIds(currentTrip.value.id, oldDay, oldIds);
           try { await saveOrderToDB(currentTrip.value.id, oldDay, oldIds); } catch(e) {}
 
-          const newIds = getOrderIds(currentTrip.value.id, newDay) || [];
-          if (!newIds.includes(String(id))) {
-            newIds.push(String(id));
-          }
+          const newIds = getOrderIds(currentTrip.value.id, newDay).filter(x => String(x) !== String(id));
+          newIds.push(String(id));
           setOrderIds(currentTrip.value.id, newDay, newIds);
           try { await saveOrderToDB(currentTrip.value.id, newDay, newIds); } catch(e) {}
 
@@ -2461,24 +2536,7 @@ createApp({
         const label = dayLabel(d);
         if (label) text += ` | ${label}`;
         text += `\n`;
-        const base = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === d);
-        const ids = getOrderIds(currentTrip.value.id, d);
-        let dayItems = base.slice();
-
-        if (ids && ids.length) {
-          const map = new Map(dayItems.map(x => [String(x.id), x]));
-          const ordered = [];
-          ids.forEach(id => {
-            const it = map.get(String(id));
-            if (it) ordered.push(it);
-          });
-          dayItems.forEach(it => {
-            if (!ids.includes(String(it.id))) ordered.push(it);
-          });
-          dayItems = ordered;
-        } else {
-          dayItems = dayItems.sort((a,b) => timeToNum(a.time) - timeToNum(b.time));
-        }
+        const dayItems = getDayOrderedItems(d);
 
         if(dayItems.length === 0) {
           text += "  (無行程)\n\n";
