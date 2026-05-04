@@ -731,9 +731,9 @@
 
           <button
             @click="addExpense"
-            class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow active:scale-95 transition text-lg"
-            :disabled="isLoading"
-          >記帳</button>
+            class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow transition text-lg disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="isLoading || isAddingExpense"
+          >{{ isAddingExpense ? '寫入中...' : '記帳' }}</button>
         </div>
 
         <div class="space-y-2">
@@ -754,7 +754,20 @@
 
             <div class="flex flex-col items-end gap-1 shrink-0 pl-2">
               <span class="font-bold text-xl text-gray-800 font-mono">${{ exp.amount }}</span>
-              <button @click="removeExpense(idx)" class="text-gray-300 hover:text-red-500 px-2">×</button>
+              <div class="flex items-center gap-1">
+                <button
+                  @click="openEditExpenseModal(exp)"
+                  class="text-gray-300 hover:text-blue-600 px-2"
+                  title="編輯"
+                  :disabled="isSavingExpense"
+                >✏️</button>
+                <button
+                  @click="removeExpense(idx)"
+                  class="text-gray-300 hover:text-red-500 px-2"
+                  title="刪除"
+                  :disabled="isSavingExpense"
+                >×</button>
+              </div>
             </div>
           </div>
         </div>
@@ -868,6 +881,64 @@
       </div>
     </div>
   </div>
+
+  <!-- Edit expense modal -->
+  <div v-if="showEditExpenseModal" class="modal-mask" @click.self="closeEditExpenseModal">
+    <div class="modal-card space-y-3">
+      <div class="font-bold text-gray-800 text-lg">編輯記帳</div>
+
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-gray-500 ml-1">項目</div>
+        <input v-model="editExpense.title" placeholder="項目名稱">
+
+        <div class="text-xs font-bold text-gray-500 ml-1">金額</div>
+        <input v-model.number="editExpense.amount" type="number" placeholder="$" class="font-mono font-bold">
+
+        <div class="text-xs font-bold text-gray-500 ml-1">分類</div>
+        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          <button
+            v-for="cat in categories"
+            :key="'edit-exp-cat-' + cat"
+            @click="editExpense.category = cat"
+            class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition"
+            :class="editExpense.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'"
+          >{{ cat }}</button>
+        </div>
+
+        <div class="text-xs font-bold text-gray-500 ml-1">Day</div>
+        <select v-model.number="editExpense.day">
+          <option v-for="d in totalDays" :key="'edit-exp-day-' + d" :value="d">Day {{ d }}</option>
+        </select>
+
+        <div class="text-xs font-bold text-gray-500 ml-1">付款人</div>
+        <select v-model="editExpense.payer">
+          <option disabled value="">請選擇</option>
+          <option v-for="(p, index) in people" :key="'edit-exp-payer-' + p.id" :value="p.name">
+            {{ p.name || '成員 ' + (index+1) }}
+          </option>
+        </select>
+
+        <div>
+          <span class="text-xs text-gray-500 font-bold block mb-2 ml-1">分攤給</span>
+          <div class="flex flex-wrap gap-2">
+            <label v-for="(p, index) in people" :key="'edit-exp-inv-' + p.id" class="checkbox-wrapper cursor-pointer relative">
+              <input type="checkbox" :value="p.name" v-model="editExpense.involved" class="absolute opacity-0 w-0 h-0">
+              <div class="px-3 py-1.5 rounded-full border border-gray-200 text-sm bg-white transition select-none text-gray-700 hover:bg-gray-50">
+                {{ p.name || '成員 ' + (index+1) }}
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button class="flex-1 border text-gray-600 small-btn active:scale-95" @click="closeEditExpenseModal" :disabled="isSavingExpense">取消</button>
+        <button class="flex-1 bg-blue-600 text-white small-btn active:scale-95 disabled:opacity-60" @click="saveEditExpense" :disabled="isSavingExpense">
+          {{ isSavingExpense ? '儲存中...' : '儲存' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -886,6 +957,7 @@ createApp({
 
     const currentTab = ref('itinerary');
     const isLoading = ref(false);
+    const isAddingExpense = ref(false);
 
     const currentDay = ref(1);
     const totalDays = ref(1);
@@ -942,6 +1014,11 @@ createApp({
     const showEditModal = ref(false);
     const editPlaceId = ref('');
     const editPlace = ref({ name: '', time: '', message: '', day: 1 });
+
+    const showEditExpenseModal = ref(false);
+    const editExpenseId = ref('');
+    const editExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
+    const isSavingExpense = ref(false);
 
     const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
@@ -2433,25 +2510,137 @@ createApp({
     });
 
     const addExpense = async () => {
-      if (!newExpense.value.title || !newExpense.value.amount) return;
-      const uid = generateId();
-      const d = normalizeExpenseRecord({
-        id: uid,
-        ...newExpense.value,
-        day: newExpense.value.day || currentDay.value || 1,
-        involved: [...newExpense.value.involved],
-        trip_id: currentTrip.value.id
-      });
-      expenses.value.unshift(d);
-      await postJSON({ action:'add', type:'expenses', data: { ...d, involved: d.involved.join(',') } });
-      newExpense.value = {
-        title: '',
-        amount: '',
-        payer: people.value[0]?.name || '',
-        involved: people.value.map(p => p.name),
-        category: '飲食',
-        day: currentDay.value || 1
+      if (isAddingExpense.value) return;
+
+      const title = String(newExpense.value.title || '').trim();
+      const amount = Number(newExpense.value.amount || 0);
+
+      if (!title || amount <= 0) return;
+      if (!currentTrip.value?.id) return;
+
+      isAddingExpense.value = true;
+
+      try {
+        const uid = generateId();
+        const d = normalizeExpenseRecord({
+          id: uid,
+          ...newExpense.value,
+          title,
+          amount,
+          day: newExpense.value.day || currentDay.value || 1,
+          involved: [...newExpense.value.involved],
+          trip_id: currentTrip.value.id
+        });
+
+        const res = await postJSON({
+          action: 'add',
+          type: 'expenses',
+          data: {
+            ...d,
+            involved: d.involved.join(',')
+          }
+        });
+
+        if (res && res.status === 'error') {
+          console.error('add expense failed:', res.message || res);
+          alert('記帳失敗，請稍後再試');
+          return;
+        }
+
+        expenses.value.unshift(d);
+        scheduleTripCacheSave();
+
+        newExpense.value = {
+          title: '',
+          amount: '',
+          payer: people.value[0]?.name || '',
+          involved: people.value.map(p => p.name),
+          category: '飲食',
+          day: currentDay.value || 1
+        };
+      } catch (err) {
+        console.error('addExpense error:', err);
+        alert('記帳失敗，請稍後再試');
+      } finally {
+        isAddingExpense.value = false;
+      }
+    };
+
+    const openEditExpenseModal = (exp) => {
+      if (!exp || !exp.id) return;
+
+      editExpenseId.value = String(exp.id);
+      editExpense.value = {
+        title: String(exp.title || ''),
+        amount: Number(exp.amount) || '',
+        payer: String(exp.payer || ''),
+        involved: normalizeInvolved(exp.involved),
+        category: exp.category || '飲食',
+        day: exp.day ? parseInt(exp.day, 10) || 1 : 1
       };
+      showEditExpenseModal.value = true;
+    };
+
+    const closeEditExpenseModal = () => {
+      if (isSavingExpense.value) return;
+      showEditExpenseModal.value = false;
+    };
+
+    const saveEditExpense = async () => {
+      if (isSavingExpense.value) return;
+      if (!currentTrip.value?.id) return;
+
+      const id = editExpenseId.value;
+      if (!id) return;
+
+      const idx = expenses.value.findIndex(x => String(x.id) === String(id));
+      if (idx < 0) {
+        showEditExpenseModal.value = false;
+        return;
+      }
+
+      const title = String(editExpense.value.title || '').trim();
+      const amount = Number(editExpense.value.amount || 0);
+      if (!title || amount <= 0) return;
+
+      isSavingExpense.value = true;
+
+      try {
+        const updated = normalizeExpenseRecord({
+          ...expenses.value[idx],
+          ...editExpense.value,
+          id,
+          title,
+          amount,
+          day: editExpense.value.day || 1,
+          involved: normalizeInvolved(editExpense.value.involved),
+          trip_id: currentTrip.value.id
+        });
+
+        const res = await postJSON({
+          action: 'edit',
+          type: 'expenses',
+          data: {
+            ...updated,
+            involved: updated.involved.join(',')
+          }
+        });
+
+        if (res && res.status === 'error') {
+          console.error('edit expense failed:', res.message || res);
+          alert('記帳修改失敗，請稍後再試');
+          return;
+        }
+
+        expenses.value.splice(idx, 1, updated);
+        scheduleTripCacheSave();
+        showEditExpenseModal.value = false;
+      } catch (err) {
+        console.error('saveEditExpense error:', err);
+        alert('記帳修改失敗，請稍後再試');
+      } finally {
+        isSavingExpense.value = false;
+      }
     };
 
     const removeExpense = async (expenseRef) => {
@@ -2620,7 +2809,7 @@ createApp({
 
     return {
       currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, isLoading,
+      currentTab, isLoading, isAddingExpense, isSavingExpense,
       currentDay, totalDays,
       people, itinerary, expenses, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
@@ -2641,7 +2830,7 @@ createApp({
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
 
-      addExpense, removeExpense, addPerson, removePerson,
+      addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
@@ -2649,7 +2838,9 @@ createApp({
       exportItinerary, isKoreaTrip,
 
       showEditModal, editPlace,
-      openEditModal, closeEditModal, saveEditPlace
+      openEditModal, closeEditModal, saveEditPlace,
+      showEditExpenseModal, editExpense,
+      openEditExpenseModal, closeEditExpenseModal, saveEditExpense
     };
   }
 }).mount('#app');
