@@ -786,6 +786,75 @@
           class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
         ><span>📋</span> 複製行程</button>
 
+        <h3 class="font-bold text-gray-700 mt-6 ml-1">🏨 住宿設定</h3>
+        <div class="card border border-purple-100 space-y-3 relative z-30">
+          <div class="text-xs text-gray-500 leading-5">
+            住宿只會作為地圖參考點顯示，不會影響行程排序與導航。
+          </div>
+
+          <div class="relative">
+            <input
+              v-model="hotelSearchQuery"
+              @input="searchHotelPlacesInput"
+              @focus="searchHotelPlacesInput"
+              placeholder="搜尋住宿名稱或地址"
+              class="font-bold"
+            >
+
+            <div v-if="hotelSearchQuery.length > 0 && (hotelSearchResults.length > 0 || hotelIsSearching)" class="suggestions-list">
+              <div v-if="hotelIsSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+
+              <div
+                v-for="item in hotelSearchResults"
+                :key="'hotel-' + item.place_id"
+                @click="selectHotelPlace(item)"
+                class="suggestion-item hover:bg-purple-50"
+              >
+                <span class="text-xl">🏨</span>
+                <div class="overflow-hidden">
+                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            <select v-model.number="newHotel.start_day" class="flex-1">
+              <option v-for="d in totalDays" :key="'hotel-start-' + d" :value="d">Day {{ d }} 起</option>
+            </select>
+            <select v-model.number="newHotel.end_day" class="flex-1">
+              <option v-for="d in totalDays" :key="'hotel-end-' + d" :value="d">Day {{ d }} 迄</option>
+            </select>
+          </div>
+
+          <button
+            @click="addHotel"
+            class="w-full bg-purple-600 text-white h-[54px] rounded-xl font-bold shadow transition text-lg disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="isLoading || isAddingHotel"
+          >{{ isAddingHotel ? '寫入中...' : '新增住宿' }}</button>
+        </div>
+
+        <div v-if="hotels.length" class="space-y-2">
+          <div
+            v-for="hotel in hotels"
+            :key="hotel.id"
+            class="flex justify-between items-start gap-3 p-3 bg-white rounded border border-purple-100 shadow-sm"
+          >
+            <div class="min-w-0">
+              <div class="font-bold text-gray-800 break-words">🏨 {{ hotel.name }}</div>
+              <div class="text-xs text-gray-500 mt-1 break-words">
+                {{ hotelDayRangeLabel(hotel) }}<span v-if="hotel.address">｜{{ hotel.address }}</span>
+              </div>
+            </div>
+            <button
+              @click="removeHotel(hotel.id)"
+              class="text-red-400 font-bold px-2 shrink-0"
+              :disabled="isDeletingHotel"
+            >刪除</button>
+          </div>
+        </div>
+
         <h3 class="font-bold text-gray-700 mt-6 ml-1">👥 成員管理</h3>
         <div class="flex gap-2">
           <input v-model="newPerson" placeholder="名字" class="flex-1">
@@ -965,6 +1034,7 @@ createApp({
     const people = ref([]);
     const itinerary = ref([]);
     const expenses = ref([]);
+    const hotels = ref([]);
 
     const newPlace = ref('');
     const newTime = ref('');
@@ -1002,6 +1072,15 @@ createApp({
     let infoWindow = null;
     let autocompleteService = null;
     let mapSearchTimeout = null;
+
+    const newHotel = ref({ start_day: 1, end_day: 1 });
+    const hotelSearchQuery = ref('');
+    const hotelSearchResults = ref([]);
+    const hotelIsSearching = ref(false);
+    const hotelSelectedPlaceData = ref(null);
+    const isAddingHotel = ref(false);
+    const isDeletingHotel = ref(false);
+    let hotelSearchTimeout = null;
 
     const itineraryListEl = ref(null);
     let sortable = null;
@@ -1085,6 +1164,41 @@ createApp({
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       order: normalizeOrderValue(item?.order)
     });
+
+    const normalizeHotelRecord = (item) => ({
+      ...item,
+      start_day: item?.start_day ? parseInt(item.start_day, 10) || 1 : 1,
+      end_day: item?.end_day ? parseInt(item.end_day, 10) || 1 : 1,
+      lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
+      lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
+      name: String(item?.name || '').trim(),
+      address: String(item?.address || '').trim(),
+      place_id: String(item?.place_id || '').trim()
+    });
+
+    const isHotelActiveOnDay = (hotel, day) => {
+      const d = parseInt(day, 10) || 1;
+      const start = parseInt(hotel?.start_day, 10) || 1;
+      const end = parseInt(hotel?.end_day, 10) || start;
+      return d >= Math.min(start, end) && d <= Math.max(start, end);
+    };
+
+    const hotelDayRangeLabel = (hotel) => {
+      const start = parseInt(hotel?.start_day, 10) || 1;
+      const end = parseInt(hotel?.end_day, 10) || start;
+      return start === end ? `Day ${start}` : `Day ${Math.min(start, end)} ~ Day ${Math.max(start, end)}`;
+    };
+
+    const hasHotelOverlap = (startDay, endDay, exceptId = '') => {
+      const s = Math.min(parseInt(startDay, 10) || 1, parseInt(endDay, 10) || 1);
+      const e = Math.max(parseInt(startDay, 10) || 1, parseInt(endDay, 10) || 1);
+      return hotels.value.some(h => {
+        if (exceptId && String(h.id) === String(exceptId)) return false;
+        const hs = Math.min(parseInt(h.start_day, 10) || 1, parseInt(h.end_day, 10) || 1);
+        const he = Math.max(parseInt(h.start_day, 10) || 1, parseInt(h.end_day, 10) || 1);
+        return s <= he && e >= hs;
+      });
+    };
 
     const sortDayItemsByStoredOrder = (list) => {
       return list.slice().sort((a, b) => {
@@ -1233,6 +1347,7 @@ createApp({
           itinerary: itinerary.value,
           expenses: expenses.value,
           people: people.value,
+          hotels: hotels.value,
           trip: currentTrip.value,
           ts: Date.now()
         }));
@@ -1249,6 +1364,7 @@ createApp({
         itinerary.value = Array.isArray(c.itinerary) ? c.itinerary.map(normalizeItineraryRecord) : [];
         expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
         people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
+        hotels.value    = Array.isArray(c.hotels) ? c.hotels.map(normalizeHotelRecord) : [];
 
         if (c.trip) currentTrip.value = { ...currentTrip.value, ...c.trip };
 
@@ -1585,6 +1701,53 @@ createApp({
         hasPoint = true;
       });
 
+
+      let hotelsToRender = hotels.value.filter(hotel => hotel.lat != null && hotel.lng != null);
+      if (displayDay) {
+        hotelsToRender = hotelsToRender.filter(hotel => isHotelActiveOnDay(hotel, displayDay));
+      }
+
+      hotelsToRender.forEach(hotel => {
+        const marker = new google.maps.Marker({
+          position: { lat: Number(hotel.lat), lng: Number(hotel.lng) },
+          map: mapInstance,
+          label: { text: '🏨', fontSize: '16px' },
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 17,
+            fillColor: '#7c3aed',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2
+          },
+          zIndex: 900,
+          title: hotel.name || '住宿'
+        });
+
+        marker.addListener('click', () => {
+          const link = getExternalMapLink({
+            name: hotel.name || '住宿',
+            lat: hotel.lat,
+            lng: hotel.lng,
+            place_id: hotel.place_id || ''
+          });
+
+          infoWindow.setContent(
+            `<div style="padding:6px; color:#111; max-width:220px;">
+              <b>🏨 ${escapeHtml(hotel.name || '住宿')}</b><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(hotelDayRangeLabel(hotel))}</span><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(hotel.address || '')}</span><br/>
+              <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
+            </div>`
+          );
+          infoWindow.open(mapInstance, marker);
+        });
+
+        markers.push(marker);
+        bounds.extend(marker.getPosition());
+        hasPoint = true;
+      });
+
       const routeItems = itemsToRender.slice().sort((a, b) => {
         const dayDiff = (a.day ? parseInt(a.day,10) : 1) - (b.day ? parseInt(b.day,10) : 1);
         if (dayDiff !== 0) return dayDiff;
@@ -1864,6 +2027,11 @@ createApp({
       itinerary.value = [];
       expenses.value = [];
       people.value = [];
+      hotels.value = [];
+      hotelSearchQuery.value = '';
+      hotelSearchResults.value = [];
+      hotelSelectedPlaceData.value = null;
+      newHotel.value = { start_day: 1, end_day: 1 };
       currentDay.value = 1;
       totalDays.value = 1;
       mapSearchQuery.value = '';
@@ -1899,7 +2067,7 @@ createApp({
     };
 
     const deleteTripTotally = async () => {
-      if(!confirm('確定移除？')) return;
+      if(!confirm('確定刪除此旅程？此操作無法復原。')) return;
       await postJSON({ action: 'del', type: 'trips', id: currentTrip.value.id });
       exitTrip();
       await fetchTrips();
@@ -1923,10 +2091,12 @@ createApp({
         const itin = Array.isArray(data?.itinerary) ? data.itinerary : [];
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
+        const htl  = Array.isArray(data?.hotels) ? data.hotels : [];
 
         itinerary.value = itin.map(normalizeItineraryRecord);
         expenses.value = exp.map(normalizeExpenseRecord);
         people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
+        hotels.value = htl.map(normalizeHotelRecord);
 
         if (trip) {
           currentTrip.value = { ...currentTrip.value, ...trip };
@@ -2335,6 +2505,8 @@ createApp({
     };
 
     const removePlace = async (id) => {
+      if (!confirm('確定刪除此行程？')) return;
+
       const i = itinerary.value.findIndex(x => String(x.id) === String(id));
       const removedDay = i !== -1 ? (itinerary.value[i].day ? parseInt(itinerary.value[i].day,10) : 1) : currentDay.value;
       if(i !== -1) itinerary.value.splice(i, 1);
@@ -2509,6 +2681,186 @@ createApp({
       return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
     });
 
+
+    const clearHotelSearchDropdown = () => {
+      hotelSearchResults.value = [];
+      hotelIsSearching.value = false;
+    };
+
+    const searchHotelPlacesInput = async () => {
+      const q = hotelSearchQuery.value.trim();
+
+      if (!q) {
+        clearHotelSearchDropdown();
+        hotelSelectedPlaceData.value = null;
+        return;
+      }
+
+      hotelIsSearching.value = true;
+      if (hotelSearchTimeout) clearTimeout(hotelSearchTimeout);
+
+      hotelSearchTimeout = setTimeout(async () => {
+        try {
+          if (!window.google || !window.google.maps) {
+            await loadGoogleMaps();
+          }
+
+          if (!autocompleteService) {
+            autocompleteService = new google.maps.places.AutocompleteService();
+          }
+
+          autocompleteService.getPlacePredictions(
+            {
+              input: q,
+              language: 'zh-TW',
+              types: ['establishment']
+            },
+            (predictions, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                hotelSearchResults.value = predictions;
+              } else {
+                hotelSearchResults.value = [];
+              }
+              hotelIsSearching.value = false;
+            }
+          );
+        } catch (err) {
+          console.error(err);
+          hotelSearchResults.value = [];
+          hotelIsSearching.value = false;
+        }
+      }, 300);
+    };
+
+    const selectHotelPlace = (item) => {
+      hotelSearchQuery.value = item.structured_formatting?.main_text || '';
+      hotelSelectedPlaceData.value = item;
+      clearHotelSearchDropdown();
+    };
+
+    const addHotel = async () => {
+      if (isAddingHotel.value) return;
+      if (!currentTrip.value?.id) return;
+
+      const startDay = parseInt(newHotel.value.start_day, 10) || 1;
+      const endDay = parseInt(newHotel.value.end_day, 10) || startDay;
+      const safeStart = Math.min(startDay, endDay);
+      const safeEnd = Math.max(startDay, endDay);
+      const keyword = hotelSearchQuery.value.trim();
+
+      if (!keyword && !hotelSelectedPlaceData.value?.place_id) {
+        alert('請先搜尋並選擇住宿地點');
+        return;
+      }
+
+      if (hasHotelOverlap(safeStart, safeEnd)) {
+        alert('住宿區間與既有住宿重疊，請調整 Day 起迄');
+        return;
+      }
+
+      isAddingHotel.value = true;
+
+      try {
+        let placeId = hotelSelectedPlaceData.value?.place_id || '';
+        let displayName = keyword;
+        let address = '';
+        let lat = null;
+        let lng = null;
+
+        if (placeId) {
+          const place = await getPlaceDetails(placeId, 'zh-TW');
+          if (place) {
+            displayName = place.name || displayName;
+            address = place.formatted_address || '';
+            if (place.geometry?.location) {
+              lat = place.geometry.location.lat();
+              lng = place.geometry.location.lng();
+            }
+          }
+        }
+
+        if ((lat == null || lng == null) && window.google && keyword) {
+          const geocoder = new google.maps.Geocoder();
+          await new Promise((resolve) => {
+            geocoder.geocode(
+              { address: keyword + (currentTrip.value?.city ? ' ' + currentTrip.value.city : '') },
+              (results, status) => {
+                if (status === 'OK' && results && results[0]) {
+                  displayName = results[0].name || displayName;
+                  address = results[0].formatted_address || address;
+                  lat = results[0].geometry.location.lat();
+                  lng = results[0].geometry.location.lng();
+                  placeId = results[0].place_id || placeId;
+                }
+                resolve();
+              }
+            );
+          });
+        }
+
+        if (lat == null || lng == null) {
+          alert('找不到住宿座標，請重新選擇地點');
+          return;
+        }
+
+        const item = normalizeHotelRecord({
+          id: generateId(),
+          trip_id: currentTrip.value.id,
+          name: displayName || keyword || '住宿',
+          start_day: safeStart,
+          end_day: safeEnd,
+          lat,
+          lng,
+          place_id: placeId,
+          address,
+          note: ''
+        });
+
+        const res = await postJSON({ action: 'add', type: 'hotels', data: item });
+        if (res && res.status === 'error') {
+          console.error('add hotel failed:', res.message || res);
+          alert('住宿新增失敗，請確認後端已加入 hotels 支援');
+          return;
+        }
+
+        hotels.value.push(item);
+        hotelSearchQuery.value = '';
+        hotelSelectedPlaceData.value = null;
+        newHotel.value = { start_day: safeEnd < totalDays.value ? safeEnd + 1 : safeStart, end_day: safeEnd < totalDays.value ? safeEnd + 1 : safeEnd };
+        clearHotelSearchDropdown();
+        scheduleTripCacheSave();
+        updateMapMarkers();
+      } catch (err) {
+        console.error('addHotel error:', err);
+        alert('住宿新增失敗，請稍後再試');
+      } finally {
+        isAddingHotel.value = false;
+      }
+    };
+
+    const removeHotel = async (id) => {
+      if (isDeletingHotel.value) return;
+      const idx = hotels.value.findIndex(h => String(h.id) === String(id));
+      const item = idx >= 0 ? hotels.value[idx] : null;
+      if (!item?.id) return;
+      if (!confirm('確定刪除此住宿設定？')) return;
+
+      isDeletingHotel.value = true;
+      try {
+        const res = await postJSON({ action: 'del', type: 'hotels', id: item.id });
+        if (res && res.status === 'error') {
+          console.error('delete hotel failed:', res.message || res);
+          alert('住宿刪除失敗，請稍後再試');
+          return;
+        }
+        hotels.value.splice(idx, 1);
+        scheduleTripCacheSave();
+        updateMapMarkers();
+      } finally {
+        isDeletingHotel.value = false;
+      }
+    };
+
     const addExpense = async () => {
       if (isAddingExpense.value) return;
 
@@ -2652,6 +3004,7 @@ createApp({
       }
       const item = idx >= 0 ? expenses.value[idx] : null;
       if (!item?.id) return;
+      if (!confirm('確定刪除此筆記帳？')) return;
       expenses.value.splice(idx, 1);
       await postJSON({ action:'del', type:'expenses', id: item.id });
     };
@@ -2669,7 +3022,7 @@ createApp({
 
     const removePerson = async (idx) => {
       const item = people.value[idx];
-      if (!item?.id || !confirm('移除？')) return;
+      if (!item?.id || !confirm('確定移除此成員？')) return;
       people.value.splice(idx, 1);
       await postJSON({ action:'del', type:'people', id: item.id });
     };
@@ -2797,7 +3150,7 @@ createApp({
         clearMapSearchResult();
       }
     });
-    watch([itinerary, expenses, people], () => scheduleTripCacheSave(), { deep: true });
+    watch([itinerary, expenses, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
@@ -2811,11 +3164,12 @@ createApp({
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, isLoading, isAddingExpense, isSavingExpense,
       currentDay, totalDays,
-      people, itinerary, expenses, filteredItinerary,
+      people, itinerary, expenses, hotels, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
       searchResults, isSearching, isCoordinateMode, resolvedCoordName,
       mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
       mapLatestResult, mapAddDay, mapDisplayFilter,
+      newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
@@ -2829,6 +3183,7 @@ createApp({
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
+      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel, hotelDayRangeLabel,
 
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
