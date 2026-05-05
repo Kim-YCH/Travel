@@ -738,7 +738,7 @@
 
         <div class="space-y-2">
           <div
-            v-for="(exp, idx) in expenses"
+            v-for="(exp, idx) in filteredExpenses"
             :key="exp.id"
             class="card flex justify-between items-center py-3 border-l-4 border-gray-300"
           >
@@ -762,7 +762,7 @@
                   :disabled="isSavingExpense"
                 >✏️</button>
                 <button
-                  @click="removeExpense(idx)"
+                  @click="removeExpense(exp.id)"
                   class="text-gray-300 hover:text-red-500 px-2"
                   title="刪除"
                   :disabled="isSavingExpense"
@@ -1152,6 +1152,21 @@ createApp({
       category: item?.category || '其他',
       payer: item?.payer || ''
     });
+
+    // 公帳規則：只要「分攤給」包含公帳，就視為放入公帳。
+    // 這類紀錄仍保留在分帳計算中，但不顯示於前端支出列表，也不納入總支出/消費分析。
+    const PUBLIC_ACCOUNT_NAME = '公帳';
+    const normalizePersonName = (name) => String(name || '').trim();
+    const isPublicAccountFund = (expense) => {
+      const involved = normalizeInvolved(expense?.involved).map(normalizePersonName);
+      return involved.includes(PUBLIC_ACCOUNT_NAME);
+    };
+    const expenseCreatedTime = (expense) => {
+      const fromId = parseInt(String(expense?.id || '').split('_')[0], 10);
+      if (Number.isFinite(fromId)) return fromId;
+      const fromDate = Date.parse(expense?.created_at || expense?.updated_at || '');
+      return Number.isFinite(fromDate) ? fromDate : 0;
+    };
 
     const normalizeOrderValue = (value) => {
       if (value === '' || value == null) return null;
@@ -2630,6 +2645,13 @@ createApp({
       }
     };
 
+    const normalExpenseRecords = computed(() => {
+      return expenses.value
+        .filter(e => !isPublicAccountFund(e))
+        .slice()
+        .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
+    });
+
     const hasExpenseFilters = computed(() =>
       expenseFilter.value.day !== 'all' ||
       expenseFilter.value.category !== 'all' ||
@@ -2639,12 +2661,12 @@ createApp({
     const moneyDays = computed(() => {
       const set = new Set();
       for (let d = 1; d <= totalDays.value; d++) set.add(d);
-      expenses.value.forEach(e => set.add(e.day ? parseInt(e.day, 10) || 1 : 1));
+      normalExpenseRecords.value.forEach(e => set.add(e.day ? parseInt(e.day, 10) || 1 : 1));
       return Array.from(set).sort((a, b) => a - b);
     });
 
     const filteredExpenses = computed(() => {
-      return expenses.value.filter(e => {
+      return normalExpenseRecords.value.filter(e => {
         const dayOk = expenseFilter.value.day === 'all' || String(e.day || 1) === String(expenseFilter.value.day);
         const catOk = expenseFilter.value.category === 'all' || (e.category || '其他') === expenseFilter.value.category;
         const payerOk = expenseFilter.value.payer === 'all' || e.payer === expenseFilter.value.payer;
@@ -3027,7 +3049,7 @@ createApp({
       await postJSON({ action:'del', type:'people', id: item.id });
     };
 
-    const totalExpense = computed(() => expenses.value.reduce((s,i) => s + (Number(i.amount) || 0), 0));
+    const totalExpense = computed(() => normalExpenseRecords.value.reduce((s,i) => s + (Number(i.amount) || 0), 0));
 
     const balanceSheet = computed(() => {
       if(!people.value.length) return [];
@@ -3054,7 +3076,7 @@ createApp({
 
     const categoryAnalysis = computed(() => {
       const stats = {};
-      expenses.value.forEach(e => {
+      normalExpenseRecords.value.forEach(e => {
         const cat = e.category || '未分類';
         stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
       });
