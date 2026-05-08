@@ -458,8 +458,8 @@
             >
             <button
               @click="addPlace"
-              class="bg-blue-600 text-white w-[54px] h-[54px] rounded-xl text-3xl shadow active:scale-95 transition flex items-center justify-center pb-1 flex-shrink-0"
-              :disabled="isLoading"
+              class="bg-blue-600 text-white w-[54px] h-[54px] rounded-xl text-3xl shadow active:scale-95 transition flex items-center justify-center pb-1 flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+              :disabled="isAddingPlace"
             >+</button>
 
             <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
@@ -639,7 +639,11 @@
               <select v-model.number="mapAddDay" class="flex-1 h-[46px]">
                 <option v-for="d in totalDays" :key="'map-add-day-' + d" :value="d">加入 Day {{ d }}</option>
               </select>
-              <button @click="addMapSearchResultToItinerary" class="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm shrink-0">加入行程</button>
+              <button
+                @click="addMapSearchResultToItinerary"
+                class="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                :disabled="isAddingMapPlace"
+              >加入行程</button>
             </div>
           </div>
         </div>
@@ -732,8 +736,8 @@
           <button
             @click="addExpense"
             class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow transition text-lg disabled:opacity-60 disabled:cursor-not-allowed"
-            :disabled="isLoading || isAddingExpense"
-          >{{ isAddingExpense ? '寫入中...' : '記帳' }}</button>
+            :disabled="isAddingExpense"
+          >記帳</button>
         </div>
 
         <div class="space-y-2">
@@ -1026,6 +1030,8 @@ createApp({
 
     const currentTab = ref('itinerary');
     const isLoading = ref(false);
+    const isAddingPlace = ref(false);
+    const isAddingMapPlace = ref(false);
     const isAddingExpense = ref(false);
 
     const currentDay = ref(1);
@@ -1802,7 +1808,13 @@ createApp({
     };
 
     const addMapSearchResultToItinerary = async () => {
+      if (isAddingMapPlace.value) return;
       if (!currentTrip.value || !mapLatestResult.value) return;
+
+      isAddingMapPlace.value = true;
+      setTimeout(() => {
+        isAddingMapPlace.value = false;
+      }, 500);
 
       const id = generateId();
       const d = mapAddDay.value || currentDay.value || 1;
@@ -1820,26 +1832,43 @@ createApp({
         trip_id: currentTrip.value.id
       };
 
-      isLoading.value = true;
+      const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
+      const ids = oldIds.slice();
+      ids.push(String(id));
+
+      itinerary.value.push(item);
+      setOrderIds(currentTrip.value.id, d, ids);
+      currentDay.value = d;
+      mapDisplayFilter.value = `day-${d}`;
+      clearMapSearchResult();
+
+      await nextTick();
+      scheduleSortableInit();
+      updateMapMarkers();
+      scheduleTripCacheSave();
+
       try {
-        itinerary.value.push(item);
-        await postJSON({ action:'add', type:'itinerary', data: item });
-
-        const oldIds = getOrderIds(currentTrip.value.id, d) || itinerary.value
-          .filter(x => (x.day ? parseInt(x.day,10) : 1) === d)
-          .map(x => String(x.id))
-          .filter(x => x !== String(id));
-        const ids = oldIds.slice();
-        ids.push(String(id));
-        setOrderIds(currentTrip.value.id, d, ids);
+        const res = await postJSON({ action:'add', type:'itinerary', data: item });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'add itinerary failed');
+        }
         await saveOrderToDB(currentTrip.value.id, d, ids);
+      } catch (err) {
+        console.error('add map itinerary sync failed:', err);
 
-        currentDay.value = d;
-        mapDisplayFilter.value = `day-${d}`;
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) itinerary.value.splice(idx, 1);
+
+        const rollbackIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
+        setOrderIds(currentTrip.value.id, d, rollbackIds);
+        try { await saveOrderToDB(currentTrip.value.id, d, rollbackIds); } catch(e) {}
+
+        await nextTick();
         scheduleSortableInit();
         updateMapMarkers();
-      } finally {
-        isLoading.value = false;
+        scheduleTripCacheSave();
+
+        alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
       }
     };
 
@@ -2418,22 +2447,71 @@ createApp({
     };
 
     const addPlace = async () => {
+      if (isAddingPlace.value) return;
       if(!currentTrip.value) return;
+
       const placeName = newPlace.value.trim();
       if(!placeName) return;
 
-      isLoading.value = true;
-      try {
-        const id = generateId();
-        const d = currentDay.value;
+      isAddingPlace.value = true;
+      setTimeout(() => {
+        isAddingPlace.value = false;
+      }, 500);
 
-        let lat = null, lng = null, placeId = '';
+      const id = generateId();
+      const d = currentDay.value;
+      const selectedPlaceSnapshot = selectedPlaceData.value ? { ...selectedPlaceData.value } : null;
+      const selectedLatSnapshot = selectedLat.value;
+      const selectedLngSnapshot = selectedLng.value;
+      const noteSnapshot = newNote.value || '';
+      const timeSnapshot = newTime.value || '';
+
+      const item = {
+        id,
+        name: placeName,
+        name_ko: '',
+        address: '',
+        day: d,
+        lat: selectedLatSnapshot != null ? selectedLatSnapshot : null,
+        lng: selectedLngSnapshot != null ? selectedLngSnapshot : null,
+        place_id: selectedPlaceSnapshot?.place_id || '',
+        message: noteSnapshot,
+        time: timeSnapshot,
+        trip_id: currentTrip.value.id
+      };
+
+      const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
+      const ids = oldIds.slice();
+      ids.push(String(id));
+
+      itinerary.value.push(item);
+      setOrderIds(currentTrip.value.id, d, ids);
+
+      newPlace.value = '';
+      newNote.value = '';
+      newTime.value = '';
+      selectedPlaceData.value = null;
+      searchResults.value = [];
+      selectedLat.value = null;
+      selectedLng.value = null;
+      isCoordinateMode.value = false;
+      resolvedCoordName.value = '';
+
+      await nextTick();
+      scheduleSortableInit();
+      updateMapMarkers();
+      scheduleTripCacheSave();
+
+      try {
+        let lat = item.lat;
+        let lng = item.lng;
+        let placeId = item.place_id || '';
         let displayName = placeName;
         let nameKo = '';
         let address = '';
 
-        if (selectedPlaceData.value?.place_id) {
-          placeId = selectedPlaceData.value.place_id;
+        if (selectedPlaceSnapshot?.place_id) {
+          placeId = selectedPlaceSnapshot.place_id;
 
           const normalPlace = await getPlaceDetails(placeId, 'zh-TW');
           if (normalPlace) {
@@ -2456,9 +2534,9 @@ createApp({
               }
             }
           }
-        } else if (selectedLat.value != null && selectedLng.value != null) {
-          lat = selectedLat.value;
-          lng = selectedLng.value;
+        } else if (selectedLatSnapshot != null && selectedLngSnapshot != null) {
+          lat = selectedLatSnapshot;
+          lng = selectedLngSnapshot;
           placeId = '';
         } else if (window.google) {
           const geocoder = new google.maps.Geocoder();
@@ -2478,44 +2556,50 @@ createApp({
           });
         }
 
-        const item = {
+        const updatedItem = {
           id,
           name: displayName || placeName,
           name_ko: nameKo || '',
           address: address || '',
           day: d,
-          lat, lng,
+          lat,
+          lng,
           place_id: placeId,
-          message: newNote.value || '',
-          time: newTime.value || '',
-          trip_id: currentTrip.value.id
+          message: noteSnapshot,
+          time: timeSnapshot,
+          trip_id: currentTrip.value.id,
+          order: item.order
         };
 
-        itinerary.value.push(item);
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) {
+          itinerary.value.splice(idx, 1, updatedItem);
+        }
 
-        newPlace.value = '';
-        newNote.value = '';
-        newTime.value = '';
-        selectedPlaceData.value = null;
-        searchResults.value = [];
-        selectedLat.value = null;
-        selectedLng.value = null;
-        isCoordinateMode.value = false;
-        resolvedCoordName.value = '';
+        const res = await postJSON({ action:'add', type:'itinerary', data: updatedItem });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'add itinerary failed');
+        }
 
-        await postJSON({ action:'add', type:'itinerary', data: item });
-
-        const oldIds = getOrderIds(currentTrip.value.id, d);
-        const ids = oldIds.slice();
-        ids.push(String(id));
-        setOrderIds(currentTrip.value.id, d, ids);
         await saveOrderToDB(currentTrip.value.id, d, ids);
+        updateMapMarkers();
+        scheduleTripCacheSave();
+      } catch (err) {
+        console.error('addPlace sync failed:', err);
+
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) itinerary.value.splice(idx, 1);
+
+        const rollbackIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
+        setOrderIds(currentTrip.value.id, d, rollbackIds);
+        try { await saveOrderToDB(currentTrip.value.id, d, rollbackIds); } catch(e) {}
 
         await nextTick();
         scheduleSortableInit();
         updateMapMarkers();
-      } finally {
-        isLoading.value = false;
+        scheduleTripCacheSave();
+
+        alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
       }
     };
 
@@ -2893,19 +2977,35 @@ createApp({
       if (!currentTrip.value?.id) return;
 
       isAddingExpense.value = true;
+      setTimeout(() => {
+        isAddingExpense.value = false;
+      }, 500);
+
+      const uid = generateId();
+      const d = normalizeExpenseRecord({
+        id: uid,
+        ...newExpense.value,
+        title,
+        amount,
+        day: newExpense.value.day || currentDay.value || 1,
+        involved: [...newExpense.value.involved],
+        trip_id: currentTrip.value.id
+      });
+
+      // 前端先立即顯示，後端在背景慢慢寫入。
+      expenses.value.unshift(d);
+      scheduleTripCacheSave();
+
+      newExpense.value = {
+        title: '',
+        amount: '',
+        payer: people.value[0]?.name || '',
+        involved: people.value.map(p => p.name),
+        category: '飲食',
+        day: currentDay.value || 1
+      };
 
       try {
-        const uid = generateId();
-        const d = normalizeExpenseRecord({
-          id: uid,
-          ...newExpense.value,
-          title,
-          amount,
-          day: newExpense.value.day || currentDay.value || 1,
-          involved: [...newExpense.value.involved],
-          trip_id: currentTrip.value.id
-        });
-
         const res = await postJSON({
           action: 'add',
           type: 'expenses',
@@ -2916,27 +3016,18 @@ createApp({
         });
 
         if (res && res.status === 'error') {
-          console.error('add expense failed:', res.message || res);
-          alert('記帳失敗，請稍後再試');
-          return;
+          throw new Error(res.message || 'add expense failed');
+        }
+      } catch (err) {
+        console.error('addExpense sync failed:', err);
+
+        const idx = expenses.value.findIndex(x => String(x.id) === String(uid));
+        if (idx !== -1) {
+          expenses.value.splice(idx, 1);
+          scheduleTripCacheSave();
         }
 
-        expenses.value.unshift(d);
-        scheduleTripCacheSave();
-
-        newExpense.value = {
-          title: '',
-          amount: '',
-          payer: people.value[0]?.name || '',
-          involved: people.value.map(p => p.name),
-          category: '飲食',
-          day: currentDay.value || 1
-        };
-      } catch (err) {
-        console.error('addExpense error:', err);
-        alert('記帳失敗，請稍後再試');
-      } finally {
-        isAddingExpense.value = false;
+        alert('記帳寫入失敗，已取消剛剛新增的資料，請稍後再試。');
       }
     };
 
@@ -3184,7 +3275,7 @@ createApp({
 
     return {
       currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, isLoading, isAddingExpense, isSavingExpense,
+      currentTab, isLoading, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
