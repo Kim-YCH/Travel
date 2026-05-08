@@ -413,9 +413,10 @@
         </div>
       </div>
       <button
-        @click="fetchData"
-        class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95"
-      >↻ 同步</button>
+        @click="manualSync"
+        class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95 disabled:opacity-60"
+        :disabled="isLoading"
+      >{{ isLoading ? '同步中' : '↻ 同步' }}</button>
     </header>
 
     <main
@@ -1015,11 +1016,11 @@
 </div>
 
 <script>
-const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+const { createApp, ref, computed, onMounted, onBeforeUnmount, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxbFStntE5GdHD3BNQVaizk4DLkAb92mNoLoy6sbWGqkmnCUmk7UohOlyyT2f7dznz8/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwtuzN1s5GPivl8vUpBijmi32hdJn0nw9R5BUgXIGULv30c_SGOZWuOthDk_BZFNgsY/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -1030,6 +1031,10 @@ createApp({
 
     const currentTab = ref('itinerary');
     const isLoading = ref(false);
+    const isAutoSyncing = ref(false);
+    const AUTO_SYNC_INTERVAL_MS = 60000;
+    let autoSyncTimer = null;
+
     const isAddingPlace = ref(false);
     const isAddingMapPlace = ref(false);
     const isAddingExpense = ref(false);
@@ -1400,10 +1405,51 @@ createApp({
       }
     };
 
+    const pendingWrites = ref([]);
+    const localWriteCount = ref(0);
+
+    const trackWrite = (promise) => {
+      const p = Promise.resolve(promise);
+      pendingWrites.value.push(p);
+
+      const remove = () => {
+        const idx = pendingWrites.value.indexOf(p);
+        if (idx !== -1) pendingWrites.value.splice(idx, 1);
+      };
+
+      p.then(remove, remove);
+      return p;
+    };
+
+    const beginLocalWrite = () => {
+      localWriteCount.value += 1;
+    };
+
+    const endLocalWrite = () => {
+      localWriteCount.value = Math.max(0, localWriteCount.value - 1);
+    };
+
+    const waitPendingWrites = async () => {
+      const jobs = pendingWrites.value.slice();
+      if (jobs.length) await Promise.allSettled(jobs);
+    };
+
+    const waitLocalWrites = async () => {
+      if (localWriteCount.value <= 0) return;
+
+      await new Promise((resolve) => {
+        const check = () => {
+          if (localWriteCount.value <= 0) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+    };
+
     const postJSON = async (payload) => {
       const p = { ...payload };
       if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
-      return await apiGet(p);
+      return await trackWrite(apiGet(p));
     };
 
     const saveTripsCache = () => {
@@ -1815,6 +1861,7 @@ createApp({
       setTimeout(() => {
         isAddingMapPlace.value = false;
       }, 500);
+      beginLocalWrite();
 
       const id = generateId();
       const d = mapAddDay.value || currentDay.value || 1;
@@ -1869,6 +1916,8 @@ createApp({
         scheduleTripCacheSave();
 
         alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
+      } finally {
+        endLocalWrite();
       }
     };
 
@@ -2084,6 +2133,7 @@ createApp({
       clearMapSearchResult();
 
       currentView.value = 'app';
+      startAutoSync();
 
       const tripId = trip.id;
       loadTripCache(tripId);
@@ -2102,6 +2152,7 @@ createApp({
     };
 
     const exitTrip = () => {
+      stopAutoSync();
       currentView.value = 'lobby';
       currentTrip.value = null;
       mapSearchQuery.value = '';
@@ -2117,16 +2168,30 @@ createApp({
       await fetchTrips();
     };
 
-    const fetchData = async () => {
+    const fetchData = async (force = false, options = {}) => {
       if(!currentTrip.value) return;
 
       const tripId = currentTrip.value.id;
       const t_start = performance.now();
-      isLoading.value = true;
+      const silent = options.silent === true;
+
+      if (!silent) {
+        isLoading.value = true;
+      }
 
       try {
         const t_api_start = performance.now();
-        const data = await apiGet({ type:'tripData', tripId });
+        const params = {
+          type: 'tripData',
+          tripId,
+          _ts: Date.now()
+        };
+
+        if (force) {
+          params.force = '1';
+        }
+
+        const data = await apiGet(params);
         const t_api_end = performance.now();
 
         console.log("tripData response ms =", Math.round(t_api_end - t_api_start), data);
@@ -2172,7 +2237,78 @@ createApp({
         saveTripCache(tripId);
       } finally {
         console.log("fetchData total ms =", Math.round(performance.now() - t_start));
-        isLoading.value = false;
+        if (!silent) {
+          isLoading.value = false;
+        }
+      }
+    };
+
+    const isUserEditingNow = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+
+      const tag = String(el.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+
+    const canAutoSync = () => {
+      if (currentView.value !== 'app') return false;
+      if (!currentTrip.value?.id) return false;
+      if (document.visibilityState !== 'visible') return false;
+      if (isLoading.value) return false;
+      if (isAutoSyncing.value) return false;
+      if (pendingWrites.value.length > 0) return false;
+      if (localWriteCount.value > 0) return false;
+      if (isUserEditingNow()) return false;
+      if (showDayModal.value) return false;
+      if (showEditModal.value) return false;
+      if (showEditExpenseModal.value) return false;
+      return true;
+    };
+
+    const autoSyncNow = async () => {
+      if (!canAutoSync()) return;
+
+      isAutoSyncing.value = true;
+      try {
+        await fetchData(true, { silent: true });
+      } catch (err) {
+        console.warn('auto sync failed:', err);
+      } finally {
+        isAutoSyncing.value = false;
+      }
+    };
+
+    const startAutoSync = () => {
+      stopAutoSync();
+      autoSyncTimer = setInterval(() => {
+        autoSyncNow();
+      }, AUTO_SYNC_INTERVAL_MS);
+    };
+
+    const stopAutoSync = () => {
+      if (autoSyncTimer) {
+        clearInterval(autoSyncTimer);
+        autoSyncTimer = null;
+      }
+    };
+
+    const manualSync = async () => {
+      if (!currentTrip.value || isLoading.value) return;
+
+      try {
+        await waitLocalWrites();
+        await waitPendingWrites();
+        await fetchData(true, { silent: false });
+      } catch (err) {
+        console.error('manualSync failed:', err);
+        alert('同步失敗，請稍後再試');
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        autoSyncNow();
       }
     };
 
@@ -2457,6 +2593,7 @@ createApp({
       setTimeout(() => {
         isAddingPlace.value = false;
       }, 500);
+      beginLocalWrite();
 
       const id = generateId();
       const d = currentDay.value;
@@ -2600,6 +2737,8 @@ createApp({
         scheduleTripCacheSave();
 
         alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
+      } finally {
+        endLocalWrite();
       }
     };
 
@@ -2980,6 +3119,7 @@ createApp({
       setTimeout(() => {
         isAddingExpense.value = false;
       }, 500);
+      beginLocalWrite();
 
       const uid = generateId();
       const d = normalizeExpenseRecord({
@@ -3028,6 +3168,8 @@ createApp({
         }
 
         alert('記帳寫入失敗，已取消剛剛新增的資料，請稍後再試。');
+      } finally {
+        endLocalWrite();
       }
     };
 
@@ -3271,11 +3413,17 @@ createApp({
       const hasTripsCache = loadTripsCache();
       console.log('loadTripsCache =', hasTripsCache);
       fetchTrips();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    });
+
+    onBeforeUnmount(() => {
+      stopAutoSync();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     });
 
     return {
       currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, isLoading, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
+      currentTab, isLoading, isAutoSyncing, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
@@ -3284,7 +3432,7 @@ createApp({
       mapLatestResult, mapAddDay, mapDisplayFilter,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
 
-      createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
+      createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData, manualSync,
 
       switchTab, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
 
