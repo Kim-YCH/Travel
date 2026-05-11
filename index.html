@@ -512,6 +512,56 @@
           </div>
         </div>
 
+        <div class="card space-y-3 flex-shrink-0">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="font-bold text-gray-800">🚇 交通時間測試</div>
+              <div class="text-xs text-gray-400 mt-0.5">依照目前 Day 的行程順序，計算相鄰兩點的移動時間</div>
+            </div>
+            <button
+              v-if="routeSegments.length || routeError"
+              @click="clearRouteResults"
+              class="text-xs text-gray-400 px-2 py-1 rounded-lg active:scale-95"
+            >清除</button>
+          </div>
+
+          <div class="flex gap-2">
+            <select v-model="routeTravelMode" class="flex-1 h-[46px]">
+              <option value="TRANSIT">大眾運輸</option>
+              <option value="WALKING">步行</option>
+              <option value="DRIVING">開車</option>
+            </select>
+            <button
+              @click="testDayRoutes"
+              class="w-[110px] bg-blue-600 text-white rounded-xl font-bold active:scale-95 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              :disabled="isRouteLoading"
+            >{{ isRouteLoading ? '計算中' : '測試' }}</button>
+          </div>
+
+          <div v-if="routeError" class="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+            {{ routeError }}
+          </div>
+
+          <div v-if="routeSegments.length" class="space-y-2">
+            <div
+              v-for="seg in routeSegments"
+              :key="seg.key"
+              class="bg-gray-50 rounded-xl p-2 text-sm border border-gray-100"
+            >
+              <div class="font-bold text-gray-700 break-words">
+                {{ seg.from }} → {{ seg.to }}
+              </div>
+              <div class="text-gray-500 mt-0.5">
+                約 {{ seg.duration }} / {{ seg.distance }}
+              </div>
+            </div>
+
+            <div class="border-t pt-2 font-bold text-gray-800 text-sm">
+              今日移動總時間：約 {{ routeTotalText }}
+            </div>
+          </div>
+        </div>
+
         <div class="space-y-3 pb-20" ref="itineraryListEl">
           <div
             v-for="place in filteredItinerary"
@@ -1054,6 +1104,12 @@ createApp({
     const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
+
+    const routeTravelMode = ref('TRANSIT');
+    const routeSegments = ref([]);
+    const routeTotalSeconds = ref(0);
+    const isRouteLoading = ref(false);
+    const routeError = ref('');
 
     const searchResults = ref([]);
     const isSearching = ref(false);
@@ -2496,6 +2552,137 @@ createApp({
 
     const filteredItinerary = computed(() => getDayOrderedItems(currentDay.value));
 
+    const formatDurationSeconds = (seconds) => {
+      const totalMinutes = Math.round((Number(seconds) || 0) / 60);
+      if (totalMinutes <= 0) return '0 分鐘';
+
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+
+      if (h > 0 && m > 0) return `${h} 小時 ${m} 分鐘`;
+      if (h > 0) return `${h} 小時`;
+      return `${m} 分鐘`;
+    };
+
+    const routeTotalText = computed(() => formatDurationSeconds(routeTotalSeconds.value));
+
+    const clearRouteResults = () => {
+      routeSegments.value = [];
+      routeTotalSeconds.value = 0;
+      routeError.value = '';
+    };
+
+    const getRouteStatusText = (status) => {
+      const map = {
+        ZERO_RESULTS: '找不到可用路線',
+        OVER_QUERY_LIMIT: 'API 使用量暫時超過限制',
+        REQUEST_DENIED: 'Google Directions 權限未啟用或被拒絕',
+        INVALID_REQUEST: '路線請求格式不正確',
+        UNKNOWN_ERROR: 'Google 服務暫時錯誤'
+      };
+      return map[String(status || '')] || String(status || '無法計算');
+    };
+
+    const requestDirections = (service, request) => new Promise((resolve, reject) => {
+      service.route(request, (response, status) => {
+        if (status === 'OK') resolve(response);
+        else reject(new Error(getRouteStatusText(status)));
+      });
+    });
+
+    const testDayRoutes = async () => {
+      if (!currentTrip.value) return;
+
+      const points = filteredItinerary.value
+        .filter(p => p.lat && p.lng && !Number.isNaN(Number(p.lat)) && !Number.isNaN(Number(p.lng)))
+        .map(p => ({
+          id: p.id,
+          name: String(p.name || '未命名地點'),
+          lat: Number(p.lat),
+          lng: Number(p.lng)
+        }));
+
+      clearRouteResults();
+
+      if (points.length < 2) {
+        routeError.value = '目前 Day 至少需要 2 個有座標的行程點，才能測試交通時間。';
+        return;
+      }
+
+      isRouteLoading.value = true;
+
+      try {
+        await loadGoogleMaps();
+
+        if (!window.google || !google.maps || !google.maps.DirectionsService) {
+          throw new Error('Google DirectionsService 尚未載入');
+        }
+
+        const service = new google.maps.DirectionsService();
+        const mode = google.maps.TravelMode[routeTravelMode.value] || google.maps.TravelMode.TRANSIT;
+        const results = [];
+        let totalSeconds = 0;
+        let failedCount = 0;
+
+        for (let i = 0; i < points.length - 1; i++) {
+          const from = points[i];
+          const to = points[i + 1];
+
+          const request = {
+            origin: { lat: from.lat, lng: from.lng },
+            destination: { lat: to.lat, lng: to.lng },
+            travelMode: mode,
+            provideRouteAlternatives: false
+          };
+
+          if (routeTravelMode.value === 'TRANSIT') {
+            request.transitOptions = { departureTime: new Date() };
+          }
+
+          try {
+            const response = await requestDirections(service, request);
+            const route = response.routes && response.routes[0];
+            const leg = route && route.legs && route.legs[0];
+
+            if (!leg) throw new Error('無路線資料');
+
+            const durationSeconds = leg.duration?.value || 0;
+            totalSeconds += durationSeconds;
+
+            results.push({
+              key: `${from.id}_${to.id}_${routeTravelMode.value}`,
+              from: from.name,
+              to: to.name,
+              duration: leg.duration?.text || formatDurationSeconds(durationSeconds),
+              distance: leg.distance?.text || '-'
+            });
+          } catch (segErr) {
+            failedCount++;
+            results.push({
+              key: `${from.id}_${to.id}_${routeTravelMode.value}_failed`,
+              from: from.name,
+              to: to.name,
+              duration: '無法計算',
+              distance: '-'
+            });
+            console.warn('route segment failed:', from.name, to.name, segErr);
+          }
+        }
+
+        routeSegments.value = results;
+        routeTotalSeconds.value = totalSeconds;
+
+        if (failedCount > 0) {
+          routeError.value = `有 ${failedCount} 段路線無法計算，可嘗試切換交通方式。`;
+        }
+      } catch (err) {
+        console.error('testDayRoutes failed:', err);
+        routeError.value = '交通時間計算失敗，請確認 Google Maps Directions API 是否可用。';
+      } finally {
+        isRouteLoading.value = false;
+      }
+    };
+
     let searchTimeout = null;
 
     const searchPlacesInput = async () => {
@@ -3383,6 +3570,7 @@ createApp({
     };
 
     watch(currentDay, () => {
+      clearRouteResults();
       mapAddDay.value = currentDay.value || 1;
       newExpense.value.day = currentDay.value || 1;
       if (getMapDisplayDay()) {
@@ -3391,6 +3579,8 @@ createApp({
       scheduleSortableInit();
       if (currentTab.value === 'map') updateMapMarkers();
     });
+
+    watch(routeTravelMode, () => clearRouteResults());
 
     watch(currentTab, () => {
       scheduleSortableInit();
@@ -3424,6 +3614,7 @@ createApp({
     return {
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, isLoading, isAutoSyncing, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
+      routeTravelMode, routeSegments, routeTotalText, isRouteLoading, routeError, testDayRoutes, clearRouteResults,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
