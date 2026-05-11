@@ -413,10 +413,9 @@
         </div>
       </div>
       <button
-        @click="manualSync"
-        class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95 disabled:opacity-60"
-        :disabled="isLoading"
-      >{{ isLoading ? '同步中' : '↻ 同步' }}</button>
+        @click="fetchData"
+        class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95"
+      >↻ 同步</button>
     </header>
 
     <main
@@ -509,56 +508,6 @@
           <div class="flex gap-2 items-start">
             <input v-model="newTime" type="time" class="w-1/3 text-center font-mono">
             <textarea v-model="newNote" rows="2" placeholder="備註..." class="flex-1 min-h-[54px] resize-none"></textarea>
-          </div>
-        </div>
-
-        <div class="card space-y-3 flex-shrink-0">
-          <div class="flex items-start justify-between gap-2">
-            <div>
-              <div class="font-bold text-gray-800">🚇 交通時間測試</div>
-              <div class="text-xs text-gray-400 mt-0.5">依照目前 Day 的行程順序，計算相鄰兩點的移動時間</div>
-            </div>
-            <button
-              v-if="routeSegments.length || routeError"
-              @click="clearRouteResults"
-              class="text-xs text-gray-400 px-2 py-1 rounded-lg active:scale-95"
-            >清除</button>
-          </div>
-
-          <div class="flex gap-2">
-            <select v-model="routeTravelMode" class="flex-1 h-[46px]">
-              <option value="TRANSIT">大眾運輸</option>
-              <option value="WALKING">步行</option>
-              <option value="DRIVING">開車</option>
-            </select>
-            <button
-              @click="testDayRoutes"
-              class="w-[110px] bg-blue-600 text-white rounded-xl font-bold active:scale-95 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              :disabled="isRouteLoading"
-            >{{ isRouteLoading ? '計算中' : '測試' }}</button>
-          </div>
-
-          <div v-if="routeError" class="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
-            {{ routeError }}
-          </div>
-
-          <div v-if="routeSegments.length" class="space-y-2">
-            <div
-              v-for="seg in routeSegments"
-              :key="seg.key"
-              class="bg-gray-50 rounded-xl p-2 text-sm border border-gray-100"
-            >
-              <div class="font-bold text-gray-700 break-words">
-                {{ seg.from }} → {{ seg.to }}
-              </div>
-              <div class="text-gray-500 mt-0.5">
-                約 {{ seg.duration }} / {{ seg.distance }}
-              </div>
-            </div>
-
-            <div class="border-t pt-2 font-bold text-gray-800 text-sm">
-              今日移動總時間：約 {{ routeTotalText }}
-            </div>
           </div>
         </div>
 
@@ -1066,11 +1015,11 @@
 </div>
 
 <script>
-const { createApp, ref, computed, onMounted, onBeforeUnmount, nextTick, watch } = Vue;
+const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwtuzN1s5GPivl8vUpBijmi32hdJn0nw9R5BUgXIGULv30c_SGOZWuOthDk_BZFNgsY/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxbFStntE5GdHD3BNQVaizk4DLkAb92mNoLoy6sbWGqkmnCUmk7UohOlyyT2f7dznz8/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -1081,10 +1030,6 @@ createApp({
 
     const currentTab = ref('itinerary');
     const isLoading = ref(false);
-    const isAutoSyncing = ref(false);
-    const AUTO_SYNC_INTERVAL_MS = 60000;
-    let autoSyncTimer = null;
-
     const isAddingPlace = ref(false);
     const isAddingMapPlace = ref(false);
     const isAddingExpense = ref(false);
@@ -1104,12 +1049,6 @@ createApp({
     const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
-
-    const routeTravelMode = ref('TRANSIT');
-    const routeSegments = ref([]);
-    const routeTotalSeconds = ref(0);
-    const isRouteLoading = ref(false);
-    const routeError = ref('');
 
     const searchResults = ref([]);
     const isSearching = ref(false);
@@ -1461,51 +1400,10 @@ createApp({
       }
     };
 
-    const pendingWrites = ref([]);
-    const localWriteCount = ref(0);
-
-    const trackWrite = (promise) => {
-      const p = Promise.resolve(promise);
-      pendingWrites.value.push(p);
-
-      const remove = () => {
-        const idx = pendingWrites.value.indexOf(p);
-        if (idx !== -1) pendingWrites.value.splice(idx, 1);
-      };
-
-      p.then(remove, remove);
-      return p;
-    };
-
-    const beginLocalWrite = () => {
-      localWriteCount.value += 1;
-    };
-
-    const endLocalWrite = () => {
-      localWriteCount.value = Math.max(0, localWriteCount.value - 1);
-    };
-
-    const waitPendingWrites = async () => {
-      const jobs = pendingWrites.value.slice();
-      if (jobs.length) await Promise.allSettled(jobs);
-    };
-
-    const waitLocalWrites = async () => {
-      if (localWriteCount.value <= 0) return;
-
-      await new Promise((resolve) => {
-        const check = () => {
-          if (localWriteCount.value <= 0) resolve();
-          else setTimeout(check, 100);
-        };
-        check();
-      });
-    };
-
     const postJSON = async (payload) => {
       const p = { ...payload };
       if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
-      return await trackWrite(apiGet(p));
+      return await apiGet(p);
     };
 
     const saveTripsCache = () => {
@@ -1917,7 +1815,6 @@ createApp({
       setTimeout(() => {
         isAddingMapPlace.value = false;
       }, 500);
-      beginLocalWrite();
 
       const id = generateId();
       const d = mapAddDay.value || currentDay.value || 1;
@@ -1972,8 +1869,6 @@ createApp({
         scheduleTripCacheSave();
 
         alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
-      } finally {
-        endLocalWrite();
       }
     };
 
@@ -2189,7 +2084,6 @@ createApp({
       clearMapSearchResult();
 
       currentView.value = 'app';
-      startAutoSync();
 
       const tripId = trip.id;
       loadTripCache(tripId);
@@ -2208,7 +2102,6 @@ createApp({
     };
 
     const exitTrip = () => {
-      stopAutoSync();
       currentView.value = 'lobby';
       currentTrip.value = null;
       mapSearchQuery.value = '';
@@ -2224,30 +2117,16 @@ createApp({
       await fetchTrips();
     };
 
-    const fetchData = async (force = false, options = {}) => {
+    const fetchData = async () => {
       if(!currentTrip.value) return;
 
       const tripId = currentTrip.value.id;
       const t_start = performance.now();
-      const silent = options.silent === true;
-
-      if (!silent) {
-        isLoading.value = true;
-      }
+      isLoading.value = true;
 
       try {
         const t_api_start = performance.now();
-        const params = {
-          type: 'tripData',
-          tripId,
-          _ts: Date.now()
-        };
-
-        if (force) {
-          params.force = '1';
-        }
-
-        const data = await apiGet(params);
+        const data = await apiGet({ type:'tripData', tripId });
         const t_api_end = performance.now();
 
         console.log("tripData response ms =", Math.round(t_api_end - t_api_start), data);
@@ -2293,78 +2172,7 @@ createApp({
         saveTripCache(tripId);
       } finally {
         console.log("fetchData total ms =", Math.round(performance.now() - t_start));
-        if (!silent) {
-          isLoading.value = false;
-        }
-      }
-    };
-
-    const isUserEditingNow = () => {
-      const el = document.activeElement;
-      if (!el) return false;
-
-      const tag = String(el.tagName || '').toUpperCase();
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-    };
-
-    const canAutoSync = () => {
-      if (currentView.value !== 'app') return false;
-      if (!currentTrip.value?.id) return false;
-      if (document.visibilityState !== 'visible') return false;
-      if (isLoading.value) return false;
-      if (isAutoSyncing.value) return false;
-      if (pendingWrites.value.length > 0) return false;
-      if (localWriteCount.value > 0) return false;
-      if (isUserEditingNow()) return false;
-      if (showDayModal.value) return false;
-      if (showEditModal.value) return false;
-      if (showEditExpenseModal.value) return false;
-      return true;
-    };
-
-    const autoSyncNow = async () => {
-      if (!canAutoSync()) return;
-
-      isAutoSyncing.value = true;
-      try {
-        await fetchData(true, { silent: true });
-      } catch (err) {
-        console.warn('auto sync failed:', err);
-      } finally {
-        isAutoSyncing.value = false;
-      }
-    };
-
-    const startAutoSync = () => {
-      stopAutoSync();
-      autoSyncTimer = setInterval(() => {
-        autoSyncNow();
-      }, AUTO_SYNC_INTERVAL_MS);
-    };
-
-    const stopAutoSync = () => {
-      if (autoSyncTimer) {
-        clearInterval(autoSyncTimer);
-        autoSyncTimer = null;
-      }
-    };
-
-    const manualSync = async () => {
-      if (!currentTrip.value || isLoading.value) return;
-
-      try {
-        await waitLocalWrites();
-        await waitPendingWrites();
-        await fetchData(true, { silent: false });
-      } catch (err) {
-        console.error('manualSync failed:', err);
-        alert('同步失敗，請稍後再試');
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        autoSyncNow();
+        isLoading.value = false;
       }
     };
 
@@ -2552,137 +2360,6 @@ createApp({
 
     const filteredItinerary = computed(() => getDayOrderedItems(currentDay.value));
 
-    const formatDurationSeconds = (seconds) => {
-      const totalMinutes = Math.round((Number(seconds) || 0) / 60);
-      if (totalMinutes <= 0) return '0 分鐘';
-
-      const h = Math.floor(totalMinutes / 60);
-      const m = totalMinutes % 60;
-
-      if (h > 0 && m > 0) return `${h} 小時 ${m} 分鐘`;
-      if (h > 0) return `${h} 小時`;
-      return `${m} 分鐘`;
-    };
-
-    const routeTotalText = computed(() => formatDurationSeconds(routeTotalSeconds.value));
-
-    const clearRouteResults = () => {
-      routeSegments.value = [];
-      routeTotalSeconds.value = 0;
-      routeError.value = '';
-    };
-
-    const getRouteStatusText = (status) => {
-      const map = {
-        ZERO_RESULTS: '找不到可用路線',
-        OVER_QUERY_LIMIT: 'API 使用量暫時超過限制',
-        REQUEST_DENIED: 'Google Directions 權限未啟用或被拒絕',
-        INVALID_REQUEST: '路線請求格式不正確',
-        UNKNOWN_ERROR: 'Google 服務暫時錯誤'
-      };
-      return map[String(status || '')] || String(status || '無法計算');
-    };
-
-    const requestDirections = (service, request) => new Promise((resolve, reject) => {
-      service.route(request, (response, status) => {
-        if (status === 'OK') resolve(response);
-        else reject(new Error(getRouteStatusText(status)));
-      });
-    });
-
-    const testDayRoutes = async () => {
-      if (!currentTrip.value) return;
-
-      const points = filteredItinerary.value
-        .filter(p => p.lat && p.lng && !Number.isNaN(Number(p.lat)) && !Number.isNaN(Number(p.lng)))
-        .map(p => ({
-          id: p.id,
-          name: String(p.name || '未命名地點'),
-          lat: Number(p.lat),
-          lng: Number(p.lng)
-        }));
-
-      clearRouteResults();
-
-      if (points.length < 2) {
-        routeError.value = '目前 Day 至少需要 2 個有座標的行程點，才能測試交通時間。';
-        return;
-      }
-
-      isRouteLoading.value = true;
-
-      try {
-        await loadGoogleMaps();
-
-        if (!window.google || !google.maps || !google.maps.DirectionsService) {
-          throw new Error('Google DirectionsService 尚未載入');
-        }
-
-        const service = new google.maps.DirectionsService();
-        const mode = google.maps.TravelMode[routeTravelMode.value] || google.maps.TravelMode.TRANSIT;
-        const results = [];
-        let totalSeconds = 0;
-        let failedCount = 0;
-
-        for (let i = 0; i < points.length - 1; i++) {
-          const from = points[i];
-          const to = points[i + 1];
-
-          const request = {
-            origin: { lat: from.lat, lng: from.lng },
-            destination: { lat: to.lat, lng: to.lng },
-            travelMode: mode,
-            provideRouteAlternatives: false
-          };
-
-          if (routeTravelMode.value === 'TRANSIT') {
-            request.transitOptions = { departureTime: new Date() };
-          }
-
-          try {
-            const response = await requestDirections(service, request);
-            const route = response.routes && response.routes[0];
-            const leg = route && route.legs && route.legs[0];
-
-            if (!leg) throw new Error('無路線資料');
-
-            const durationSeconds = leg.duration?.value || 0;
-            totalSeconds += durationSeconds;
-
-            results.push({
-              key: `${from.id}_${to.id}_${routeTravelMode.value}`,
-              from: from.name,
-              to: to.name,
-              duration: leg.duration?.text || formatDurationSeconds(durationSeconds),
-              distance: leg.distance?.text || '-'
-            });
-          } catch (segErr) {
-            failedCount++;
-            results.push({
-              key: `${from.id}_${to.id}_${routeTravelMode.value}_failed`,
-              from: from.name,
-              to: to.name,
-              duration: '無法計算',
-              distance: '-'
-            });
-            console.warn('route segment failed:', from.name, to.name, segErr);
-          }
-        }
-
-        routeSegments.value = results;
-        routeTotalSeconds.value = totalSeconds;
-
-        if (failedCount > 0) {
-          routeError.value = `有 ${failedCount} 段路線無法計算，可嘗試切換交通方式。`;
-        }
-      } catch (err) {
-        console.error('testDayRoutes failed:', err);
-        routeError.value = '交通時間計算失敗，請確認 Google Maps Directions API 是否可用。';
-      } finally {
-        isRouteLoading.value = false;
-      }
-    };
-
     let searchTimeout = null;
 
     const searchPlacesInput = async () => {
@@ -2780,7 +2457,6 @@ createApp({
       setTimeout(() => {
         isAddingPlace.value = false;
       }, 500);
-      beginLocalWrite();
 
       const id = generateId();
       const d = currentDay.value;
@@ -2924,8 +2600,6 @@ createApp({
         scheduleTripCacheSave();
 
         alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
-      } finally {
-        endLocalWrite();
       }
     };
 
@@ -3306,7 +2980,6 @@ createApp({
       setTimeout(() => {
         isAddingExpense.value = false;
       }, 500);
-      beginLocalWrite();
 
       const uid = generateId();
       const d = normalizeExpenseRecord({
@@ -3355,8 +3028,6 @@ createApp({
         }
 
         alert('記帳寫入失敗，已取消剛剛新增的資料，請稍後再試。');
-      } finally {
-        endLocalWrite();
       }
     };
 
@@ -3570,7 +3241,6 @@ createApp({
     };
 
     watch(currentDay, () => {
-      clearRouteResults();
       mapAddDay.value = currentDay.value || 1;
       newExpense.value.day = currentDay.value || 1;
       if (getMapDisplayDay()) {
@@ -3579,8 +3249,6 @@ createApp({
       scheduleSortableInit();
       if (currentTab.value === 'map') updateMapMarkers();
     });
-
-    watch(routeTravelMode, () => clearRouteResults());
 
     watch(currentTab, () => {
       scheduleSortableInit();
@@ -3603,18 +3271,11 @@ createApp({
       const hasTripsCache = loadTripsCache();
       console.log('loadTripsCache =', hasTripsCache);
       fetchTrips();
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-    });
-
-    onBeforeUnmount(() => {
-      stopAutoSync();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     });
 
     return {
       currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, isLoading, isAutoSyncing, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
-      routeTravelMode, routeSegments, routeTotalText, isRouteLoading, routeError, testDayRoutes, clearRouteResults,
+      currentTab, isLoading, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, filteredItinerary,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
@@ -3623,7 +3284,7 @@ createApp({
       mapLatestResult, mapAddDay, mapDisplayFilter,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
 
-      createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData, manualSync,
+      createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
       switchTab, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
 
