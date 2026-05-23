@@ -843,16 +843,18 @@
           <div
             v-for="hotel in hotels"
             :key="hotel.id"
-            class="flex justify-between items-start gap-3 p-3 bg-white rounded border border-purple-100 shadow-sm"
+            class="flex justify-between items-start gap-3 p-3 bg-white rounded border border-purple-100 shadow-sm cursor-pointer active:scale-[0.99] transition"
+            @click="openHotelMap(hotel)"
           >
             <div class="min-w-0">
               <div class="font-bold text-gray-800 break-words">🏨 {{ hotel.name }}</div>
               <div class="text-xs text-gray-500 mt-1 break-words">
                 {{ hotelDayRangeLabel(hotel) }}<span v-if="hotel.address">｜{{ hotel.address }}</span>
               </div>
+              <div class="text-[10px] text-purple-500 mt-1">點擊開啟地圖</div>
             </div>
             <button
-              @click="removeHotel(hotel.id)"
+              @click.stop="removeHotel(hotel.id)"
               class="text-red-400 font-bold px-2 shrink-0"
               :disabled="isDeletingHotel"
             >刪除</button>
@@ -1019,7 +1021,7 @@ const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxbFStntE5GdHD3BNQVaizk4DLkAb92mNoLoy6sbWGqkmnCUmk7UohOlyyT2f7dznz8/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwtuzN1s5GPivl8vUpBijmi32hdJn0nw9R5BUgXIGULv30c_SGOZWuOthDk_BZFNgsY/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -1746,22 +1748,33 @@ createApp({
         });
 
         marker.addListener('click', () => {
-          const link = getExternalMapLink({
-            name: hotel.name || '住宿',
-            lat: hotel.lat,
-            lng: hotel.lng,
-            place_id: hotel.place_id || ''
-          });
+          const buttonId = `hotel-map-${String(hotel.id || generateId()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
           infoWindow.setContent(
-            `<div style="padding:6px; color:#111; max-width:220px;">
-              <b>🏨 ${escapeHtml(hotel.name || '住宿')}</b><br/>
-              <span style="font-size:12px; color:#555">${escapeHtml(hotelDayRangeLabel(hotel))}</span><br/>
-              <span style="font-size:12px; color:#555">${escapeHtml(hotel.address || '')}</span><br/>
-              <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
+            `<div style="padding:8px; color:#111; max-width:240px;">
+              <div style="font-weight:bold; margin-bottom:4px;">🏨 ${escapeHtml(hotel.name || '住宿')}</div>
+              <div style="font-size:12px; color:#555; margin-bottom:4px;">${escapeHtml(hotelDayRangeLabel(hotel))}</div>
+              <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(hotel.address || '')}</div>
+              <button
+                id="${buttonId}"
+                style="background:#2563eb;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;cursor:pointer;"
+              >
+                ${isKoreaTrip.value ? '開啟 Naver Map' : '開啟 Google Maps'}
+              </button>
             </div>`
           );
+
           infoWindow.open(mapInstance, marker);
+
+          google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+              btn.onclick = (event) => {
+                event.stopPropagation();
+                openHotelMap(hotel);
+              };
+            }
+          });
         });
 
         markers.push(marker);
@@ -2621,6 +2634,58 @@ createApp({
       updateMapMarkers();
     };
 
+    const openHotelMap = (hotel) => {
+      if (!hotel) return;
+
+      const name = String(hotel.name || '住宿').trim();
+      const address = String(hotel.address || '').trim();
+      const lat = hotel.lat !== '' && hotel.lat != null ? Number(hotel.lat) : null;
+      const lng = hotel.lng !== '' && hotel.lng != null ? Number(hotel.lng) : null;
+      const placeId = String(hotel.place_id || '').trim();
+      const queryText = [name, address].filter(Boolean).join(' ');
+      const encodedQuery = encodeURIComponent(queryText || name || '住宿');
+
+      if (isKoreaTrip.value) {
+        if (hotel.naver_url) {
+          window.open(hotel.naver_url, '_blank');
+          return;
+        }
+
+        const naverWebSearch = `https://map.naver.com/v5/search/${encodedQuery}`;
+
+        if (lat && lng) {
+          const naverAppLink =
+            `nmap://place?lat=${lat}&lng=${lng}&name=${encodeURIComponent(name || '住宿')}&appname=tripplanner`;
+
+          window.location.href = naverAppLink;
+
+          setTimeout(() => {
+            window.open(naverWebSearch, '_blank');
+          }, 1200);
+
+          return;
+        }
+
+        window.open(naverWebSearch, '_blank');
+        return;
+      }
+
+      if (placeId) {
+        window.open(
+          `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${placeId}`,
+          '_blank'
+        );
+        return;
+      }
+
+      if (lat && lng) {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+        return;
+      }
+
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`, '_blank');
+    };
+
     const openExternalMap = (p) => {
       if (isKoreaTrip.value) {
         const displayName = encodeURIComponent(p.name_ko || p.name || '');
@@ -3296,7 +3361,7 @@ createApp({
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
-      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel, hotelDayRangeLabel,
+      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel, hotelDayRangeLabel, openHotelMap,
 
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
