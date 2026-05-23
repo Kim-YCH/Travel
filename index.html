@@ -361,6 +361,23 @@
       border-color: #2563eb;
       box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
     }
+
+    .alternative-dropzone {
+      min-height: 76px;
+    }
+
+    .alternative-card {
+      border-left: 4px solid #f59e0b;
+    }
+
+    .sortable-chosen {
+      opacity: 0.9;
+    }
+
+    .sortable-ghost {
+      opacity: 0.45;
+    }
+
   </style>
 </head>
 <body>
@@ -554,6 +571,62 @@
           </div>
 
           <div v-if="filteredItinerary.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
+        </div>
+
+        <!-- Alternatives -->
+        <div class="card border border-amber-100 space-y-3 flex-shrink-0">
+          <div>
+            <h3 class="font-bold text-gray-800">📌 Day {{ currentDay }} 備案</h3>
+            <div class="text-xs text-gray-500 mt-1">可從上方正式行程拖曳到這裡成為備案，也可從備案拖回正式行程。</div>
+          </div>
+
+          <div ref="alternativeListEl" class="space-y-2 alternative-dropzone">
+            <div
+              v-for="place in filteredAlternatives"
+              :key="place.id"
+              :data-id="place.id"
+              class="card alternative-card flex justify-between items-start gap-3 active:scale-[0.99] transition py-3 mb-2"
+            >
+              <div class="itinerary-main flex items-start gap-2">
+                <div class="drag-handle text-amber-400 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
+
+                <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
+                  <div class="itinerary-title-row">
+                    <span class="text-[10px] text-amber-700 bg-amber-100 px-1.5 rounded font-bold border border-amber-200 shrink-0">備案</span>
+                    <span
+                      v-if="place.time"
+                      class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
+                    >{{ formatTime(place.time) }}</span>
+                    <span class="itinerary-title">{{ place.name }}</span>
+                  </div>
+
+                  <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
+
+                  <div class="itinerary-tags">
+                    <span
+                      v-if="place.lat && place.lng"
+                      class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
+                    >已定位</span>
+                    <span
+                      v-else
+                      class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
+                    >無座標</span>
+
+                    <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
+                <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
+                <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
+              </div>
+            </div>
+
+            <div v-if="filteredAlternatives.length===0" class="text-center text-gray-400 py-5 border border-dashed border-amber-200 rounded-xl bg-amber-50/40">
+              將正式行程拖曳到這裡，即可設為備案
+            </div>
+          </div>
         </div>
       </div>
 
@@ -843,18 +916,16 @@
           <div
             v-for="hotel in hotels"
             :key="hotel.id"
-            class="flex justify-between items-start gap-3 p-3 bg-white rounded border border-purple-100 shadow-sm cursor-pointer active:scale-[0.99] transition"
-            @click="openHotelMap(hotel)"
+            class="flex justify-between items-start gap-3 p-3 bg-white rounded border border-purple-100 shadow-sm"
           >
             <div class="min-w-0">
               <div class="font-bold text-gray-800 break-words">🏨 {{ hotel.name }}</div>
               <div class="text-xs text-gray-500 mt-1 break-words">
                 {{ hotelDayRangeLabel(hotel) }}<span v-if="hotel.address">｜{{ hotel.address }}</span>
               </div>
-              <div class="text-[10px] text-purple-500 mt-1">點擊開啟地圖</div>
             </div>
             <button
-              @click.stop="removeHotel(hotel.id)"
+              @click="removeHotel(hotel.id)"
               class="text-red-400 font-bold px-2 shrink-0"
               :disabled="isDeletingHotel"
             >刪除</button>
@@ -1021,7 +1092,7 @@ const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwtuzN1s5GPivl8vUpBijmi32hdJn0nw9R5BUgXIGULv30c_SGOZWuOthDk_BZFNgsY/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyp7AnyszddlubQRfQDg5HpqBIL6PMuvCpzf__iCw-0Zb0LNyNe191qNDc-fjnN7QQ/exec';
     const GOOGLE_MAPS_API_KEY = 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q';
 
     const currentView = ref('lobby');
@@ -1043,6 +1114,7 @@ createApp({
     const itinerary = ref([]);
     const expenses = ref([]);
     const hotels = ref([]);
+    const alternatives = ref([]); // 舊版備案表保留但不再使用；新版備案改存在 itinerary.is_alternative
 
     const newPlace = ref('');
     const newTime = ref('');
@@ -1090,8 +1162,20 @@ createApp({
     const isDeletingHotel = ref(false);
     let hotelSearchTimeout = null;
 
+    const newAlternative = ref({ message: '' });
+    const alternativeSearchQuery = ref('');
+    const alternativeSearchResults = ref([]);
+    const alternativeIsSearching = ref(false);
+    const alternativeSelectedPlaceData = ref(null);
+    const isAddingAlternative = ref(false);
+    const isDeletingAlternative = ref(false);
+    const isAddingAlternativeToItinerary = ref(false);
+    let alternativeSearchTimeout = null;
+
     const itineraryListEl = ref(null);
+    const alternativeListEl = ref(null);
     let sortable = null;
+    let alternativeSortable = null;
 
     const showDayModal = ref(false);
     const modalDay = ref(1);
@@ -1182,10 +1266,19 @@ createApp({
       return Number.isFinite(num) && num > 0 ? num : null;
     };
 
+    const normalizeAlternativeFlag = (value) => {
+      return String(value || '').trim().toLowerCase() === 'v' ? 'v' : '';
+    };
+
+    const getAlternativeFlag = (item) => normalizeAlternativeFlag(item?.is_alternative ?? item?.['是否為備案']);
+
+    const isAlternativeItem = (item) => getAlternativeFlag(item) === 'v';
+
     const normalizeItineraryRecord = (item) => ({
       ...item,
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
-      order: normalizeOrderValue(item?.order)
+      order: normalizeOrderValue(item?.order),
+      is_alternative: getAlternativeFlag(item)
     });
 
     const normalizeHotelRecord = (item) => ({
@@ -1197,6 +1290,17 @@ createApp({
       name: String(item?.name || '').trim(),
       address: String(item?.address || '').trim(),
       place_id: String(item?.place_id || '').trim()
+    });
+
+    const normalizeAlternativeRecord = (item) => ({
+      ...item,
+      day: item?.day ? parseInt(item.day, 10) || 1 : 1,
+      lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
+      lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
+      name: String(item?.name || '').trim(),
+      address: String(item?.address || '').trim(),
+      place_id: String(item?.place_id || '').trim(),
+      message: String(item?.message || '')
     });
 
     const isHotelActiveOnDay = (hotel, day) => {
@@ -1240,34 +1344,46 @@ createApp({
       });
     };
 
-    const getDayOrderedItems = (day) => {
+    const getDayOrderedItems = (day, isAlternative = false) => {
       const targetDay = parseInt(day, 10) || 1;
-      const list = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === targetDay);
+      const list = itinerary.value.filter(i =>
+        (i.day ? parseInt(i.day,10) : 1) === targetDay &&
+        isAlternativeItem(i) === Boolean(isAlternative)
+      );
       return sortDayItemsByStoredOrder(list);
     };
 
-    const applyOrderToLocalItinerary = (day, ids) => {
+    const applyOrderToLocalItinerary = (day, ids, isAlternative = false) => {
       const targetDay = parseInt(day, 10) || 1;
+      const altFlag = Boolean(isAlternative) ? 'v' : '';
       const idOrder = Array.isArray(ids) ? ids.map(String) : [];
-      const dayItems = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === targetDay);
+      const dayItems = itinerary.value.filter(i =>
+        (i.day ? parseInt(i.day,10) : 1) === targetDay &&
+        isAlternativeItem(i) === Boolean(isAlternative)
+      );
       const map = new Map(dayItems.map(item => [String(item.id), item]));
 
       let order = 1;
       idOrder.forEach((id) => {
         const item = map.get(String(id));
         if (item) {
+          item.is_alternative = altFlag;
           item.order = order++;
           map.delete(String(id));
         }
       });
 
       sortDayItemsByStoredOrder(Array.from(map.values())).forEach((item) => {
+        item.is_alternative = altFlag;
         item.order = order++;
       });
     };
 
-    const hasCompleteSequentialOrder = (day) => {
-      const items = itinerary.value.filter(i => (i.day ? parseInt(i.day,10) : 1) === (parseInt(day, 10) || 1));
+    const hasCompleteSequentialOrder = (day, isAlternative = false) => {
+      const items = itinerary.value.filter(i =>
+        (i.day ? parseInt(i.day,10) : 1) === (parseInt(day, 10) || 1) &&
+        isAlternativeItem(i) === Boolean(isAlternative)
+      );
       if (!items.length) return true;
 
       const orders = items.map(item => normalizeOrderValue(item.order));
@@ -1284,15 +1400,17 @@ createApp({
       const maxDay = itinerary.value.reduce((m, it) => Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
 
       for (let day = 1; day <= maxDay; day++) {
-        const items = getDayOrderedItems(day);
-        if (!items.length) continue;
-        if (hasCompleteSequentialOrder(day)) continue;
+        for (const isAlt of [false, true]) {
+          const items = getDayOrderedItems(day, isAlt);
+          if (!items.length) continue;
+          if (hasCompleteSequentialOrder(day, isAlt)) continue;
 
-        const ids = items.map(item => String(item.id));
-        applyOrderToLocalItinerary(day, ids);
-        try {
-          await saveOrderToDB(tripId, day, ids);
-        } catch (e) {}
+          const ids = items.map(item => String(item.id));
+          applyOrderToLocalItinerary(day, ids, isAlt);
+          try {
+            await saveOrderToDB(tripId, day, ids, isAlt);
+          } catch (e) {}
+        }
       }
     };
 
@@ -1371,6 +1489,7 @@ createApp({
           expenses: expenses.value,
           people: people.value,
           hotels: hotels.value,
+          alternatives: alternatives.value,
           trip: currentTrip.value,
           ts: Date.now()
         }));
@@ -1388,6 +1507,7 @@ createApp({
         expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
         people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
         hotels.value    = Array.isArray(c.hotels) ? c.hotels.map(normalizeHotelRecord) : [];
+        alternatives.value = Array.isArray(c.alternatives) ? c.alternatives.map(normalizeAlternativeRecord) : [];
 
         if (c.trip) currentTrip.value = { ...currentTrip.value, ...c.trip };
 
@@ -1446,23 +1566,29 @@ createApp({
       }, 250);
     };
 
-    const setOrderIds = (tripId, day, ids) => {
-      applyOrderToLocalItinerary(day, ids);
+    const setOrderIds = (tripId, day, ids, isAlternative = false) => {
+      applyOrderToLocalItinerary(day, ids, isAlternative);
       scheduleTripCacheSave();
     };
-    const getOrderIds = (tripId, day) => getDayOrderedItems(day).map(item => String(item.id));
-    const clearOrderIds = (tripId, day) => {
+    const getOrderIds = (tripId, day, isAlternative = false) => getDayOrderedItems(day, isAlternative).map(item => String(item.id));
+    const clearOrderIds = (tripId, day, isAlternative = false) => {
       const targetDay = parseInt(day, 10) || 1;
       itinerary.value.forEach((item) => {
-        if ((item.day ? parseInt(item.day,10) : 1) === targetDay) {
+        if ((item.day ? parseInt(item.day,10) : 1) === targetDay && isAlternativeItem(item) === Boolean(isAlternative)) {
           item.order = null;
         }
       });
       scheduleTripCacheSave();
     };
 
-    const saveOrderToDB = async (tripId, day, ids) => {
-      await postJSON({ action: 'save_order', tripId, day: String(day), order: (ids||[]).join(',') });
+    const saveOrderToDB = async (tripId, day, ids, isAlternative = false) => {
+      await postJSON({
+        action: 'save_order',
+        tripId,
+        day: String(day),
+        order: (ids||[]).join(','),
+        isAlternative: isAlternative ? 'v' : ''
+      });
     };
 
     const escapeHtml = (s) => String(s)
@@ -1685,7 +1811,7 @@ createApp({
       clearMapRouteLine();
 
       const displayDay = getMapDisplayDay();
-      let itemsToRender = itinerary.value.filter(item => item.lat && item.lng);
+      let itemsToRender = itinerary.value.filter(item => item.lat && item.lng && !isAlternativeItem(item));
 
       if (displayDay) {
         itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
@@ -1748,33 +1874,22 @@ createApp({
         });
 
         marker.addListener('click', () => {
-          const buttonId = `hotel-map-${String(hotel.id || generateId()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+          const link = getExternalMapLink({
+            name: hotel.name || '住宿',
+            lat: hotel.lat,
+            lng: hotel.lng,
+            place_id: hotel.place_id || ''
+          });
 
           infoWindow.setContent(
-            `<div style="padding:8px; color:#111; max-width:240px;">
-              <div style="font-weight:bold; margin-bottom:4px;">🏨 ${escapeHtml(hotel.name || '住宿')}</div>
-              <div style="font-size:12px; color:#555; margin-bottom:4px;">${escapeHtml(hotelDayRangeLabel(hotel))}</div>
-              <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(hotel.address || '')}</div>
-              <button
-                id="${buttonId}"
-                style="background:#2563eb;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;cursor:pointer;"
-              >
-                ${isKoreaTrip.value ? '開啟 Naver Map' : '開啟 Google Maps'}
-              </button>
+            `<div style="padding:6px; color:#111; max-width:220px;">
+              <b>🏨 ${escapeHtml(hotel.name || '住宿')}</b><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(hotelDayRangeLabel(hotel))}</span><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(hotel.address || '')}</span><br/>
+              <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
             </div>`
           );
-
           infoWindow.open(mapInstance, marker);
-
-          google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
-            const btn = document.getElementById(buttonId);
-            if (btn) {
-              btn.onclick = (event) => {
-                event.stopPropagation();
-                openHotelMap(hotel);
-              };
-            }
-          });
         });
 
         markers.push(marker);
@@ -1842,7 +1957,8 @@ createApp({
         place_id: mapLatestResult.value.place_id || '',
         message: '',
         time: '',
-        trip_id: currentTrip.value.id
+        trip_id: currentTrip.value.id,
+        is_alternative: ''
       };
 
       const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
@@ -2149,11 +2265,11 @@ createApp({
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
         const htl  = Array.isArray(data?.hotels) ? data.hotels : [];
-
         itinerary.value = itin.map(normalizeItineraryRecord);
         expenses.value = exp.map(normalizeExpenseRecord);
         people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
         hotels.value = htl.map(normalizeHotelRecord);
+        alternatives.value = [];
 
         if (trip) {
           currentTrip.value = { ...currentTrip.value, ...trip };
@@ -2296,10 +2412,11 @@ createApp({
         await postJSON({ action:'clear_order', tripId, day: String(d) });
 
         for (let day = d; day <= totalDays.value - 1; day++) {
-          const ids = getOrderIds(tripId, day);
-          if (ids.length) {
-            await saveOrderToDB(tripId, day, ids);
-          } else {
+          const selectedIds = getOrderIds(tripId, day, false);
+          const alternativeIds = getOrderIds(tripId, day, true);
+          if (selectedIds.length) await saveOrderToDB(tripId, day, selectedIds, false);
+          if (alternativeIds.length) await saveOrderToDB(tripId, day, alternativeIds, true);
+          if (!selectedIds.length && !alternativeIds.length) {
             await postJSON({ action:'clear_order', tripId, day: String(day) });
           }
         }
@@ -2322,11 +2439,74 @@ createApp({
         sortable.destroy();
         sortable = null;
       }
+      if (alternativeSortable) {
+        alternativeSortable.destroy();
+        alternativeSortable = null;
+      }
+    };
+
+    const getDomIds = (el) => {
+      if (!el) return [];
+      return Array.from(el.querySelectorAll('[data-id]'))
+        .map(node => node.getAttribute('data-id'))
+        .filter(Boolean);
+    };
+
+    const syncDragGroups = async () => {
+      if (!currentTrip.value?.id) return;
+      const day = currentDay.value;
+      const selectedIds = getDomIds(itineraryListEl.value);
+      const alternativeIds = getDomIds(alternativeListEl.value);
+
+      selectedIds.forEach(id => {
+        const item = itinerary.value.find(x => String(x.id) === String(id));
+        if (item) {
+          item.day = day;
+          item.is_alternative = '';
+        }
+      });
+
+      alternativeIds.forEach(id => {
+        const item = itinerary.value.find(x => String(x.id) === String(id));
+        if (item) {
+          item.day = day;
+          item.is_alternative = 'v';
+        }
+      });
+
+      setOrderIds(currentTrip.value.id, day, selectedIds, false);
+      setOrderIds(currentTrip.value.id, day, alternativeIds, true);
+
+      scheduleTripCacheSave();
+      updateMapMarkers();
+
+      const edits = [...selectedIds, ...alternativeIds].map(id => {
+        const item = itinerary.value.find(x => String(x.id) === String(id));
+        if (!item) return Promise.resolve();
+        return postJSON({
+          action: 'edit',
+          type: 'itinerary',
+          data: {
+            id: item.id,
+            trip_id: currentTrip.value.id,
+            day,
+            is_alternative: item.is_alternative || ''
+          }
+        });
+      });
+
+      try {
+        await Promise.allSettled(edits);
+        await Promise.allSettled([
+          saveOrderToDB(currentTrip.value.id, day, selectedIds, false),
+          saveOrderToDB(currentTrip.value.id, day, alternativeIds, true)
+        ]);
+      } catch (e) {}
     };
 
     let lastSortableSignature = '';
     const initSortable = () => {
-      if (!itineraryListEl.value) {
+      if (!itineraryListEl.value || !alternativeListEl.value) {
         destroySortable();
         return;
       }
@@ -2335,31 +2515,28 @@ createApp({
         return;
       }
 
-      const currentIds = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
-        .map(el => el.getAttribute('data-id'))
-        .filter(Boolean)
-        .join('|');
-      const signature = `${currentTrip.value.id}__${currentDay.value}__${currentIds}`;
+      const selectedIds = getDomIds(itineraryListEl.value).join('|');
+      const alternativeIds = getDomIds(alternativeListEl.value).join('|');
+      const signature = `${currentTrip.value.id}__${currentDay.value}__${selectedIds}__${alternativeIds}`;
 
-      if (sortable && lastSortableSignature === signature) return;
+      if (sortable && alternativeSortable && lastSortableSignature === signature) return;
 
       destroySortable();
       lastSortableSignature = signature;
 
-      sortable = new Sortable(itineraryListEl.value, {
+      const commonOptions = {
+        group: 'itinerary-day-split',
         animation: 150,
         handle: '.drag-handle',
         ghostClass: 'opacity-50',
         onEnd: async () => {
-          const ids = Array.from(itineraryListEl.value.querySelectorAll('[data-id]'))
-            .map(el => el.getAttribute('data-id'))
-            .filter(Boolean);
-          setOrderIds(currentTrip.value.id, currentDay.value, ids);
-          try { await saveOrderToDB(currentTrip.value.id, currentDay.value, ids); } catch(e){}
-          scheduleTripCacheSave();
-          lastSortableSignature = `${currentTrip.value.id}__${currentDay.value}__${ids.join('|')}`;
+          await syncDragGroups();
+          lastSortableSignature = `${currentTrip.value.id}__${currentDay.value}__${getDomIds(itineraryListEl.value).join('|')}__${getDomIds(alternativeListEl.value).join('|')}`;
         }
-      });
+      };
+
+      sortable = new Sortable(itineraryListEl.value, commonOptions);
+      alternativeSortable = new Sortable(alternativeListEl.value, commonOptions);
     };
 
     let sortableInitTimer = null;
@@ -2371,7 +2548,9 @@ createApp({
       }, 30);
     };
 
-    const filteredItinerary = computed(() => getDayOrderedItems(currentDay.value));
+    const filteredItinerary = computed(() => getDayOrderedItems(currentDay.value, false));
+
+    const filteredAlternatives = computed(() => getDayOrderedItems(currentDay.value, true));
 
     let searchTimeout = null;
 
@@ -2490,7 +2669,8 @@ createApp({
         place_id: selectedPlaceSnapshot?.place_id || '',
         message: noteSnapshot,
         time: timeSnapshot,
-        trip_id: currentTrip.value.id
+        trip_id: currentTrip.value.id,
+        is_alternative: ''
       };
 
       const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
@@ -2581,7 +2761,8 @@ createApp({
           message: noteSnapshot,
           time: timeSnapshot,
           trip_id: currentTrip.value.id,
-          order: item.order
+          order: item.order,
+          is_alternative: ''
         };
 
         const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
@@ -2617,74 +2798,276 @@ createApp({
     };
 
     const removePlace = async (id) => {
-      if (!confirm('確定刪除此行程？')) return;
-
       const i = itinerary.value.findIndex(x => String(x.id) === String(id));
+      const removedName = i !== -1 ? itinerary.value[i].name : '行程';
+      const removedIsAlt = i !== -1 ? isAlternativeItem(itinerary.value[i]) : false;
+      if (!confirm(removedIsAlt ? '確定刪除此備案？' : '確定刪除此行程？')) return;
+
       const removedDay = i !== -1 ? (itinerary.value[i].day ? parseInt(itinerary.value[i].day,10) : 1) : currentDay.value;
       if(i !== -1) itinerary.value.splice(i, 1);
 
       await postJSON({ action:'del', type:'itinerary', id });
 
-      const ids = getOrderIds(currentTrip.value.id, removedDay).filter(x => String(x) !== String(id));
-      setOrderIds(currentTrip.value.id, removedDay, ids);
-      try { await saveOrderToDB(currentTrip.value.id, removedDay, ids); } catch(e){}
+      const ids = getOrderIds(currentTrip.value.id, removedDay, removedIsAlt).filter(x => String(x) !== String(id));
+      setOrderIds(currentTrip.value.id, removedDay, ids, removedIsAlt);
+      try { await saveOrderToDB(currentTrip.value.id, removedDay, ids, removedIsAlt); } catch(e){}
 
       await nextTick();
       scheduleSortableInit();
       updateMapMarkers();
     };
 
-    const openHotelMap = (hotel) => {
-      if (!hotel) return;
 
-      const name = String(hotel.name || '住宿').trim();
-      const address = String(hotel.address || '').trim();
-      const lat = hotel.lat !== '' && hotel.lat != null ? Number(hotel.lat) : null;
-      const lng = hotel.lng !== '' && hotel.lng != null ? Number(hotel.lng) : null;
-      const placeId = String(hotel.place_id || '').trim();
-      const queryText = [name, address].filter(Boolean).join(' ');
-      const encodedQuery = encodeURIComponent(queryText || name || '住宿');
+    const searchAlternativePlacesInput = async () => {
+      const q = alternativeSearchQuery.value.trim();
 
-      if (isKoreaTrip.value) {
-        if (hotel.naver_url) {
-          window.open(hotel.naver_url, '_blank');
-          return;
+      if (!q) {
+        alternativeSearchResults.value = [];
+        alternativeIsSearching.value = false;
+        alternativeSelectedPlaceData.value = null;
+        return;
+      }
+
+      alternativeSelectedPlaceData.value = null;
+      alternativeIsSearching.value = true;
+
+      if (alternativeSearchTimeout) clearTimeout(alternativeSearchTimeout);
+
+      alternativeSearchTimeout = setTimeout(async () => {
+        try {
+          if (!window.google || !window.google.maps) {
+            await loadGoogleMaps();
+          }
+
+          if (!autocompleteService) {
+            autocompleteService = new google.maps.places.AutocompleteService();
+          }
+
+          autocompleteService.getPlacePredictions(
+            { input: q, language: 'zh-TW' },
+            (predictions, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                alternativeSearchResults.value = predictions;
+              } else {
+                alternativeSearchResults.value = [];
+              }
+              alternativeIsSearching.value = false;
+            }
+          );
+        } catch (err) {
+          console.error(err);
+          alternativeSearchResults.value = [];
+          alternativeIsSearching.value = false;
         }
-
-        const naverWebSearch = `https://map.naver.com/v5/search/${encodedQuery}`;
-
-        if (lat && lng) {
-          const naverAppLink =
-            `nmap://place?lat=${lat}&lng=${lng}&name=${encodeURIComponent(name || '住宿')}&appname=tripplanner`;
-
-          window.location.href = naverAppLink;
-
-          setTimeout(() => {
-            window.open(naverWebSearch, '_blank');
-          }, 1200);
-
-          return;
-        }
-
-        window.open(naverWebSearch, '_blank');
-        return;
-      }
-
-      if (placeId) {
-        window.open(
-          `https://www.google.com/maps/search/?api=1&query=${encodedQuery}&query_place_id=${placeId}`,
-          '_blank'
-        );
-        return;
-      }
-
-      if (lat && lng) {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
-        return;
-      }
-
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`, '_blank');
+      }, 300);
     };
+
+    const selectAlternativePlace = (item) => {
+      alternativeSearchQuery.value = item.structured_formatting.main_text;
+      alternativeSelectedPlaceData.value = item;
+      alternativeSearchResults.value = [];
+      alternativeIsSearching.value = false;
+    };
+
+    const addAlternative = async () => {
+      if (isAddingAlternative.value) return;
+      if (!currentTrip.value?.id) return;
+
+      const name = alternativeSearchQuery.value.trim();
+      if (!name) return;
+
+      isAddingAlternative.value = true;
+      setTimeout(() => {
+        isAddingAlternative.value = false;
+      }, 500);
+
+      const id = generateId();
+      const d = currentDay.value || 1;
+      const selectedPlaceSnapshot = alternativeSelectedPlaceData.value ? { ...alternativeSelectedPlaceData.value } : null;
+      const messageSnapshot = newAlternative.value.message || '';
+
+      const alt = {
+        id,
+        trip_id: currentTrip.value.id,
+        day: d,
+        name,
+        lat: null,
+        lng: null,
+        place_id: selectedPlaceSnapshot?.place_id || '',
+        address: '',
+        message: messageSnapshot,
+        created_at: new Date().toISOString()
+      };
+
+      alternatives.value.unshift(alt);
+
+      alternativeSearchQuery.value = '';
+      alternativeSearchResults.value = [];
+      alternativeSelectedPlaceData.value = null;
+      alternativeIsSearching.value = false;
+      newAlternative.value = { message: '' };
+
+      scheduleTripCacheSave();
+
+      try {
+        let lat = null;
+        let lng = null;
+        let placeId = alt.place_id || '';
+        let displayName = name;
+        let address = '';
+
+        if (selectedPlaceSnapshot?.place_id) {
+          placeId = selectedPlaceSnapshot.place_id;
+
+          const place = await getPlaceDetails(placeId, 'zh-TW');
+          if (place) {
+            displayName = place.name || name;
+            address = place.formatted_address || '';
+            if (place.geometry?.location) {
+              lat = place.geometry.location.lat();
+              lng = place.geometry.location.lng();
+            }
+          }
+        } else if (window.google) {
+          const geocoder = new google.maps.Geocoder();
+          await new Promise((resolve) => {
+            geocoder.geocode(
+              { address: name + (currentTrip.value.city ? " " + currentTrip.value.city : "") },
+              (results, status) => {
+                if (status === 'OK' && results && results[0]) {
+                  lat = results[0].geometry.location.lat();
+                  lng = results[0].geometry.location.lng();
+                  placeId = results[0].place_id || '';
+                  address = results[0].formatted_address || '';
+                }
+                resolve();
+              }
+            );
+          });
+        }
+
+        const updatedAlt = normalizeAlternativeRecord({
+          ...alt,
+          name: displayName || name,
+          lat,
+          lng,
+          place_id: placeId,
+          address
+        });
+
+        const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) {
+          alternatives.value.splice(idx, 1, updatedAlt);
+        }
+
+        const res = await postJSON({ action:'add', type:'alternatives', data: updatedAlt });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'add alternative failed');
+        }
+
+        scheduleTripCacheSave();
+      } catch (err) {
+        console.error('addAlternative sync failed:', err);
+
+        const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) alternatives.value.splice(idx, 1);
+
+        scheduleTripCacheSave();
+        alert('備案新增失敗，已取消剛剛新增的資料，請稍後再試。');
+      }
+    };
+
+    const removeAlternative = async (id) => {
+      if (isDeletingAlternative.value) return;
+      if (!confirm('確定刪除此備案？')) return;
+
+      isDeletingAlternative.value = true;
+
+      const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
+      const backup = idx !== -1 ? { ...alternatives.value[idx] } : null;
+      if (idx !== -1) alternatives.value.splice(idx, 1);
+      scheduleTripCacheSave();
+
+      try {
+        const res = await postJSON({ action:'del', type:'alternatives', id });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'delete alternative failed');
+        }
+      } catch (err) {
+        console.error('removeAlternative failed:', err);
+        if (backup) alternatives.value.splice(idx < 0 ? alternatives.value.length : idx, 0, backup);
+        scheduleTripCacheSave();
+        alert('備案刪除失敗，請稍後再試。');
+      } finally {
+        isDeletingAlternative.value = false;
+      }
+    };
+
+    const addAlternativeToItinerary = async (alt) => {
+      if (isAddingAlternativeToItinerary.value) return;
+      if (!currentTrip.value?.id || !alt) return;
+
+      isAddingAlternativeToItinerary.value = true;
+      setTimeout(() => {
+        isAddingAlternativeToItinerary.value = false;
+      }, 500);
+
+      const id = generateId();
+      const d = alt.day ? parseInt(alt.day, 10) || currentDay.value : currentDay.value;
+
+      const item = normalizeItineraryRecord({
+        id,
+        name: alt.name || '備案',
+        name_ko: '',
+        address: alt.address || '',
+        day: d,
+        lat: alt.lat != null ? Number(alt.lat) : null,
+        lng: alt.lng != null ? Number(alt.lng) : null,
+        place_id: alt.place_id || '',
+        message: alt.message || '',
+        time: '',
+        trip_id: currentTrip.value.id
+      });
+
+      const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
+      const ids = oldIds.slice();
+      ids.push(String(id));
+
+      itinerary.value.push(item);
+      setOrderIds(currentTrip.value.id, d, ids);
+      currentDay.value = d;
+
+      await nextTick();
+      scheduleSortableInit();
+      updateMapMarkers();
+      scheduleTripCacheSave();
+
+      try {
+        const res = await postJSON({ action:'add', type:'itinerary', data: item });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'add itinerary from alternative failed');
+        }
+
+        await saveOrderToDB(currentTrip.value.id, d, ids);
+      } catch (err) {
+        console.error('addAlternativeToItinerary sync failed:', err);
+
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) itinerary.value.splice(idx, 1);
+
+        const rollbackIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
+        setOrderIds(currentTrip.value.id, d, rollbackIds);
+        try { await saveOrderToDB(currentTrip.value.id, d, rollbackIds); } catch(e) {}
+
+        await nextTick();
+        scheduleSortableInit();
+        updateMapMarkers();
+        scheduleTripCacheSave();
+
+        alert('加入正式行程失敗，已取消剛剛新增的資料，請稍後再試。');
+      }
+    };
+
 
     const openExternalMap = (p) => {
       if (isKoreaTrip.value) {
@@ -2750,6 +3133,7 @@ createApp({
 
       const newDay = editPlace.value.day ? parseInt(editPlace.value.day, 10) : 1;
       const oldDay = itinerary.value[idx].day ? parseInt(itinerary.value[idx].day, 10) : 1;
+      const currentIsAlt = isAlternativeItem(itinerary.value[idx]);
 
       itinerary.value[idx].name = editPlace.value.name || '';
       itinerary.value[idx].time = editPlace.value.time || '';
@@ -2768,19 +3152,20 @@ createApp({
             name: itinerary.value[idx].name,
             time: itinerary.value[idx].time,
             message: itinerary.value[idx].message,
-            day: newDay
+            day: newDay,
+            is_alternative: currentIsAlt ? 'v' : ''
           }
         });
 
         if (oldDay !== newDay) {
-          const oldIds = getOrderIds(currentTrip.value.id, oldDay).filter(x => String(x) !== String(id));
-          setOrderIds(currentTrip.value.id, oldDay, oldIds);
-          try { await saveOrderToDB(currentTrip.value.id, oldDay, oldIds); } catch(e) {}
+          const oldIds = getOrderIds(currentTrip.value.id, oldDay, currentIsAlt).filter(x => String(x) !== String(id));
+          setOrderIds(currentTrip.value.id, oldDay, oldIds, currentIsAlt);
+          try { await saveOrderToDB(currentTrip.value.id, oldDay, oldIds, currentIsAlt); } catch(e) {}
 
-          const newIds = getOrderIds(currentTrip.value.id, newDay).filter(x => String(x) !== String(id));
+          const newIds = getOrderIds(currentTrip.value.id, newDay, currentIsAlt).filter(x => String(x) !== String(id));
           newIds.push(String(id));
-          setOrderIds(currentTrip.value.id, newDay, newIds);
-          try { await saveOrderToDB(currentTrip.value.id, newDay, newIds); } catch(e) {}
+          setOrderIds(currentTrip.value.id, newDay, newIds, currentIsAlt);
+          try { await saveOrderToDB(currentTrip.value.id, newDay, newIds, currentIsAlt); } catch(e) {}
 
           currentDay.value = newDay;
         }
@@ -3341,13 +3726,15 @@ createApp({
     return {
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, isLoading, isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
+      isAddingAlternative, isDeletingAlternative, isAddingAlternativeToItinerary,
       currentDay, totalDays,
-      people, itinerary, expenses, hotels, filteredItinerary,
+      people, itinerary, expenses, hotels, alternatives, filteredItinerary, filteredAlternatives,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
       searchResults, isSearching, isCoordinateMode, resolvedCoordName,
       mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
       mapLatestResult, mapAddDay, mapDisplayFilter,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
+      newAlternative, alternativeSearchQuery, alternativeSearchResults, alternativeIsSearching,
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
@@ -3357,11 +3744,12 @@ createApp({
 
       searchPlacesInput, useCoordinateInput, selectPlace, searchInExternalMap,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
-      itineraryListEl, formatTime,
+      itineraryListEl, alternativeListEl, formatTime,
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
-      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel, hotelDayRangeLabel, openHotelMap,
+      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel, hotelDayRangeLabel,
+      searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, addAlternativeToItinerary,
 
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
