@@ -1809,34 +1809,31 @@ createApp({
       const address = String(hotel.address || '').trim();
       const lat = hotel.lat !== '' && hotel.lat != null ? Number(hotel.lat) : null;
       const lng = hotel.lng !== '' && hotel.lng != null ? Number(hotel.lng) : null;
-      const query = encodeURIComponent([name, address].filter(Boolean).join(' '));
+      const queryText = [name, address].filter(Boolean).join(' ') || name || '住宿';
+      const encodedName = encodeURIComponent(name || '住宿');
+      const encodedQuery = encodeURIComponent(queryText);
 
       if (isKoreaTrip.value) {
-        const naverWebSearch = `https://map.naver.com/v5/search/${query || encodeURIComponent(name)}`;
-
         if (lat != null && lng != null) {
-          const naverAppLink =
-            `nmap://place?lat=${lat}&lng=${lng}&name=${encodeURIComponent(name)}&appname=tripplanner`;
-
-          window.location.href = naverAppLink;
-
-          setTimeout(() => {
-            window.open(naverWebSearch, '_blank');
-          }, 900);
-
+          // 住宿跟一般行程一樣，直接呼叫 Naver Map App。
+          // 不再使用 setTimeout 自動開網頁，避免點住宿後跳到瀏覽器網站。
+          window.location.href =
+            `nmap://place?lat=${lat}&lng=${lng}&name=${encodedName}&appname=tripplanner`;
           return;
         }
 
-        window.open(naverWebSearch, '_blank');
+        // 沒有座標時仍優先呼叫 Naver Map App 搜尋，不自動跳網站。
+        window.location.href = `nmap://search?query=${encodedQuery}&appname=tripplanner`;
         return;
       }
 
       if (lat != null && lng != null) {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+        // iPhone 已安裝 Google Maps 時會直接開 App；未安裝時才可能由系統改用網頁。
+        window.location.href = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}&zoom=16`;
         return;
       }
 
-      window.open(`https://www.google.com/maps/search/?api=1&query=${query || encodeURIComponent(name)}`, '_blank');
+      window.location.href = `comgooglemaps://?q=${encodedQuery}`;
     };
 
     const showHotelInfoWindow = (hotel, marker) => {
