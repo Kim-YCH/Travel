@@ -2450,52 +2450,135 @@ createApp({
       }
 
       const ymd = toYMD(pick);
+      const tripId = currentTrip.value.id;
+      const oldStartDate = currentTrip.value.start_date || '';
+      const tripIdx = trips.value.findIndex(t => String(t.id) === String(tripId));
+      const oldTripStartDate = tripIdx !== -1 ? (trips.value[tripIdx].start_date || '') : '';
+
+      // 先更新前端畫面，讓日期立即生效。
       currentTrip.value.start_date = ymd;
+      if (tripIdx !== -1) trips.value[tripIdx].start_date = ymd;
+      showDayModal.value = false;
+      scheduleTripCacheSave();
+      scheduleTripsCacheSave();
 
-      const idx = trips.value.findIndex(t => String(t.id) === String(currentTrip.value.id));
-      if (idx !== -1) trips.value[idx].start_date = ymd;
-
-      isLoading.value = true;
+      // 後端背景同步；失敗才回復前端資料。
       try {
-        await postJSON({ action:'set_trip_start_date', type:'trips', tripId: currentTrip.value.id, start_date: ymd });
-      } finally {
-        isLoading.value = false;
-        showDayModal.value = false;
+        const res = await postJSON({
+          action:'set_trip_start_date',
+          type:'trips',
+          tripId,
+          start_date: ymd
+        });
+
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'set_trip_start_date failed');
+        }
+      } catch (err) {
+        console.error('applyDay1Date sync failed:', err);
+
+        if (currentTrip.value && String(currentTrip.value.id) === String(tripId)) {
+          currentTrip.value.start_date = oldStartDate;
+        }
+        if (tripIdx !== -1 && trips.value[tripIdx]) {
+          trips.value[tripIdx].start_date = oldTripStartDate;
+        }
+
+        scheduleTripCacheSave();
+        scheduleTripsCacheSave();
+        alert('日期更新失敗，已回復原本日期，請稍後再試。');
       }
     };
 
     const swapWithDay = async () => {
       if (!currentTrip.value) return;
 
+      const tripId = currentTrip.value.id;
       const dayA = parseInt(modalDay.value, 10);
       const dayB = parseInt(swapTargetDay.value, 10);
       if (!dayA || !dayB || dayA === dayB) return;
 
-      isLoading.value = true;
+      const backupItinerary = itinerary.value.map(item => ({ ...item }));
+      const backupCurrentDay = currentDay.value;
+      const backupMapDisplayFilter = mapDisplayFilter.value;
+
+      const selectedAIds = getOrderIds(tripId, dayA, false);
+      const selectedBIds = getOrderIds(tripId, dayB, false);
+      const alternativeAIds = getOrderIds(tripId, dayA, true);
+      const alternativeBIds = getOrderIds(tripId, dayB, true);
+
+      // 先更新前端畫面，讓天數交換立即生效。
+      itinerary.value.forEach((item) => {
+        const d = item.day ? parseInt(item.day, 10) || 1 : 1;
+        if (d === dayA) {
+          item.day = dayB;
+          item.order = null;
+        } else if (d === dayB) {
+          item.day = dayA;
+          item.order = null;
+        }
+      });
+
+      setOrderIds(tripId, dayA, selectedBIds, false);
+      setOrderIds(tripId, dayB, selectedAIds, false);
+      setOrderIds(tripId, dayA, alternativeBIds, true);
+      setOrderIds(tripId, dayB, alternativeAIds, true);
+
+      currentDay.value = dayA;
+      showDayModal.value = false;
+
+      await nextTick();
+      scheduleSortableInit();
+      updateMapMarkers();
+      scheduleTripCacheSave();
+
+      // 後端背景同步；如果交換本身失敗，才回復前端資料。
+      let swapCommitted = false;
       try {
-        await postJSON({ action:'swap_days', tripId: currentTrip.value.id, dayA: String(dayA), dayB: String(dayB) });
+        const res = await postJSON({
+          action:'swap_days',
+          tripId,
+          dayA: String(dayA),
+          dayB: String(dayB)
+        });
 
-        const tripId = currentTrip.value.id;
-        const oA = getOrderIds(tripId, dayA);
-        const oB = getOrderIds(tripId, dayB);
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'swap_days failed');
+        }
+        swapCommitted = true;
 
-        if (oB) {
-          await saveOrderToDB(tripId, dayA, oB);
-        } else {
-          await postJSON({ action:'clear_order', tripId, day: String(dayA) });
+        const orderResults = await Promise.allSettled([
+          saveOrderToDB(tripId, dayA, selectedBIds, false),
+          saveOrderToDB(tripId, dayB, selectedAIds, false),
+          saveOrderToDB(tripId, dayA, alternativeBIds, true),
+          saveOrderToDB(tripId, dayB, alternativeAIds, true)
+        ]);
+
+        const orderFailed = orderResults.some(r => r.status === 'rejected');
+        if (orderFailed) {
+          throw new Error('save swapped order failed');
+        }
+      } catch (err) {
+        console.error('swapWithDay sync failed:', err);
+
+        if (swapCommitted) {
+          // 天數已經寫入 DB，但排序同步可能失敗；重新讀取 DB，避免前後端狀態不一致。
+          alert('天數已交換，但排序同步可能失敗，系統會重新同步資料。');
+          await fetchData();
+          currentDay.value = dayA;
+          return;
         }
 
-        if (oA) {
-          await saveOrderToDB(tripId, dayB, oA);
-        } else {
-          await postJSON({ action:'clear_order', tripId, day: String(dayB) });
-        }
+        itinerary.value = backupItinerary.map(item => ({ ...item }));
+        currentDay.value = backupCurrentDay;
+        mapDisplayFilter.value = backupMapDisplayFilter;
 
-        await fetchData();
-        currentDay.value = dayA;
-      } finally {
-        isLoading.value = false;
-        showDayModal.value = false;
+        await nextTick();
+        scheduleSortableInit();
+        updateMapMarkers();
+        scheduleTripCacheSave();
+
+        alert('天數交換失敗，已回復原本資料，請稍後再試。');
       }
     };
 
@@ -3263,51 +3346,80 @@ createApp({
         return;
       }
 
+      const tripId = currentTrip.value.id;
+      const backupItinerary = itinerary.value.map(item => ({ ...item }));
+      const backupCurrentDay = currentDay.value;
       const newDay = editPlace.value.day ? parseInt(editPlace.value.day, 10) : 1;
       const oldDay = itinerary.value[idx].day ? parseInt(itinerary.value[idx].day, 10) : 1;
       const currentIsAlt = isAlternativeItem(itinerary.value[idx]);
 
+      // 先更新前端，讓編輯結果立即顯示。
       itinerary.value[idx].name = editPlace.value.name || '';
       itinerary.value[idx].time = editPlace.value.time || '';
       itinerary.value[idx].message = editPlace.value.message || '';
       itinerary.value[idx].day = newDay;
       if (oldDay !== newDay) itinerary.value[idx].order = null;
 
-      isLoading.value = true;
+      if (oldDay !== newDay) {
+        const oldIds = getOrderIds(tripId, oldDay, currentIsAlt).filter(x => String(x) !== String(id));
+        setOrderIds(tripId, oldDay, oldIds, currentIsAlt);
+
+        const newIds = getOrderIds(tripId, newDay, currentIsAlt).filter(x => String(x) !== String(id));
+        newIds.push(String(id));
+        setOrderIds(tripId, newDay, newIds, currentIsAlt);
+
+        currentDay.value = newDay;
+      }
+
+      showEditModal.value = false;
+      await nextTick();
+      scheduleSortableInit();
+      updateMapMarkers();
+      scheduleTripCacheSave();
+
+      // 後端背景同步；失敗才回復前端資料。
       try {
-        await postJSON({
+        const editedItem = itinerary.value.find(x => String(x.id) === String(id));
+        if (!editedItem) throw new Error('edited itinerary item missing');
+
+        const res = await postJSON({
           action: 'edit',
           type: 'itinerary',
           data: {
             id,
-            trip_id: currentTrip.value.id,
-            name: itinerary.value[idx].name,
-            time: itinerary.value[idx].time,
-            message: itinerary.value[idx].message,
+            trip_id: tripId,
+            name: editedItem.name || '',
+            time: editedItem.time || '',
+            message: editedItem.message || '',
             day: newDay,
             is_alternative: currentIsAlt ? 'v' : ''
           }
         });
 
-        if (oldDay !== newDay) {
-          const oldIds = getOrderIds(currentTrip.value.id, oldDay, currentIsAlt).filter(x => String(x) !== String(id));
-          setOrderIds(currentTrip.value.id, oldDay, oldIds, currentIsAlt);
-          try { await saveOrderToDB(currentTrip.value.id, oldDay, oldIds, currentIsAlt); } catch(e) {}
-
-          const newIds = getOrderIds(currentTrip.value.id, newDay, currentIsAlt).filter(x => String(x) !== String(id));
-          newIds.push(String(id));
-          setOrderIds(currentTrip.value.id, newDay, newIds, currentIsAlt);
-          try { await saveOrderToDB(currentTrip.value.id, newDay, newIds, currentIsAlt); } catch(e) {}
-
-          currentDay.value = newDay;
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'edit itinerary failed');
         }
+
+        if (oldDay !== newDay) {
+          const oldIds = getOrderIds(tripId, oldDay, currentIsAlt).filter(x => String(x) !== String(id));
+          const newIds = getOrderIds(tripId, newDay, currentIsAlt);
+          await Promise.allSettled([
+            saveOrderToDB(tripId, oldDay, oldIds, currentIsAlt),
+            saveOrderToDB(tripId, newDay, newIds, currentIsAlt)
+          ]);
+        }
+      } catch (err) {
+        console.error('saveEditPlace sync failed:', err);
+
+        itinerary.value = backupItinerary.map(item => ({ ...item }));
+        currentDay.value = backupCurrentDay;
 
         await nextTick();
         scheduleSortableInit();
         updateMapMarkers();
-      } finally {
-        isLoading.value = false;
-        showEditModal.value = false;
+        scheduleTripCacheSave();
+
+        alert('行程修改失敗，已回復原本資料，請稍後再試。');
       }
     };
 
