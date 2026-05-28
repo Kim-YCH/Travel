@@ -1922,22 +1922,22 @@ createApp({
     const makeMapPinIcon = (fillColor) => {
       if (!window.google || !google.maps) return null;
 
+      // 備案 marker 使用跟 Google 預設紅色 pin 接近的尺寸。
+      // 不加白框，避免地圖上看起來比正式行程 marker 更大或形狀怪異。
       const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="38" height="52" viewBox="0 0 38 52">
+        <svg xmlns="http://www.w3.org/2000/svg" width="27" height="43" viewBox="0 0 27 43">
           <path
-            d="M19 50C19 50 4 32.7 4 19C4 10.72 10.72 4 19 4C27.28 4 34 10.72 34 19C34 32.7 19 50 19 50Z"
+            d="M13.5 0C6.04 0 0 6.04 0 13.5C0 23.63 13.5 43 13.5 43C13.5 43 27 23.63 27 13.5C27 6.04 20.96 0 13.5 0Z"
             fill="${fillColor}"
-            stroke="#ffffff"
-            stroke-width="3"
           />
         </svg>
       `;
 
       return {
         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-        scaledSize: new google.maps.Size(36, 49),
-        anchor: new google.maps.Point(18, 47),
-        labelOrigin: new google.maps.Point(18, 18)
+        scaledSize: new google.maps.Size(27, 43),
+        anchor: new google.maps.Point(13.5, 43),
+        labelOrigin: new google.maps.Point(13.5, 13.5)
       };
     };
 
@@ -1969,6 +1969,27 @@ createApp({
         });
 
         marker.addListener("click", () => {
+          if (isKoreaTrip.value) {
+            const buttonId = `open-itinerary-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+            infoWindow.setContent(
+              `<div style="padding:8px; color:#111; max-width:240px;">
+                <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '')}</div>
+                <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</div>
+                <button
+                  id="${buttonId}"
+                  style="background:#ef4444;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
+                >開啟 Naver Map</button>
+              </div>`
+            );
+            infoWindow.open(mapInstance, marker);
+
+            google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+              const btn = document.getElementById(buttonId);
+              if (btn) btn.onclick = () => openExternalMap(item);
+            });
+            return;
+          }
+
           const link = item.place_id
             ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
             : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
@@ -3354,25 +3375,19 @@ createApp({
 
     const openExternalMap = (p) => {
       if (isKoreaTrip.value) {
-        const displayName = encodeURIComponent(p.name_ko || p.name || '');
+        const displayName = encodeURIComponent(p.name_ko || p.name || '地點');
         const searchName = encodeURIComponent(p.name_ko || p.name || '');
-        const lat = p.lat;
-        const lng = p.lng;
+        const lat = p.lat !== '' && p.lat != null ? Number(p.lat) : null;
+        const lng = p.lng !== '' && p.lng != null ? Number(p.lng) : null;
 
-        if (lat && lng) {
-          const naverAppLink = `nmap://place?lat=${lat}&lng=${lng}&name=${displayName}&appname=tripplanner`;
-          const naverWebSearch = `https://map.naver.com/v5/search/${searchName}`;
-
-          window.location.href = naverAppLink;
-
-          setTimeout(() => {
-            window.open(naverWebSearch, "_blank");
-          }, 1200);
-
+        // 韓國旅程一律優先直接呼叫 Naver Map App。
+        // 不自動 fallback 到 Naver 網站，避免點 marker 後又跳回瀏覽器。
+        if (lat != null && lng != null) {
+          window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${displayName}&appname=tripplanner`;
           return;
         }
 
-        window.open(`https://map.naver.com/v5/search/${searchName}`, '_blank');
+        window.location.href = `nmap://search?query=${searchName}&appname=tripplanner`;
         return;
       }
 
