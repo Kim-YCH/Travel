@@ -1918,6 +1918,29 @@ createApp({
       openInfo();
     };
 
+
+    const makeMapPinIcon = (fillColor) => {
+      if (!window.google || !google.maps) return null;
+
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="38" height="52" viewBox="0 0 38 52">
+          <path
+            d="M19 50C19 50 4 32.7 4 19C4 10.72 10.72 4 19 4C27.28 4 34 10.72 34 19C34 32.7 19 50 19 50Z"
+            fill="${fillColor}"
+            stroke="#ffffff"
+            stroke-width="3"
+          />
+        </svg>
+      `;
+
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new google.maps.Size(36, 49),
+        anchor: new google.maps.Point(18, 47),
+        labelOrigin: new google.maps.Point(18, 18)
+      };
+    };
+
     const updateMapMarkers = () => {
       if (!mapInstance || !window.google) return;
 
@@ -1977,14 +2000,7 @@ createApp({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
           label: { text: d.toString(), color: 'white', fontWeight: 'bold' },
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 17,
-            fillColor: '#f59e0b',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2
-          },
+          icon: makeMapPinIcon('#f59e0b'),
           zIndex: 850,
           title: item.name ? `備案：${item.name}` : `Day ${d} 備案`
         });
