@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- version: 20260528_alt_export_map -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
@@ -1965,6 +1966,57 @@ createApp({
       });
 
 
+      let alternativeItemsToRender = itinerary.value.filter(item => item.lat && item.lng && isAlternativeItem(item));
+      if (displayDay) {
+        alternativeItemsToRender = alternativeItemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
+      }
+
+      alternativeItemsToRender.forEach(item => {
+        const d = item.day ? parseInt(item.day,10) : 1;
+        const marker = new google.maps.Marker({
+          position: { lat: Number(item.lat), lng: Number(item.lng) },
+          map: mapInstance,
+          label: { text: d.toString(), color: 'white', fontWeight: 'bold' },
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 17,
+            fillColor: '#f59e0b',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2
+          },
+          zIndex: 850,
+          title: item.name ? `備案：${item.name}` : `Day ${d} 備案`
+        });
+
+        marker.addListener('click', () => {
+          const buttonId = `open-alt-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+          infoWindow.setContent(
+            `<div style="padding:8px; color:#111; max-width:240px;">
+              <div style="margin-bottom:5px;">
+                <span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:bold;">📌 備案</span>
+              </div>
+              <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '備案')}</div>
+              <div style="font-size:12px; color:#555; margin-bottom:8px;">Day ${d}${formatTime(item.time) ? '｜' + escapeHtml(formatTime(item.time)) : ''}${item.message ? '｜' + escapeHtml(item.message) : ''}</div>
+              <button
+                id="${buttonId}"
+                style="background:#f59e0b;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
+              >開啟地圖 App</button>
+            </div>`
+          );
+          infoWindow.open(mapInstance, marker);
+
+          google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+            const btn = document.getElementById(buttonId);
+            if (btn) btn.onclick = () => openExternalMap(item);
+          });
+        });
+
+        markers.push(marker);
+        bounds.extend(marker.getPosition());
+        hasPoint = true;
+      });
+
       let hotelsToRender = hotels.value.filter(hotel => hotel.lat != null && hotel.lng != null);
       if (displayDay) {
         hotelsToRender = hotelsToRender.filter(hotel => isHotelActiveOnDay(hotel, displayDay));
@@ -3877,10 +3929,11 @@ createApp({
         const label = dayLabel(d);
         if (label) text += ` | ${label}`;
         text += `\n`;
-        const dayItems = getDayOrderedItems(d);
+        const dayItems = getDayOrderedItems(d, false);
+        const dayAlternatives = getDayOrderedItems(d, true);
         const dayHotels = getHotelsForDay(d);
 
-        if(dayItems.length === 0 && dayHotels.length === 0) {
+        if(dayItems.length === 0 && dayAlternatives.length === 0 && dayHotels.length === 0) {
           text += "  (無行程)\n\n";
           continue;
         }
@@ -3889,6 +3942,14 @@ createApp({
           const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
           text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
         });
+
+        if(dayAlternatives.length > 0) {
+          text += `  📌 備案\n`;
+          dayAlternatives.forEach(item => {
+            const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
+            text += `    ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
+          });
+        }
 
         dayHotels.forEach(hotel => {
           const addr = hotel.address ? ` (${hotel.address})` : '';
