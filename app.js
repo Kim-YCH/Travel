@@ -4,6 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || 'dev';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -77,8 +78,13 @@ createApp({
     const showEditHotelModal = ref(false);
     const editHotelId = ref('');
     const editHotel = ref({ name: '', start_day: 1, end_day: 1, address: '' });
+    const editHotelSearchQuery = ref('');
+    const editHotelSearchResults = ref([]);
+    const editHotelIsSearching = ref(false);
+    const editHotelSelectedPlaceData = ref(null);
     const isSavingHotel = ref(false);
     let hotelSearchTimeout = null;
+    let editHotelSearchTimeout = null;
 
     const newAlternative = ref({ message: '' });
     const alternativeSearchQuery = ref('');
@@ -800,7 +806,7 @@ createApp({
 
       infoWindow.setContent(
         `<div style="padding:8px; color:#111; max-width:230px;">
-          <div style="font-weight:bold; margin-bottom:4px;">🏨 ${escapeHtml(hotel.name || '住宿')}</div>
+          <div style="font-weight:bold; margin-bottom:4px;">🏠 ${escapeHtml(hotel.name || '住宿')}</div>
           <div style="font-size:12px; color:#555; margin-bottom:3px;">${escapeHtml(hotelDayRangeLabel(hotel))}</div>
           <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(hotel.address || '')}</div>
           <button
@@ -1018,7 +1024,7 @@ createApp({
         const marker = new google.maps.Marker({
           position: { lat: Number(hotel.lat), lng: Number(hotel.lng) },
           map: mapInstance,
-          label: { text: '宿', color: 'white', fontWeight: 'bold' },
+          label: { text: '🏠', fontSize: '16px' },
           icon: makeMapPinIcon('#0d9488'),
           zIndex: 900,
           title: hotel.name || '住宿'
@@ -2577,6 +2583,93 @@ createApp({
       clearHotelSearchDropdown();
     };
 
+    const clearEditHotelSearchDropdown = () => {
+      editHotelSearchResults.value = [];
+      editHotelIsSearching.value = false;
+    };
+
+    const searchEditHotelPlacesInput = async () => {
+      const q = editHotelSearchQuery.value.trim();
+
+      if (!q) {
+        clearEditHotelSearchDropdown();
+        editHotelSelectedPlaceData.value = null;
+        return;
+      }
+
+      editHotelIsSearching.value = true;
+      editHotelSelectedPlaceData.value = null;
+      if (editHotelSearchTimeout) clearTimeout(editHotelSearchTimeout);
+
+      editHotelSearchTimeout = setTimeout(async () => {
+        try {
+          if (!window.google || !window.google.maps) {
+            await loadGoogleMaps();
+          }
+
+          if (!autocompleteService) {
+            autocompleteService = new google.maps.places.AutocompleteService();
+          }
+
+          autocompleteService.getPlacePredictions(
+            {
+              input: q,
+              language: 'zh-TW',
+              types: ['establishment']
+            },
+            (predictions, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                editHotelSearchResults.value = predictions;
+              } else {
+                editHotelSearchResults.value = [];
+              }
+              editHotelIsSearching.value = false;
+            }
+          );
+        } catch (err) {
+          console.error(err);
+          editHotelSearchResults.value = [];
+          editHotelIsSearching.value = false;
+        }
+      }, 300);
+    };
+
+    const selectEditHotelPlace = async (item) => {
+      const mainText = item.structured_formatting?.main_text || item.description || '';
+      editHotelSearchQuery.value = mainText;
+      clearEditHotelSearchDropdown();
+
+      const selected = {
+        place_id: item.place_id || '',
+        name: mainText,
+        address: item.structured_formatting?.secondary_text || item.description || '',
+        lat: null,
+        lng: null
+      };
+
+      editHotelSelectedPlaceData.value = selected;
+
+      try {
+        if (item.place_id) {
+          const place = await getPlaceDetails(item.place_id, 'zh-TW');
+          if (place) {
+            selected.name = place.name || selected.name;
+            selected.address = place.formatted_address || selected.address;
+            if (place.geometry?.location) {
+              selected.lat = place.geometry.location.lat();
+              selected.lng = place.geometry.location.lng();
+            }
+          }
+        }
+      } catch (err) {
+        console.error('selectEditHotelPlace detail failed:', err);
+      }
+
+      editHotel.value.name = selected.name || editHotel.value.name;
+      editHotel.value.address = selected.address || editHotel.value.address;
+      editHotelSelectedPlaceData.value = { ...selected };
+    };
+
     const addHotel = async () => {
       if (isAddingHotel.value) return;
       if (!currentTrip.value?.id) return;
@@ -2714,12 +2807,20 @@ createApp({
         end_day: hotel.end_day ? parseInt(hotel.end_day, 10) || 1 : 1,
         address: String(hotel.address || '')
       };
+      editHotelSearchQuery.value = '';
+      editHotelSearchResults.value = [];
+      editHotelIsSearching.value = false;
+      editHotelSelectedPlaceData.value = null;
       showEditHotelModal.value = true;
     };
 
     const closeEditHotelModal = () => {
       if (isSavingHotel.value) return;
       showEditHotelModal.value = false;
+      editHotelSearchQuery.value = '';
+      editHotelSearchResults.value = [];
+      editHotelIsSearching.value = false;
+      editHotelSelectedPlaceData.value = null;
     };
 
     const saveEditHotel = async () => {
@@ -2748,19 +2849,37 @@ createApp({
 
       isSavingHotel.value = true;
       const backup = { ...hotels.value[idx] };
-      const updated = normalizeHotelRecord({
+      const selectedPlace = editHotelSelectedPlaceData.value;
+      const updatedData = {
         ...backup,
         name,
         start_day: safeStart,
         end_day: safeEnd,
         address: String(editHotel.value.address || '').trim(),
         trip_id: currentTrip.value.id
-      });
+      };
+
+      if (selectedPlace) {
+        updatedData.place_id = selectedPlace.place_id || updatedData.place_id || '';
+        if (selectedPlace.lat != null && selectedPlace.lng != null) {
+          updatedData.lat = Number(selectedPlace.lat);
+          updatedData.lng = Number(selectedPlace.lng);
+        }
+        if (!updatedData.address && selectedPlace.address) {
+          updatedData.address = selectedPlace.address;
+        }
+      }
+
+      const updated = normalizeHotelRecord(updatedData);
 
       hotels.value.splice(idx, 1, updated);
       scheduleTripCacheSave();
       updateMapMarkers();
       showEditHotelModal.value = false;
+      editHotelSearchQuery.value = '';
+      editHotelSearchResults.value = [];
+      editHotelIsSearching.value = false;
+      editHotelSelectedPlaceData.value = null;
 
       try {
         const res = await postJSON({ action: 'edit', type: 'hotels', data: updated });
@@ -3017,7 +3136,7 @@ createApp({
 
         dayHotels.forEach(hotel => {
           const addr = hotel.address ? ` (${hotel.address})` : '';
-          text += `  🏨 ${hotel.name || '住宿'}${addr}\n`;
+          text += `  🏠 ${hotel.name || '住宿'}${addr}\n`;
         });
 
         text += "\n";
@@ -3120,6 +3239,7 @@ createApp({
     });
 
     return {
+      APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
       isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
@@ -3131,7 +3251,7 @@ createApp({
       mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
       mapLatestResult, mapAddDay, mapDisplayFilter,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
-      showEditHotelModal, editHotel, isSavingHotel,
+      showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
       newAlternative, alternativeSearchQuery, alternativeSearchResults, alternativeIsSearching,
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
@@ -3146,7 +3266,9 @@ createApp({
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
-      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel, openEditHotelModal, closeEditHotelModal, saveEditHotel, hotelDayRangeLabel, openHotelMap,
+      searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
+      searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
+      hotelDayRangeLabel, openHotelMap,
       searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, addAlternativeToItinerary,
 
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
