@@ -576,3 +576,23 @@ html, body {
       }
     }
 
+
+
+/* 20260618.11: move all bottom tab labels above iPhone home indicator. */
+.bottom-nav {
+  min-height: calc(78px + env(safe-area-inset-bottom, 0px)) !important;
+  padding-top: 6px !important;
+  padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)) !important;
+  align-items: flex-start !important;
+}
+
+.bottom-nav button {
+  min-height: 48px;
+  justify-content: flex-start;
+  transform-origin: top center;
+  padding-bottom: 4px;
+}
+
+.bottom-nav button span:last-child {
+  line-height: 1.1;
+}
