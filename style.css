@@ -382,52 +382,52 @@ html, body {
 
 
     .trip-lobby-card {
-      min-height: 104px;
+      min-height: 82px;
     }
 
     .trip-countdown-card {
       position: relative;
-      width: 88px;
-      height: 88px;
-      border-radius: 22px;
+      width: 68px;
+      height: 64px;
+      border-radius: 17px;
       background: linear-gradient(180deg, #b98568 0%, #8f5f47 100%);
-      box-shadow: 0 10px 22px rgba(120, 78, 55, 0.22);
+      box-shadow: 0 7px 15px rgba(120, 78, 55, 0.18);
       flex-shrink: 0;
       display: flex;
       align-items: flex-end;
       justify-content: center;
-      padding: 9px;
+      padding: 7px;
       overflow: visible;
     }
 
     .trip-countdown-rings {
       position: absolute;
-      top: -11px;
+      top: -8px;
       left: 0;
       right: 0;
-      height: 26px;
+      height: 20px;
       display: flex;
       justify-content: center;
-      gap: 26px;
+      gap: 19px;
       z-index: 3;
       pointer-events: none;
     }
 
     .trip-countdown-rings span {
-      width: 11px;
-      height: 30px;
+      width: 8px;
+      height: 22px;
       border-radius: 999px;
       background: linear-gradient(90deg, #cbd5e1, #64748b 45%, #e2e8f0 70%, #475569);
-      box-shadow: 0 4px 8px rgba(15,23,42,0.28);
+      box-shadow: 0 3px 6px rgba(15,23,42,0.24);
     }
 
     .trip-countdown-paper {
       position: relative;
       width: 100%;
-      height: 70px;
-      border-radius: 16px 16px 18px 18px;
+      height: 50px;
+      border-radius: 12px 12px 14px 14px;
       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 74%, #e5e7eb 100%);
-      box-shadow: inset 0 0 0 1px rgba(15,23,42,0.06), 0 8px 16px rgba(15,23,42,0.15);
+      box-shadow: inset 0 0 0 1px rgba(15,23,42,0.06), 0 5px 10px rgba(15,23,42,0.13);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -440,26 +440,26 @@ html, body {
       position: absolute;
       right: 0;
       bottom: 0;
-      width: 31px;
-      height: 31px;
+      width: 23px;
+      height: 23px;
       background: linear-gradient(135deg, rgba(226,232,240,0.1) 0%, #d1d5db 50%, #9ca3af 100%);
       clip-path: polygon(100% 0, 0 100%, 100% 100%);
       opacity: 0.72;
     }
 
     .trip-countdown-number {
-      font-size: 30px;
+      font-size: 22px;
       line-height: 1;
       font-weight: 900;
       color: #e11d48;
-      letter-spacing: -1px;
+      letter-spacing: -0.6px;
       font-variant-numeric: tabular-nums;
       z-index: 1;
     }
 
     .trip-countdown-text {
-      margin-top: 5px;
-      font-size: 11px;
+      margin-top: 3px;
+      font-size: 9px;
       line-height: 1;
       font-weight: 800;
       color: #6b7280;
