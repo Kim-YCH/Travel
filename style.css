@@ -39,6 +39,26 @@ html, body {
       min-height: 0;
     }
 
+
+
+    /* App header compact layout: keep enough iPhone safe-area space, but reduce blue height. */
+    .app-header {
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
+    }
+
+    .app-header h1 {
+      line-height: 1.15;
+    }
+
+    /* Give scroll pages more real bottom space so content is not covered by iPhone home indicator / bottom nav. */
+    .tab-panel {
+      padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .bottom-nav {
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
     .card {
       background: white;
       border-radius: 16px;

@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260618_08 -->
+<!-- version: 20260618_09 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260618_08" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260618_08" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260618_08" />
-  <link rel="manifest" href="./site.webmanifest?v=20260618_08" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260618_09" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260618_09" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260618_09" />
+  <link rel="manifest" href="./site.webmanifest?v=20260618_09" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,7 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260618_08" />
+  <link rel="stylesheet" href="./style.css?v=20260618_09" />
 </head>
 <body>
 
@@ -73,7 +73,7 @@
 
   <!-- App -->
   <div v-else class="flex flex-col h-full overflow-hidden">
-    <header class="bg-blue-600 text-white p-4 pt-12 pb-4 shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
+    <header class="app-header bg-blue-600 text-white shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
       <div>
         <h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1>
         <div class="text-xs text-blue-200">
@@ -657,7 +657,7 @@
       </div>
     </main>
 
-    <nav class="bg-white border-t flex justify-around pb-safe pt-2 pb-2 z-50 flex-shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <nav class="bottom-nav bg-white border-t flex justify-around pt-2 z-50 flex-shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='itinerary'?'text-blue-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5">📍</span><span class="text-[10px] font-bold">行程</span>
       </button>
@@ -850,8 +850,8 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260618_08"></script>
-<script src="./app.js?v=20260618_08"></script>
+<script src="./config.js?v=20260618_09"></script>
+<script src="./app.js?v=20260618_09"></script>
 
 </body>
 </html>
