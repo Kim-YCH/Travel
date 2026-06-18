@@ -144,6 +144,24 @@ createApp({
       return x;
     };
 
+
+    const daysUntilTrip = (trip) => {
+      const base = parseYMD(trip?.start_date);
+      if (!base) return null;
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+      const diff = Math.ceil((base.getTime() - today.getTime()) / 86400000);
+      return diff >= 0 ? diff : null;
+    };
+
+    const tripCountdownDays = (trip) => daysUntilTrip(trip);
+
+    const tripCountdownLabel = (trip) => {
+      const d = daysUntilTrip(trip);
+      if (d == null) return '';
+      return d === 0 ? '今天開始' : '天後開始';
+    };
+
     const dayLabel = (day) => {
       const base = parseYMD(currentTrip.value?.start_date);
       if (!base) return '';
@@ -3257,6 +3275,7 @@ createApp({
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
       switchTab, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
+      tripCountdownDays, tripCountdownLabel,
 
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
