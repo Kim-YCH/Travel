@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260618.04';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260618.06';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -783,32 +783,24 @@ createApp({
     };
 
     const getMapExportLinks = (place = {}) => {
-      // 導航 App 顯示的目的地名稱要維持行程/住宿原本名稱，不要變成泛稱「地點」。
+      // 匯出文字改用與行程/住宿卡片點擊相同的地圖 App 邏輯。
+      // 韓國旅程只保留 Naver Map App，不再輸出 Google Maps 導航網址。
       const title = String(place.name || place.title || place.name_ko || currentTrip.value?.name || '行程').trim();
       const address = String(place.address || '').trim();
       const queryText = [title, address, currentTrip.value?.city || ''].filter(Boolean).join(' ') || title;
       const lat = place.lat !== '' && place.lat != null ? Number(place.lat) : null;
       const lng = place.lng !== '' && place.lng != null ? Number(place.lng) : null;
-      const placeId = String(place.place_id || '').trim();
       const encodedName = encodeURIComponent(title);
       const encodedQuery = encodeURIComponent(queryText || title);
 
-      const googleDirectionWeb = (lat != null && lng != null)
-        ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`
-        : (placeId
-          ? `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}&destination_place_id=${placeId}&travelmode=walking`
-          : `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}&travelmode=walking`);
-
       if (isKoreaTrip.value) {
         const naverApp = (lat != null && lng != null)
-          ? `nmap://route/public?dlat=${lat}&dlng=${lng}&dname=${encodedName}&appname=tripplanner`
+          ? `nmap://place?lat=${lat}&lng=${lng}&name=${encodedName}&appname=tripplanner`
           : `nmap://search?query=${encodedQuery}&appname=tripplanner`;
 
         return {
-          nav: googleDirectionWeb,
           app: naverApp,
-          navLabel: '導航網址',
-          appLabel: 'Naver App 導航'
+          appLabel: 'Naver Map App'
         };
       }
 
@@ -817,9 +809,7 @@ createApp({
         : `comgooglemaps://?daddr=${encodedQuery}&directionsmode=walking`;
 
       return {
-        nav: googleDirectionWeb,
         app: googleApp,
-        navLabel: '導航網址',
         appLabel: 'Google Maps App'
       };
     };
@@ -827,10 +817,7 @@ createApp({
     const appendMapLinksToExport = (place, indent = '    ') => {
       const links = getMapExportLinks(place);
       let text = '';
-      if (links.nav) text += `${indent}🧭 ${links.navLabel}：${links.nav}
-`;
-      if (links.app) text += `${indent}📱 ${links.appLabel}：${links.app}
-`;
+      if (links.app) text += `${indent}📱 ${links.appLabel}：${links.app}\n`;
       return text;
     };
 
