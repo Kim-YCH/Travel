@@ -782,6 +782,41 @@ createApp({
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
     };
 
+    const getMapExportLinks = (place = {}) => {
+      const name = String(place.name_ko || place.name || place.title || '地點').trim();
+      const address = String(place.address || '').trim();
+      const queryText = [name, address, currentTrip.value?.city || ''].filter(Boolean).join(' ');
+      const lat = place.lat !== '' && place.lat != null ? Number(place.lat) : null;
+      const lng = place.lng !== '' && place.lng != null ? Number(place.lng) : null;
+      const placeId = String(place.place_id || '').trim();
+      const encodedName = encodeURIComponent(name || '地點');
+      const encodedQuery = encodeURIComponent(queryText || name || '地點');
+
+      if (isKoreaTrip.value) {
+        const naverWeb = `https://map.naver.com/v5/search/${encodedQuery}`;
+        const naverApp = (lat != null && lng != null)
+          ? `nmap://place?lat=${lat}&lng=${lng}&name=${encodedName}&appname=tripplanner`
+          : `nmap://search?query=${encodedQuery}&appname=tripplanner`;
+        return { web: naverWeb, app: naverApp, webLabel: 'Naver Map', appLabel: 'Naver Map App' };
+      }
+
+      const googleWeb = getExternalMapLink({ name: queryText || name, lat, lng, place_id: placeId });
+      const googleApp = (lat != null && lng != null)
+        ? `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}&zoom=16`
+        : `comgooglemaps://?q=${encodedQuery}`;
+      return { web: googleWeb, app: googleApp, webLabel: 'Google Maps', appLabel: 'Google Maps App' };
+    };
+
+    const appendMapLinksToExport = (place, indent = '    ') => {
+      const links = getMapExportLinks(place);
+      let text = '';
+      if (links.web) text += `${indent}🗺️ ${links.webLabel}：${links.web}
+`;
+      if (links.app) text += `${indent}📱 ${links.appLabel}：${links.app}
+`;
+      return text;
+    };
+
     const openHotelMap = (hotel) => {
       if (!hotel) return;
 
@@ -3124,7 +3159,13 @@ createApp({
     const buildItineraryText = () => {
       if(!currentTrip.value) return '';
 
-      let text = `【${currentTrip.value.name}】行程表\n\n`;
+      const generatedAt = new Date();
+      const generatedLabel = `${generatedAt.getFullYear()}/${pad2(generatedAt.getMonth()+1)}/${pad2(generatedAt.getDate())} ${pad2(generatedAt.getHours())}:${pad2(generatedAt.getMinutes())}`;
+      let text = `【${currentTrip.value.name}】行程表\n`;
+      text += `版本：${APP_VERSION}\n`;
+      text += `匯出時間：${generatedLabel}\n`;
+      text += `說明：地圖網址可在系統或網路不穩時直接開啟查看；App 連結需手機支援對應地圖 App。\n\n`;
+
       for(let d = 1; d <= totalDays.value; d++) {
         text += `📅 Day ${d}`;
         const label = dayLabel(d);
@@ -3142,6 +3183,7 @@ createApp({
         dayItems.forEach(item => {
           const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
           text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
+          text += appendMapLinksToExport(item, '    ');
         });
 
         if(dayAlternatives.length > 0) {
@@ -3149,12 +3191,14 @@ createApp({
           dayAlternatives.forEach(item => {
             const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
             text += `    ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
+            text += appendMapLinksToExport(item, '      ');
           });
         }
 
         dayHotels.forEach(hotel => {
           const addr = hotel.address ? ` (${hotel.address})` : '';
           text += `  🏠 ${hotel.name || '住宿'}${addr}\n`;
+          text += appendMapLinksToExport(hotel, '    ');
         });
 
         text += "\n";
@@ -3182,7 +3226,8 @@ createApp({
       const a = document.createElement('a');
       const safeName = String(currentTrip.value?.name || 'itinerary').replace(/[\\/:*?"<>|]+/g, '_');
       a.href = URL.createObjectURL(blob);
-      a.download = `${safeName}.txt`;
+      const versionLabel = String(APP_VERSION || 'backup').replace(/[^0-9A-Za-z._-]+/g, '_');
+      a.download = `${safeName}_${versionLabel}_offline.txt`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -3295,7 +3340,7 @@ createApp({
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
-      exportItinerary, isKoreaTrip,
+      exportItinerary, downloadItineraryTxt, isKoreaTrip,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace,
