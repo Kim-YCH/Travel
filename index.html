@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260618_11 -->
+<!-- version: 20260618_12 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260618_11" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260618_11" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260618_11" />
-  <link rel="manifest" href="./site.webmanifest?v=20260618_11" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260618_12" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260618_12" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260618_12" />
+  <link rel="manifest" href="./site.webmanifest?v=20260618_12" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,7 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260618_11" />
+  <link rel="stylesheet" href="./style.css?v=20260618_12" />
 </head>
 <body>
 
@@ -163,18 +163,6 @@
                 </div>
               </div>
 
-              <div
-                v-if="!isCoordinateMode"
-                @click="searchInExternalMap"
-                class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer"
-              >
-                <span class="text-xl">🔎</span>
-                <div class="flex-1">
-                  <div class="font-bold text-blue-600 text-sm">找不到？去 {{ isKoreaTrip ? 'Naver Map' : 'Google Maps' }} 找</div>
-                  <div class="text-xs text-gray-400">可複製座標貼回來</div>
-                </div>
-                <span class="text-gray-300 text-lg">➜</span>
-              </div>
             </div>
           </div>
 
@@ -373,18 +361,6 @@
                 </div>
               </div>
 
-              <div
-                v-if="!mapIsCoordinateMode"
-                @click="searchMapInExternalMap"
-                class="suggestion-item hover:bg-gray-100 border-t-2 border-gray-100 cursor-pointer"
-              >
-                <span class="text-xl">🔎</span>
-                <div class="flex-1">
-                  <div class="font-bold text-blue-600 text-sm">找不到？去 {{ isKoreaTrip ? 'Naver Map' : 'Google Maps' }} 找</div>
-                  <div class="text-xs text-gray-400">也可複製座標貼回這裡</div>
-                </div>
-                <span class="text-gray-300 text-lg">➜</span>
-              </div>
             </div>
           </div>
 
@@ -850,8 +826,8 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260618_11"></script>
-<script src="./app.js?v=20260618_11"></script>
+<script src="./config.js?v=20260618_12"></script>
+<script src="./app.js?v=20260618_12"></script>
 
 </body>
 </html>

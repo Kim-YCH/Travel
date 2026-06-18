@@ -1293,16 +1293,6 @@ createApp({
       await searchCityAndJump();
     };
 
-    const searchMapInExternalMap = () => {
-      const query = mapSearchQuery.value.trim();
-      if (!query) return;
-
-      if (isKoreaTrip.value) {
-        window.open(`https://map.naver.com/v5/search/${encodeURIComponent(query)}`, '_blank');
-      } else {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-      }
-    };
 
     const searchCityAndJump = async () => {
       const q = mapSearchQuery.value.trim();
@@ -1949,17 +1939,6 @@ createApp({
       searchResults.value = [];
     };
 
-    const searchInExternalMap = () => {
-      const query = newPlace.value.trim();
-
-      if (isKoreaTrip.value) {
-        window.open(`https://map.naver.com/v5/search/${encodeURIComponent(query)}`, '_blank');
-      } else {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-      }
-
-      searchResults.value = [];
-    };
 
     const addPlace = async () => {
       if (isAddingPlace.value) return;
@@ -3404,11 +3383,11 @@ createApp({
 
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
-      searchPlacesInput, useCoordinateInput, selectPlace, searchInExternalMap,
+      searchPlacesInput, useCoordinateInput, selectPlace,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
       itineraryListEl, alternativeListEl, formatTime,
 
-      searchMapPlacesInput, useMapCoordinateInput, selectMapPlace, searchMapInExternalMap,
+      searchMapPlacesInput, useMapCoordinateInput, selectMapPlace,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
