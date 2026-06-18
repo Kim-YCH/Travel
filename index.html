@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260618_09 -->
+<!-- version: 20260618_10 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260618_09" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260618_09" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260618_09" />
-  <link rel="manifest" href="./site.webmanifest?v=20260618_09" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260618_10" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260618_10" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260618_10" />
+  <link rel="manifest" href="./site.webmanifest?v=20260618_10" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,7 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260618_09" />
+  <link rel="stylesheet" href="./style.css?v=20260618_10" />
 </head>
 <body>
 
@@ -430,8 +430,8 @@
       </div>
 
       <!-- Money -->
-      <div v-show="currentTab === 'money'" class="p-4 space-y-4 pb-24 tab-panel">
-        <div class="card bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
+      <div v-show="currentTab === 'money'" class="p-3 space-y-3 pb-24 tab-panel money-page">
+        <div class="card money-summary bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
           <div class="flex justify-between items-end mb-4">
             <span class="text-gray-400 text-sm">總支出</span>
             <span class="text-3xl font-bold tracking-wider">${{ totalExpense }}</span>
@@ -548,7 +548,7 @@
       </div>
 
       <!-- Settings -->
-      <div v-show="currentTab === 'settings'" class="p-4 space-y-4 pb-24 tab-panel">
+      <div v-show="currentTab === 'settings'" class="p-3 space-y-3 pb-24 tab-panel settings-page">
         <button
           @click="exitTrip"
           class="w-full bg-gray-700 text-white h-[54px] rounded-lg font-bold mb-6 shadow text-lg"
@@ -850,8 +850,8 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260618_09"></script>
-<script src="./app.js?v=20260618_09"></script>
+<script src="./config.js?v=20260618_10"></script>
+<script src="./app.js?v=20260618_10"></script>
 
 </body>
 </html>

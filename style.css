@@ -510,3 +510,69 @@ html, body {
       color: #991b1b;
       border-color: #fecaca;
     }
+
+    /* 20260618.10: use dynamic mobile viewport and make lower pages scroll higher above iPhone home indicator. */
+    html, body {
+      height: 100dvh;
+      min-height: 100dvh;
+    }
+
+    .mobile-container {
+      height: 100dvh;
+      min-height: 100dvh;
+    }
+
+    .content-scroll {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+
+    .tab-panel {
+      padding-bottom: calc(16rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .bottom-nav {
+      padding-top: 0.35rem !important;
+      padding-bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .money-page {
+      padding-top: 0.65rem !important;
+    }
+
+    .money-page .card {
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 14px;
+    }
+
+    .money-page input,
+    .money-page select {
+      height: 48px;
+      border-radius: 11px;
+    }
+
+    .money-page button.h-\[54px\] {
+      height: 48px !important;
+    }
+
+    .money-summary .text-3xl {
+      font-size: 2rem !important;
+      line-height: 2.2rem !important;
+    }
+
+    .money-summary .mb-4 {
+      margin-bottom: 0.65rem !important;
+    }
+
+    .money-summary .pt-3 {
+      padding-top: 0.6rem !important;
+    }
+
+    @supports (height: 100svh) {
+      html, body, .mobile-container {
+        height: 100svh;
+        min-height: 100svh;
+      }
+    }
+
