@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: 20260618_06 -->
+<!-- version: 20260618_07 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
@@ -12,7 +12,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260618_06" />
+  <link rel="stylesheet" href="./style.css?v=20260618_07" />
 </head>
 <body>
 
@@ -556,6 +556,11 @@
           class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
         ><span>📋</span> 複製行程</button>
 
+        <button
+          @click="downloadBackupHtml"
+          class="w-full bg-white text-amber-700 border border-amber-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
+        ><span>🗂️</span> 產生備份網頁</button>
+
         <h3 class="font-bold text-gray-700 mt-6 ml-1">🏨 住宿設定</h3>
         <div class="card border border-teal-100 space-y-3 relative z-30">
      
@@ -841,8 +846,8 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260618_06"></script>
-<script src="./app.js?v=20260618_06"></script>
+<script src="./config.js?v=20260618_07"></script>
+<script src="./app.js?v=20260618_07"></script>
 
 </body>
 </html>

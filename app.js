@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260618.06';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260618.07';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -3182,7 +3182,6 @@ createApp({
         dayItems.forEach(item => {
           const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
           text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
-          text += appendMapLinksToExport(item, '    ');
         });
 
         if(dayAlternatives.length > 0) {
@@ -3190,20 +3189,117 @@ createApp({
           dayAlternatives.forEach(item => {
             const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
             text += `    ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
-            text += appendMapLinksToExport(item, '      ');
           });
         }
 
         dayHotels.forEach(hotel => {
           const addr = hotel.address ? ` (${hotel.address})` : '';
           text += `  🏠 ${hotel.name || '住宿'}${addr}\n`;
-          text += appendMapLinksToExport(hotel, '    ');
         });
 
         text += "\n";
       }
 
       return text;
+    };
+
+
+    const buildBackupPlaceCardHtml = (place, icon = '📍') => {
+      const links = getMapExportLinks(place || {});
+      const name = escapeHtml(place?.name || place?.title || '地點');
+      const time = formatTime(place?.time || '');
+      const msg = place?.message ? escapeHtml(String(place.message).replace(/\n/g, ' ')) : '';
+      const addr = place?.address ? escapeHtml(place.address) : '';
+      const appText = isKoreaTrip.value ? '開啟 Naver Map' : '開啟地圖 App';
+      const appBtn = links.app
+        ? `<a class="map-btn" href="${escapeHtml(links.app)}">${appText}</a>`
+        : '';
+
+      return `
+        <div class="place-card">
+          <div class="place-head">
+            <div class="place-icon">${icon}</div>
+            <div class="place-main">
+              <div class="place-title">${time ? `<span class="place-time">${escapeHtml(time)}</span>` : ''}${name}</div>
+              ${addr ? `<div class="place-address">${addr}</div>` : ''}
+              ${msg ? `<div class="place-note">${msg}</div>` : ''}
+            </div>
+          </div>
+          ${appBtn}
+        </div>`;
+    };
+
+    const buildBackupHtml = () => {
+      if (!currentTrip.value) return '';
+      const tripName = escapeHtml(currentTrip.value.name || '行程備份');
+      let body = '';
+
+      for (let d = 1; d <= totalDays.value; d++) {
+        const dayItems = getDayOrderedItems(d, false);
+        const dayAlternatives = getDayOrderedItems(d, true);
+        const dayHotels = getHotelsForDay(d);
+        if(dayItems.length === 0 && dayAlternatives.length === 0 && dayHotels.length === 0) continue;
+
+        const label = dayLabel(d);
+        body += `<section class="day-section"><h2>📅 Day ${d}${label ? `｜${escapeHtml(label)}` : ''}</h2>`;
+        dayItems.forEach(item => { body += buildBackupPlaceCardHtml(item, '📍'); });
+        if (dayAlternatives.length) {
+          body += `<div class="sub-title">📌 備案</div>`;
+          dayAlternatives.forEach(item => { body += buildBackupPlaceCardHtml(item, '📌'); });
+        }
+        dayHotels.forEach(hotel => { body += buildBackupPlaceCardHtml(hotel, '🏠'); });
+        body += `</section>`;
+      }
+
+      return `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>${tripName} 備份行程</title>
+  <style>
+    body{margin:0;background:#f8fafc;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.45;}
+    .wrap{max-width:520px;margin:0 auto;padding:22px 16px 40px;}
+    .hero{background:#2563eb;color:white;border-radius:22px;padding:18px 16px;box-shadow:0 10px 28px rgba(37,99,235,.22);margin-bottom:16px;}
+    h1{margin:0;font-size:24px;font-weight:900;}
+    .hint{font-size:12px;color:#dbeafe;margin-top:6px;}
+    .day-section{margin:14px 0 18px;}
+    h2{font-size:16px;margin:0 0 10px;color:#334155;}
+    .sub-title{font-weight:900;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;display:inline-block;padding:4px 10px;margin:6px 0 8px;font-size:12px;}
+    .place-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:13px;margin-bottom:10px;box-shadow:0 3px 10px rgba(15,23,42,.05);}
+    .place-head{display:flex;gap:10px;align-items:flex-start;}
+    .place-icon{width:32px;height:32px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .place-main{min-width:0;flex:1;}
+    .place-title{font-size:16px;font-weight:900;color:#111827;word-break:break-word;}
+    .place-time{color:#2563eb;margin-right:7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+    .place-address{font-size:12px;color:#64748b;margin-top:3px;word-break:break-word;}
+    .place-note{font-size:13px;color:#475569;background:#f8fafc;border-radius:12px;padding:8px 10px;margin-top:8px;word-break:break-word;}
+    .map-btn{display:block;text-align:center;text-decoration:none;background:#0d9488;color:#fff;font-weight:900;border-radius:14px;padding:11px 12px;margin-top:11px;}
+    .footer{font-size:11px;color:#94a3b8;text-align:center;margin-top:24px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero"><h1>${tripName}</h1><div class="hint">備份行程｜按地點下方按鈕可嘗試開啟地圖 App</div></div>
+    ${body || '<div class="place-card">目前沒有行程資料</div>'}
+    <div class="footer">backup ${escapeHtml(APP_VERSION)}</div>
+  </div>
+</body>
+</html>`;
+    };
+
+    const downloadBackupHtml = () => {
+      const html = buildBackupHtml();
+      if (!html) return;
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      const safeName = String(currentTrip.value?.name || 'trip').replace(/[\\/:*?"<>|]+/g, '_');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${safeName}_備份行程_${APP_VERSION}.html`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 500);
     };
 
     const exportItinerary = () => {
@@ -3324,7 +3420,7 @@ createApp({
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
-      exportItinerary, isKoreaTrip,
+      exportItinerary, downloadBackupHtml, isKoreaTrip,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace,
