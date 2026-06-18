@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || 'dev';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260618.04';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -783,34 +783,51 @@ createApp({
     };
 
     const getMapExportLinks = (place = {}) => {
-      const name = String(place.name_ko || place.name || place.title || '地點').trim();
+      // 導航 App 顯示的目的地名稱要維持行程/住宿原本名稱，不要變成泛稱「地點」。
+      const title = String(place.name || place.title || place.name_ko || currentTrip.value?.name || '行程').trim();
       const address = String(place.address || '').trim();
-      const queryText = [name, address, currentTrip.value?.city || ''].filter(Boolean).join(' ');
+      const queryText = [title, address, currentTrip.value?.city || ''].filter(Boolean).join(' ') || title;
       const lat = place.lat !== '' && place.lat != null ? Number(place.lat) : null;
       const lng = place.lng !== '' && place.lng != null ? Number(place.lng) : null;
       const placeId = String(place.place_id || '').trim();
-      const encodedName = encodeURIComponent(name || '地點');
-      const encodedQuery = encodeURIComponent(queryText || name || '地點');
+      const encodedName = encodeURIComponent(title);
+      const encodedQuery = encodeURIComponent(queryText || title);
+
+      const googleDirectionWeb = (lat != null && lng != null)
+        ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`
+        : (placeId
+          ? `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}&destination_place_id=${placeId}&travelmode=walking`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}&travelmode=walking`);
 
       if (isKoreaTrip.value) {
-        const naverWeb = `https://map.naver.com/v5/search/${encodedQuery}`;
         const naverApp = (lat != null && lng != null)
-          ? `nmap://place?lat=${lat}&lng=${lng}&name=${encodedName}&appname=tripplanner`
+          ? `nmap://route/public?dlat=${lat}&dlng=${lng}&dname=${encodedName}&appname=tripplanner`
           : `nmap://search?query=${encodedQuery}&appname=tripplanner`;
-        return { web: naverWeb, app: naverApp, webLabel: 'Naver Map', appLabel: 'Naver Map App' };
+
+        return {
+          nav: googleDirectionWeb,
+          app: naverApp,
+          navLabel: '導航網址',
+          appLabel: 'Naver App 導航'
+        };
       }
 
-      const googleWeb = getExternalMapLink({ name: queryText || name, lat, lng, place_id: placeId });
       const googleApp = (lat != null && lng != null)
-        ? `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}&zoom=16`
-        : `comgooglemaps://?q=${encodedQuery}`;
-      return { web: googleWeb, app: googleApp, webLabel: 'Google Maps', appLabel: 'Google Maps App' };
+        ? `comgooglemaps://?daddr=${lat},${lng}&directionsmode=walking`
+        : `comgooglemaps://?daddr=${encodedQuery}&directionsmode=walking`;
+
+      return {
+        nav: googleDirectionWeb,
+        app: googleApp,
+        navLabel: '導航網址',
+        appLabel: 'Google Maps App'
+      };
     };
 
     const appendMapLinksToExport = (place, indent = '    ') => {
       const links = getMapExportLinks(place);
       let text = '';
-      if (links.web) text += `${indent}🗺️ ${links.webLabel}：${links.web}
+      if (links.nav) text += `${indent}🧭 ${links.navLabel}：${links.nav}
 `;
       if (links.app) text += `${indent}📱 ${links.appLabel}：${links.app}
 `;
@@ -3159,12 +3176,7 @@ createApp({
     const buildItineraryText = () => {
       if(!currentTrip.value) return '';
 
-      const generatedAt = new Date();
-      const generatedLabel = `${generatedAt.getFullYear()}/${pad2(generatedAt.getMonth()+1)}/${pad2(generatedAt.getDate())} ${pad2(generatedAt.getHours())}:${pad2(generatedAt.getMinutes())}`;
-      let text = `【${currentTrip.value.name}】行程表\n`;
-      text += `版本：${APP_VERSION}\n`;
-      text += `匯出時間：${generatedLabel}\n`;
-      text += `說明：地圖網址可在系統或網路不穩時直接開啟查看；App 連結需手機支援對應地圖 App。\n\n`;
+      let text = `【${currentTrip.value.name}】行程表\n\n`;
 
       for(let d = 1; d <= totalDays.value; d++) {
         text += `📅 Day ${d}`;
@@ -3217,21 +3229,6 @@ createApp({
     const manualSync = async () => {
       await flushPendingQueue();
       await fetchData();
-    };
-
-    const downloadItineraryTxt = () => {
-      const text = buildItineraryText();
-      if (!text) return;
-      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-      const a = document.createElement('a');
-      const safeName = String(currentTrip.value?.name || 'itinerary').replace(/[\\/:*?"<>|]+/g, '_');
-      a.href = URL.createObjectURL(blob);
-      const versionLabel = String(APP_VERSION || 'backup').replace(/[^0-9A-Za-z._-]+/g, '_');
-      a.download = `${safeName}_${versionLabel}_offline.txt`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 500);
     };
 
     const switchTab = async (tab) => {
@@ -3340,7 +3337,7 @@ createApp({
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
-      exportItinerary, downloadItineraryTxt, isKoreaTrip,
+      exportItinerary, isKoreaTrip,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace,
