@@ -1,10 +1,10 @@
-const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+const { createApp, ref, computed, onMounted, onBeforeUnmount, nextTick, watch } = Vue;
 
 createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260618.07';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260619.01';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -24,6 +24,8 @@ createApp({
 
     const currentDay = ref(1);
     const totalDays = ref(1);
+    const todayKey = ref('');
+    let todayRefreshTimer = null;
 
     const people = ref([]);
     const itinerary = ref([]);
@@ -130,6 +132,7 @@ createApp({
 
     const pad2 = (n) => String(n).padStart(2, '0');
     const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    const refreshTodayKey = () => { todayKey.value = toYMD(new Date()); };
     const parseYMD = (s) => {
       if (!s) return null;
       const p = String(s).split('-');
@@ -148,7 +151,7 @@ createApp({
     const daysUntilTrip = (trip) => {
       const base = parseYMD(trip?.start_date);
       if (!base) return null;
-      const today = new Date();
+      const today = parseYMD(todayKey.value || toYMD(new Date())) || new Date();
       today.setHours(12, 0, 0, 0);
       const diff = Math.ceil((base.getTime() - today.getTime()) / 86400000);
       return diff >= 0 ? diff : null;
@@ -3353,11 +3356,36 @@ createApp({
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
+    const handleAppResume = () => {
+      refreshTodayKey();
+      // iOS 主畫面書籤會保留上次畫面，回到前景時主動刷新日期/倒數。
+      if (currentView.value === 'lobby') {
+        fetchTrips();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) handleAppResume();
+    };
+
     onMounted(async () => {
+      refreshTodayKey();
       const hasTripsCache = loadTripsCache();
       console.log('loadTripsCache =', hasTripsCache);
       window.addEventListener('online', () => flushPendingQueue());
+      window.addEventListener('focus', handleAppResume);
+      window.addEventListener('pageshow', handleAppResume);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      todayRefreshTimer = setInterval(refreshTodayKey, 60 * 1000);
       fetchTrips();
+    });
+
+    onBeforeUnmount(() => {
+      window.removeEventListener('online', () => flushPendingQueue());
+      window.removeEventListener('focus', handleAppResume);
+      window.removeEventListener('pageshow', handleAppResume);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (todayRefreshTimer) clearInterval(todayRefreshTimer);
     });
 
     return {
