@@ -4,11 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-<<<<<<< HEAD
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260619.01';
-=======
     const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260619.02';
->>>>>>> ac10ce5 (20260619.02 Open trip on current travel day)
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
