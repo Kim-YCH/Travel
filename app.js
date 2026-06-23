@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260623.02';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260623.01';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -42,6 +42,7 @@ createApp({
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
 
     const searchResults = ref([]);
+    const translatedSearchHint = ref('');
     const isSearching = ref(false);
     const isCoordinateMode = ref(false);
     const resolvedCoordName = ref('');
@@ -51,6 +52,7 @@ createApp({
 
     const mapSearchQuery = ref('');
     const mapSearchResults = ref([]);
+    const mapTranslatedSearchHint = ref('');
     const mapIsSearching = ref(false);
     const mapIsCoordinateMode = ref(false);
     const mapResolvedCoordName = ref('');
@@ -129,6 +131,111 @@ createApp({
     };
 
     const isKoreaTrip = computed(() => isKoreaCity(currentTrip.value?.city || ''));
+
+    const getTripTranslateTarget = () => {
+      const city = String(currentTrip.value?.city || '').trim().toLowerCase();
+      if (isKoreaCity(city)) return { code: 'ko', label: '韓文' };
+      const japanKeywords = ['日本', '東京', '大阪', '京都', '奈良', '札幌', '沖繩', '福岡', '名古屋', 'japan', 'tokyo', 'osaka', 'kyoto', 'nara', 'sapporo', 'okinawa', 'fukuoka', 'nagoya'];
+      if (japanKeywords.some(k => city.includes(k.toLowerCase()))) return { code: 'ja', label: '日文' };
+      const thaiKeywords = ['泰國', '曼谷', '清邁', '普吉', 'thailand', 'bangkok', 'chiang mai', 'phuket'];
+      if (thaiKeywords.some(k => city.includes(k.toLowerCase()))) return { code: 'th', label: '泰文' };
+      return null;
+    };
+
+    const translateSearchCache = new Map();
+
+    const translatePlaceKeyword = async (keyword) => {
+      const target = getTripTranslateTarget();
+      const q = String(keyword || '').trim();
+      if (!target || !q) return { keyword: q, translated: '', target };
+
+      const city = String(currentTrip.value?.city || '').trim();
+      const sourceText = city && !q.includes(city) ? `${q} ${city}` : q;
+      const key = `${target.code}__${sourceText}`;
+      if (translateSearchCache.has(key)) return translateSearchCache.get(key);
+
+      try {
+        const res = await apiGet({
+          action: 'translate_place_keyword',
+          text: sourceText,
+          target: target.code
+        });
+        const translated = String(res?.translatedText || '').trim();
+        const out = {
+          keyword: translated || sourceText,
+          translated,
+          target,
+          detectedSourceLanguage: res?.detectedSourceLanguage || ''
+        };
+        translateSearchCache.set(key, out);
+        return out;
+      } catch (err) {
+        console.warn('translatePlaceKeyword failed:', err);
+        return { keyword: sourceText, translated: '', target };
+      }
+    };
+
+    const getPlacePredictionsAsync = async (request) => {
+      if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!autocompleteService) autocompleteService = new google.maps.places.AutocompleteService();
+
+      return await new Promise((resolve) => {
+        autocompleteService.getPlacePredictions(request, (predictions, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+            resolve(predictions);
+          } else {
+            resolve([]);
+          }
+        });
+      });
+    };
+
+    const mergePredictions = (...groups) => {
+      const seen = new Set();
+      const out = [];
+      groups.flat().forEach((item) => {
+        const key = item?.place_id || item?.description;
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(item);
+      });
+      return out;
+    };
+
+    const searchPlacesWithTranslation = async (q, options = {}) => {
+      const target = getTripTranslateTarget();
+      const baseReq = {
+        input: q,
+        language: 'zh-TW',
+        ...(options.types ? { types: options.types } : {})
+      };
+      if (options.bounds) baseReq.bounds = options.bounds;
+
+      const originalPredictions = await getPlacePredictionsAsync(baseReq);
+
+      if (!target) {
+        return { predictions: originalPredictions, hint: '' };
+      }
+
+      const translatedInfo = await translatePlaceKeyword(q);
+      const translatedKeyword = String(translatedInfo.keyword || '').trim();
+      if (!translatedKeyword || translatedKeyword === q) {
+        return { predictions: originalPredictions, hint: '' };
+      }
+
+      const translatedReq = {
+        input: translatedKeyword,
+        language: target.code,
+        ...(options.types ? { types: options.types } : {})
+      };
+      if (options.bounds) translatedReq.bounds = options.bounds;
+
+      const translatedPredictions = await getPlacePredictionsAsync(translatedReq);
+      return {
+        predictions: mergePredictions(translatedPredictions, originalPredictions),
+        hint: translatedInfo.translated ? `翻譯搜尋：${translatedInfo.translated}` : ''
+      };
+    };
 
     const pad2 = (n) => String(n).padStart(2, '0');
     const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -788,6 +895,7 @@ createApp({
 
     const clearMapSearchDropdown = () => {
       mapSearchResults.value = [];
+      mapTranslatedSearchHint.value = '';
       mapIsSearching.value = false;
       mapIsCoordinateMode.value = false;
       mapResolvedCoordName.value = '';
@@ -1246,6 +1354,7 @@ createApp({
       const q = mapSearchQuery.value.trim();
 
       if (!q) {
+        mapTranslatedSearchHint.value = '';
         clearMapSearchResult();
         return;
       }
@@ -1259,6 +1368,7 @@ createApp({
         mapSelectedLng.value = parseFloat(parts[1]);
         mapResolvedCoordName.value = `座標 ${parts[0].trim()}, ${parts[1].trim()}`;
         mapSearchResults.value = [];
+        mapTranslatedSearchHint.value = '';
         mapSelectedPlaceData.value = null;
         return;
       }
@@ -1274,28 +1384,15 @@ createApp({
 
       mapSearchTimeout = setTimeout(async () => {
         try {
-          if (!window.google || !window.google.maps) {
-            await loadGoogleMaps();
-          }
-
-          if (!autocompleteService) {
-            autocompleteService = new google.maps.places.AutocompleteService();
-          }
-
-          const req = { input: q, language: 'zh-TW' };
+          const opts = {};
           if (mapInstance && typeof mapInstance.getBounds === 'function') {
             const bounds = mapInstance.getBounds();
-            if (bounds) req.bounds = bounds;
+            if (bounds) opts.bounds = bounds;
           }
-
-          autocompleteService.getPlacePredictions(req, (predictions, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-              mapSearchResults.value = predictions;
-            } else {
-              mapSearchResults.value = [];
-            }
-            mapIsSearching.value = false;
-          });
+          const out = await searchPlacesWithTranslation(q, opts);
+          mapSearchResults.value = out.predictions || [];
+          mapTranslatedSearchHint.value = out.hint || '';
+          mapIsSearching.value = false;
         } catch (err) {
           console.error(err);
           mapSearchResults.value = [];
@@ -1362,7 +1459,10 @@ createApp({
 
       const geocoder = new google.maps.Geocoder();
       const city = String(currentTrip.value?.city || '').trim();
-      const geocodeQuery = city && !q.includes(city) ? `${q} ${city}` : q;
+      const fallbackQuery = city && !q.includes(city) ? `${q} ${city}` : q;
+      const translatedInfo = await translatePlaceKeyword(q);
+      const geocodeQuery = translatedInfo?.keyword || fallbackQuery;
+      if (translatedInfo?.translated) mapTranslatedSearchHint.value = `翻譯搜尋：${translatedInfo.translated}`;
 
       geocoder.geocode({ address: geocodeQuery }, (results, status) => {
         if (status === 'OK' && results[0]) {
@@ -1900,6 +2000,7 @@ createApp({
 
       if (!q) {
         searchResults.value = [];
+        translatedSearchHint.value = '';
         isCoordinateMode.value = false;
         isSearching.value = false;
         return;
@@ -1909,6 +2010,7 @@ createApp({
       if (coordRegex.test(q)) {
         isCoordinateMode.value = true;
         isSearching.value = false;
+        translatedSearchHint.value = '';
 
         const parts = q.split(',');
         selectedLat.value = parseFloat(parts[0]);
@@ -1929,25 +2031,10 @@ createApp({
 
       searchTimeout = setTimeout(async () => {
         try {
-          if (!window.google || !window.google.maps) {
-            await loadGoogleMaps();
-          }
-
-          if (!autocompleteService) {
-            autocompleteService = new google.maps.places.AutocompleteService();
-          }
-
-          autocompleteService.getPlacePredictions(
-            { input: q, language: 'zh-TW' },
-            (predictions, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-                searchResults.value = predictions;
-              } else {
-                searchResults.value = [];
-              }
-              isSearching.value = false;
-            }
-          );
+          const out = await searchPlacesWithTranslation(q);
+          searchResults.value = out.predictions || [];
+          translatedSearchHint.value = out.hint || '';
+          isSearching.value = false;
         } catch (err) {
           console.error(err);
           searchResults.value = [];
@@ -1965,6 +2052,7 @@ createApp({
       newPlace.value = item.structured_formatting.main_text;
       selectedPlaceData.value = item;
       searchResults.value = [];
+      translatedSearchHint.value = '';
     };
 
 
@@ -2015,6 +2103,7 @@ createApp({
       newTime.value = '';
       selectedPlaceData.value = null;
       searchResults.value = [];
+      translatedSearchHint.value = '';
       selectedLat.value = null;
       selectedLng.value = null;
       isCoordinateMode.value = false;
@@ -3374,6 +3463,7 @@ createApp({
     watch(currentView, () => scheduleSortableInit());
     watch(mapSearchQuery, (val) => {
       if (!String(val || '').trim()) {
+        mapTranslatedSearchHint.value = '';
         clearMapSearchResult();
       }
     });
@@ -3422,8 +3512,8 @@ createApp({
       currentDay, totalDays,
       people, itinerary, expenses, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
-      searchResults, isSearching, isCoordinateMode, resolvedCoordName,
-      mapSearchQuery, mapSearchResults, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
+      searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
+      mapSearchQuery, mapSearchResults, mapTranslatedSearchHint, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
       mapLatestResult, mapAddDay, mapDisplayFilter,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
