@@ -4,7 +4,11 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
+<<<<<<< HEAD
     const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260619.01';
+=======
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260619.02';
+>>>>>>> ac10ce5 (20260619.02 Open trip on current travel day)
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -163,6 +167,27 @@ createApp({
       const d = daysUntilTrip(trip);
       if (d == null) return '';
       return d === 0 ? '今天開始' : '天後開始';
+    };
+
+    const getTripDayForToday = (trip, totalDayCount = totalDays.value) => {
+      const base = parseYMD(trip?.start_date);
+      const maxDay = Math.max(1, parseInt(totalDayCount, 10) || 1);
+      if (!base) return 1;
+
+      const today = parseYMD(todayKey.value || toYMD(new Date())) || new Date();
+      today.setHours(12, 0, 0, 0);
+      const diffDay = Math.floor((today.getTime() - base.getTime()) / 86400000) + 1;
+
+      // 還沒出發，或旅程已結束，一律回到 Day 1。
+      if (diffDay < 1 || diffDay > maxDay) return 1;
+      return diffDay;
+    };
+
+    const applyEntryDayByToday = () => {
+      const day = getTripDayForToday(currentTrip.value, totalDays.value);
+      currentDay.value = day;
+      mapAddDay.value = day;
+      newExpense.value.day = day;
     };
 
     const dayLabel = (day) => {
@@ -1426,6 +1451,7 @@ createApp({
 
       const tripId = trip.id;
       loadTripCache(tripId);
+      applyEntryDayByToday();
 
       await nextTick();
       scheduleSortableInit();
@@ -1439,9 +1465,9 @@ createApp({
 
       loadPendingQueue(tripId);
       if (pendingSyncQueue.value.length) {
-        flushPendingQueue().then(() => fetchData());
+        flushPendingQueue().then(() => fetchData({ autoSelectToday: true }));
       } else {
-        fetchData();
+        fetchData({ autoSelectToday: true });
       }
     };
 
@@ -1464,7 +1490,7 @@ createApp({
       await fetchTrips();
     };
 
-    const fetchData = async () => {
+    const fetchData = async (options = {}) => {
       if(!currentTrip.value) return;
 
       const tripId = currentTrip.value.id;
@@ -1497,6 +1523,9 @@ createApp({
           Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
 
         totalDays.value = Math.max(1, maxDay);
+        if (options.autoSelectToday) {
+          applyEntryDayByToday();
+        }
 
         await ensureAllDayOrdersSynced(tripId);
 
