@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260623.01';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260624.01';
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
