@@ -1,9 +1,10 @@
-// version: 260702-5
+// version: 260702-6
 // 準備清單功能：分類與項目由使用者自行建立，資料同步到 Google Sheet，並保留 localStorage 作為暫存備援。
 // 260702-4：勾選與新增項目改為局部更新，避免手機鍵盤收起與畫面重繪。
 // 260702-5：分類改為 emoji 與名稱同欄輸入，編輯 / 刪除按鈕改成縮小版行程卡樣式。
+// 260702-6：新增自動重試同步、回到前景自動刷新，避免閒置後長時間停在離線狀態。
 (function () {
-  const VERSION = '260702-5';
+  const VERSION = '260702-6';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v3::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -15,6 +16,11 @@
   let isLoadingRemote = false;
   let syncStatus = '';
   let lastSyncedAt = '';
+  let lastRemoteUpdatedAt = '';
+  let hasPendingSheetSave = false;
+  let lastAutoRefreshAt = 0;
+  const AUTO_REFRESH_MS = 60000;
+  const AUTO_RETRY_MS = 30000;
 
   function safeJsonParse(value, fallback) {
     try { return JSON.parse(value); } catch (_) { return fallback; }
@@ -102,6 +108,23 @@
     return !!(data && Array.isArray(data.sections) && data.sections.length > 0);
   }
 
+  function stateFingerprint(data) {
+    try {
+      return JSON.stringify((data && data.sections) || []);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function isBrowserOnline() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+  }
+
+  function isEditingChecklistInput() {
+    const active = document.activeElement;
+    return !!(root && active && root.contains(active) && active.matches('input, textarea'));
+  }
+
   function loadLocalState() {
     currentTripKey = getStorageKey();
     const saved = safeJsonParse(localStorage.getItem(currentTripKey), null);
@@ -118,6 +141,7 @@
 
   function scheduleSheetSave() {
     if (!API_URL || !state) return;
+    hasPendingSheetSave = true;
     syncStatus = '待同步';
     updateSyncUI();
     if (syncTimer) clearTimeout(syncTimer);
@@ -133,15 +157,20 @@
     return await res.json();
   }
 
-  async function loadFromSheet() {
+  async function loadFromSheet(options = {}) {
     if (!API_URL || isLoadingRemote) return;
 
     const tripName = getCurrentTripName();
     if (!tripName || tripName === '共用清單') return;
 
+    const silent = !!options.silent;
     isLoadingRemote = true;
-    syncStatus = '同步中';
-    updateSyncUI();
+    if (!silent) {
+      syncStatus = '同步中';
+      updateSyncUI();
+    }
+
+    let shouldRender = false;
 
     try {
       const url = API_URL
@@ -157,10 +186,19 @@
           updatedAt: data.updatedAt || new Date().toISOString(),
           sections: data.sections || []
         });
+        const remoteFingerprint = stateFingerprint(remote);
+        const localFingerprint = stateFingerprint(state);
+        lastRemoteUpdatedAt = data.updatedAt || lastRemoteUpdatedAt;
 
-        if (hasAnyContent(remote) || !hasAnyContent(state)) {
-          state = remote;
-          saveLocal(false);
+        if (hasPendingSheetSave) {
+          // 本機有尚未成功送出的變更時，不用遠端資料覆蓋，改由自動重試寫回 Sheet。
+          syncStatus = '待同步';
+        } else if (hasAnyContent(remote) || !hasAnyContent(state)) {
+          if (remoteFingerprint !== localFingerprint) {
+            state = remote;
+            saveLocal(false);
+            shouldRender = true;
+          }
           syncStatus = '已同步';
           lastSyncedAt = new Date().toISOString();
         } else {
@@ -173,10 +211,11 @@
       }
     } catch (err) {
       console.warn('prep checklist load failed:', err);
-      syncStatus = '離線';
+      syncStatus = isBrowserOnline() ? '未同步' : '離線';
     } finally {
       isLoadingRemote = false;
-      render();
+      if (!silent || shouldRender) render();
+      else updateSyncUI();
     }
   }
 
@@ -197,14 +236,18 @@
       });
 
       if (out && out.status === 'success') {
+        hasPendingSheetSave = false;
         syncStatus = '已同步';
         lastSyncedAt = new Date().toISOString();
+        lastRemoteUpdatedAt = out.updatedAt || lastSyncedAt;
       } else {
+        hasPendingSheetSave = true;
         syncStatus = '未同步';
         console.warn('prep checklist save failed:', out);
       }
     } catch (err) {
-      syncStatus = '離線';
+      hasPendingSheetSave = true;
+      syncStatus = isBrowserOnline() ? '未同步' : '離線';
       console.warn('prep checklist save failed:', err);
     }
 
@@ -673,6 +716,50 @@
     return null;
   }
 
+  function autoSyncTick() {
+    if (!API_URL || !state) return;
+    ensureLoadedForCurrentTrip();
+
+    const tripName = getCurrentTripName();
+    if (!tripName || tripName === '共用清單') return;
+    if (!isBrowserOnline()) {
+      if (syncStatus !== '離線') {
+        syncStatus = '離線';
+        updateSyncUI();
+      }
+      return;
+    }
+
+    if (hasPendingSheetSave || syncStatus === '離線' || syncStatus === '未同步' || syncStatus === '待同步') {
+      saveToSheet();
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastAutoRefreshAt >= AUTO_REFRESH_MS && !isEditingChecklistInput()) {
+      lastAutoRefreshAt = now;
+      loadFromSheet({ silent: true });
+    }
+  }
+
+  function bindAutoSyncEvents() {
+    window.addEventListener('online', () => {
+      syncStatus = hasPendingSheetSave ? '待同步' : '同步中';
+      updateSyncUI();
+      autoSyncTick();
+    });
+
+    window.addEventListener('focus', () => {
+      autoSyncTick();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) autoSyncTick();
+    });
+
+    setInterval(autoSyncTick, AUTO_RETRY_MS);
+  }
+
   function ensureLoadedForCurrentTrip() {
     const key = getStorageKey();
     if (key !== currentTripKey || !state) {
@@ -694,6 +781,7 @@
     loadLocalState();
     render();
     loadFromSheet();
+    bindAutoSyncEvents();
     const observer = new MutationObserver(() => ensureLoadedForCurrentTrip());
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     setInterval(ensureLoadedForCurrentTrip, 1200);
