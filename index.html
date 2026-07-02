@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 260702-1 -->
+<!-- version: 260702-2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=260702-1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=260702-1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=260702-1" />
-  <link rel="manifest" href="./site.webmanifest?v=260702-1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=260702-2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=260702-2" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=260702-2" />
+  <link rel="manifest" href="./site.webmanifest?v=260702-2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,7 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=260702-1" />
+  <link rel="stylesheet" href="./style.css?v=260702-2" />
 </head>
 <body>
 
@@ -26,7 +26,12 @@
   <!-- Lobby -->
   <div v-if="currentView === 'lobby'" class="content-scroll p-6 justify-center bg-gray-50">
     <h1 class="text-3xl font-bold text-gray-900 mb-1">✈️ 出發囉</h1>
-    <div class="text-[11px] text-gray-400 mb-5 select-none">版本 {{ APP_VERSION }}</div>
+    <div class="text-[11px] text-gray-400 mb-2 select-none">版本 {{ APP_VERSION }}</div>
+    <button
+      type="button"
+      onclick="window.TRAVEL_FORCE_REFRESH && window.TRAVEL_FORCE_REFRESH()"
+      class="mb-5 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-blue-100 bg-white text-blue-600 text-xs font-bold shadow-sm active:scale-95 transition"
+    >↻ 刷新版本 / 重新載入</button>
 
     <div class="space-y-4 mb-8">
       <div
@@ -828,10 +833,11 @@
   </div>
 </div>
 
-<script src="./config.js?v=260702-1"></script>
-<script src="./keyword-map.js?v=260702-1"></script>
-<script src="./app.js?v=260702-1"></script>
-<script src="./prep-checklist.js?v=260702-1"></script>
+<script src="./config.js?v=260702-2"></script>
+<script src="./cache-refresh.js?v=260702-2"></script>
+<script src="./keyword-map.js?v=260702-2"></script>
+<script src="./app.js?v=260702-2"></script>
+<script src="./prep-checklist.js?v=260702-2"></script>
 
 </body>
 </html>
