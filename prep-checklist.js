@@ -1,7 +1,8 @@
-// version: 260702-3
+// version: 260702-4
 // 準備清單功能：分類與項目由使用者自行建立，資料同步到 Google Sheet，並保留 localStorage 作為暫存備援。
+// 260702-4：勾選與新增項目改為局部更新，避免手機鍵盤收起與畫面重繪。
 (function () {
-  const VERSION = '260702-3';
+  const VERSION = '260702-4';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v3::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -94,6 +95,7 @@
   function scheduleSheetSave() {
     if (!API_URL || !state) return;
     syncStatus = '待同步';
+    updateSyncUI();
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(saveToSheet, 650);
   }
@@ -115,7 +117,7 @@
 
     isLoadingRemote = true;
     syncStatus = '同步中';
-    render();
+    updateSyncUI();
 
     try {
       const url = API_URL
@@ -161,7 +163,7 @@
     if (!tripName || tripName === '共用清單') return;
 
     syncStatus = '同步中';
-    render();
+    updateSyncUI();
 
     try {
       const out = await apiPost({
@@ -182,7 +184,7 @@
       console.warn('prep checklist save failed:', err);
     }
 
-    render();
+    updateSyncUI();
   }
 
   function saveState(updateTime = true) {
@@ -256,6 +258,37 @@
     document.head.appendChild(style);
   }
 
+  function renderItem(item) {
+    return `
+      <label class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
+        <input type="checkbox" ${item.checked ? 'checked' : ''} />
+        <span class="prep-item-text">${escapeHtml(item.text)}</span>
+        <button class="prep-mini-btn prep-edit-item" type="button">改</button>
+        <button class="prep-mini-btn prep-delete-item" type="button">×</button>
+      </label>`;
+  }
+
+  function renderSection(section) {
+    return `
+      <div class="prep-section" data-section-id="${escapeHtml(section.id)}">
+        <div class="prep-section-title">
+          <span class="prep-section-name">${escapeHtml(section.emoji)} ${escapeHtml(section.title)}</span>
+          <span class="prep-section-actions">
+            <span class="prep-section-count" style="font-size:12px;color:#94a3b8;">${section.items.filter(i => i.checked).length}/${section.items.length}</span>
+            <button class="prep-mini-btn prep-edit-section" type="button">改名</button>
+            <button class="prep-mini-btn prep-delete-section" type="button">刪除</button>
+          </span>
+        </div>
+        <div class="prep-items">
+          ${section.items.length ? section.items.map(renderItem).join('') : '<div class="prep-muted">尚無項目</div>'}
+        </div>
+        <div class="prep-section-add">
+          <input class="prep-new-item-input" placeholder="新增項目" />
+          <button class="prep-add-item-btn" type="button">新增</button>
+        </div>
+      </div>`;
+  }
+
   function render() {
     if (!root || !state) return;
     const stats = getStats();
@@ -271,7 +304,7 @@
             <div class="prep-title-row">
               <div>
                 <div style="font-size:18px;font-weight:900;">🎒 準備清單</div>
-                <div style="font-size:12px;opacity:.85;margin-top:2px;">${escapeHtml(tripName)}｜${stats.done}/${stats.total}（${stats.percent}%）</div>
+                <div class="prep-summary" style="font-size:12px;opacity:.85;margin-top:2px;">${escapeHtml(tripName)}｜${stats.done}/${stats.total}（${stats.percent}%）</div>
               </div>
               <button class="prep-close" type="button" aria-label="關閉">×</button>
             </div>
@@ -279,8 +312,8 @@
           </div>
           <div class="prep-body">
             <div class="prep-status-line">
-              <span>${lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`}</span>
-              ${syncText ? `<span class="prep-sync-pill">${escapeHtml(syncText)}</span>` : ''}
+              <span class="prep-updated-text">${lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`}</span>
+              <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
             </div>
 
             <div class="prep-add-box">
@@ -292,32 +325,11 @@
               <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
             </div>
 
-            ${hasSections ? '' : `<div class="prep-empty">尚未建立準備清單</div>`}
+            <div class="prep-empty" style="${hasSections ? 'display:none;' : ''}">尚未建立準備清單</div>
 
-            ${state.sections.map(section => `
-              <div class="prep-section" data-section-id="${escapeHtml(section.id)}">
-                <div class="prep-section-title">
-                  <span class="prep-section-name">${escapeHtml(section.emoji)} ${escapeHtml(section.title)}</span>
-                  <span class="prep-section-actions">
-                    <span style="font-size:12px;color:#94a3b8;">${section.items.filter(i => i.checked).length}/${section.items.length}</span>
-                    <button class="prep-mini-btn prep-edit-section" type="button">改名</button>
-                    <button class="prep-mini-btn prep-delete-section" type="button">刪除</button>
-                  </span>
-                </div>
-                ${section.items.length ? section.items.map(item => `
-                  <label class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
-                    <input type="checkbox" ${item.checked ? 'checked' : ''} />
-                    <span class="prep-item-text">${escapeHtml(item.text)}</span>
-                    <button class="prep-mini-btn prep-edit-item" type="button">改</button>
-                    <button class="prep-mini-btn prep-delete-item" type="button">×</button>
-                  </label>
-                `).join('') : '<div class="prep-muted">尚無項目</div>'}
-                <div class="prep-section-add">
-                  <input class="prep-new-item-input" placeholder="新增項目" />
-                  <button class="prep-add-item-btn" type="button">新增</button>
-                </div>
-              </div>
-            `).join('')}
+            <div class="prep-section-list">
+              ${state.sections.map(renderSection).join('')}
+            </div>
 
             <div class="prep-bottom-actions">
               <button class="prep-action-btn secondary prep-clear-checks" type="button">清空勾選</button>
@@ -329,140 +341,302 @@
 
     const fab = root.querySelector('.prep-fab');
     const overlay = root.querySelector('.prep-overlay');
-    const closeBtn = root.querySelector('.prep-close');
     fab.classList.toggle('is-visible', !!document.querySelector('.app-header h1'));
     overlay.classList.toggle('is-open', panelOpen);
+  }
 
-    fab.addEventListener('click', () => { panelOpen = true; render(); });
-    closeBtn.addEventListener('click', () => { panelOpen = false; render(); });
-    overlay.addEventListener('click', event => { if (event.target === overlay) { panelOpen = false; render(); } });
+  function updateStatsUI() {
+    if (!root || !state) return;
+    const stats = getStats();
+    const tripName = getCurrentTripName();
+    const summary = root.querySelector('.prep-summary');
+    const progressBar = root.querySelector('.prep-progress-bar');
+    if (summary) summary.textContent = `${tripName}｜${stats.done}/${stats.total}（${stats.percent}%）`;
+    if (progressBar) progressBar.style.width = `${stats.percent}%`;
 
-    root.querySelector('.prep-add-section-btn').addEventListener('click', () => {
-      const titleInput = root.querySelector('.prep-new-section-title');
-      const emojiInput = root.querySelector('.prep-new-section-emoji');
-      const title = String(titleInput.value || '').trim();
-      const emoji = String(emojiInput.value || '').trim() || '🧳';
-      if (!title) return;
-      state.sections.push({ id: makeId('section'), title, emoji, items: [] });
-      saveState(true);
-      render();
+    root.querySelectorAll('.prep-section').forEach(sectionEl => {
+      const section = findSection(sectionEl.dataset.sectionId);
+      const count = sectionEl.querySelector('.prep-section-count');
+      if (section && count) count.textContent = `${section.items.filter(i => i.checked).length}/${section.items.length}`;
     });
+  }
 
-    root.querySelectorAll('.prep-new-section-title').forEach(input => {
-      input.addEventListener('keydown', event => {
-        if (event.key !== 'Enter') return;
+  function updateSyncUI() {
+    if (!root) return;
+    const syncText = syncStatus || (lastSyncedAt ? '已同步' : '');
+    const pill = root.querySelector('.prep-sync-pill');
+    const updated = root.querySelector('.prep-updated-text');
+    if (pill) {
+      pill.textContent = syncText;
+      pill.style.display = syncText ? '' : 'none';
+    }
+    if (updated) {
+      updated.textContent = lastSyncedAt ? `更新 ${formatTime(lastSyncedAt)}` : `版本 ${VERSION}`;
+    }
+  }
+
+  function updateEmptyUI() {
+    if (!root || !state) return;
+    const empty = root.querySelector('.prep-empty');
+    if (empty) empty.style.display = state.sections.length ? 'none' : '';
+  }
+
+  function updateSectionCount(sectionId) {
+    const sectionEl = root && root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
+    const section = findSection(sectionId);
+    if (!sectionEl || !section) return;
+    const count = sectionEl.querySelector('.prep-section-count');
+    if (count) count.textContent = `${section.items.filter(i => i.checked).length}/${section.items.length}`;
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
+    return String(value).replace(/"/g, '\\"');
+  }
+
+  function addSectionFromInputs() {
+    const titleInput = root.querySelector('.prep-new-section-title');
+    const emojiInput = root.querySelector('.prep-new-section-emoji');
+    const title = String(titleInput && titleInput.value || '').trim();
+    const emoji = String(emojiInput && emojiInput.value || '').trim() || '🧳';
+    if (!title) return;
+
+    const section = { id: makeId('section'), title, emoji, items: [] };
+    state.sections.push(section);
+    saveState(true);
+
+    const sectionList = root.querySelector('.prep-section-list');
+    if (sectionList) sectionList.insertAdjacentHTML('beforeend', renderSection(section));
+    if (titleInput) titleInput.value = '';
+    if (emojiInput) emojiInput.value = '';
+    updateEmptyUI();
+    updateStatsUI();
+    updateSyncUI();
+  }
+
+  function addItemFromInput(input) {
+    const sectionEl = input.closest('.prep-section');
+    const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
+    const text = String(input.value || '').trim();
+    if (!section || !text) return;
+
+    const item = { id: makeId('item'), text, checked: false, checkedAt: '' };
+    section.items.push(item);
+    saveState(true);
+
+    const itemsEl = sectionEl.querySelector('.prep-items');
+    if (itemsEl) {
+      const muted = itemsEl.querySelector('.prep-muted');
+      if (muted) muted.remove();
+      itemsEl.insertAdjacentHTML('beforeend', renderItem(item));
+    }
+
+    input.value = '';
+    updateStatsUI();
+    updateSectionCount(section.id);
+    updateSyncUI();
+
+    // 保留連續輸入體驗：不要重畫整個面板，並盡量把焦點留在同一個輸入框。
+    requestAnimationFrame(() => {
+      try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+    });
+  }
+
+  function updateItemChecked(input) {
+    const itemEl = input.closest('.prep-item');
+    const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
+    if (!item) return;
+
+    item.checked = input.checked;
+    item.checkedAt = item.checked ? new Date().toISOString() : '';
+    saveState(true);
+
+    itemEl.classList.toggle('is-checked', item.checked);
+    const sectionEl = itemEl.closest('.prep-section');
+    if (sectionEl) updateSectionCount(sectionEl.dataset.sectionId);
+    updateStatsUI();
+    updateSyncUI();
+  }
+
+  function editSection(btn) {
+    const sectionEl = btn.closest('.prep-section');
+    const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
+    if (!section) return;
+
+    const nextEmoji = prompt('分類圖示：', section.emoji || '🧳');
+    if (nextEmoji === null) return;
+    const nextTitle = prompt('分類名稱：', section.title || '');
+    if (nextTitle === null) return;
+    const title = String(nextTitle || '').trim();
+    if (!title) return;
+
+    section.emoji = String(nextEmoji || '').trim() || '🧳';
+    section.title = title;
+    saveState(true);
+
+    const name = sectionEl.querySelector('.prep-section-name');
+    if (name) name.textContent = `${section.emoji} ${section.title}`;
+    updateSyncUI();
+  }
+
+  function deleteSection(btn) {
+    const sectionEl = btn.closest('.prep-section');
+    const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
+    if (!section) return;
+    if (!confirm(`確定刪除「${section.title}」？`)) return;
+
+    state.sections = state.sections.filter(x => x.id !== section.id);
+    saveState(true);
+    if (sectionEl) sectionEl.remove();
+    updateEmptyUI();
+    updateStatsUI();
+    updateSyncUI();
+  }
+
+  function editItem(btn) {
+    const itemEl = btn.closest('.prep-item');
+    const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
+    if (!item) return;
+
+    const nextText = prompt('項目名稱：', item.text || '');
+    if (nextText === null) return;
+    const text = String(nextText || '').trim();
+    if (!text) return;
+
+    item.text = text;
+    saveState(true);
+    const textEl = itemEl.querySelector('.prep-item-text');
+    if (textEl) textEl.textContent = text;
+    updateSyncUI();
+  }
+
+  function deleteItem(btn) {
+    const itemEl = btn.closest('.prep-item');
+    if (!itemEl) return;
+    const itemId = itemEl.dataset.itemId;
+    const sectionEl = itemEl.closest('.prep-section');
+    const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
+
+    if (section) section.items = section.items.filter(item => item.id !== itemId);
+    saveState(true);
+    itemEl.remove();
+
+    if (sectionEl && section && section.items.length === 0) {
+      const itemsEl = sectionEl.querySelector('.prep-items');
+      if (itemsEl) itemsEl.innerHTML = '<div class="prep-muted">尚無項目</div>';
+    }
+
+    if (section) updateSectionCount(section.id);
+    updateStatsUI();
+    updateSyncUI();
+  }
+
+  function clearChecks() {
+    if (!confirm('確定清空所有勾選？')) return;
+    state.sections.forEach(section => section.items.forEach(item => { item.checked = false; item.checkedAt = ''; }));
+    saveState(true);
+
+    root.querySelectorAll('.prep-item').forEach(itemEl => itemEl.classList.remove('is-checked'));
+    root.querySelectorAll('.prep-item input[type="checkbox"]').forEach(input => { input.checked = false; });
+    updateStatsUI();
+    updateSyncUI();
+  }
+
+  function deleteAll() {
+    if (!confirm('確定刪除全部準備清單？')) return;
+    state.sections = [];
+    saveState(true);
+    render();
+  }
+
+  function bindRootEvents() {
+    root.addEventListener('click', event => {
+      const target = event.target;
+
+      if (target.closest('.prep-fab')) {
+        panelOpen = true;
+        render();
+        return;
+      }
+
+      if (target.closest('.prep-close')) {
+        panelOpen = false;
+        render();
+        return;
+      }
+
+      const overlay = target.classList && target.classList.contains('prep-overlay') ? target : null;
+      if (overlay) {
+        panelOpen = false;
+        render();
+        return;
+      }
+
+      if (target.closest('.prep-add-section-btn')) {
+        addSectionFromInputs();
+        return;
+      }
+
+      if (target.closest('.prep-add-item-btn')) {
+        const sectionEl = target.closest('.prep-section');
+        const input = sectionEl && sectionEl.querySelector('.prep-new-item-input');
+        if (input) addItemFromInput(input);
+        return;
+      }
+
+      if (target.closest('.prep-edit-section')) {
+        editSection(target.closest('.prep-edit-section'));
+        return;
+      }
+
+      if (target.closest('.prep-delete-section')) {
+        deleteSection(target.closest('.prep-delete-section'));
+        return;
+      }
+
+      if (target.closest('.prep-edit-item')) {
         event.preventDefault();
-        const btn = root.querySelector('.prep-add-section-btn');
-        if (btn) btn.click();
-      });
-    });
+        editItem(target.closest('.prep-edit-item'));
+        return;
+      }
 
-    root.querySelectorAll('.prep-add-item-btn').forEach(btn => {
-      btn.addEventListener('click', event => {
-        const sectionEl = event.target.closest('.prep-section');
-        const section = findSection(sectionEl.dataset.sectionId);
-        const input = sectionEl.querySelector('.prep-new-item-input');
-        const text = String(input.value || '').trim();
-        if (!section || !text) return;
-        section.items.push({ id: makeId('item'), text, checked: false, checkedAt: '' });
-        saveState(true);
-        render();
-      });
-    });
-
-    root.querySelectorAll('.prep-new-item-input').forEach(input => {
-      input.addEventListener('keydown', event => {
-        if (event.key !== 'Enter') return;
+      if (target.closest('.prep-delete-item')) {
         event.preventDefault();
-        const sectionEl = event.target.closest('.prep-section');
-        const btn = sectionEl.querySelector('.prep-add-item-btn');
-        if (btn) btn.click();
-      });
+        deleteItem(target.closest('.prep-delete-item'));
+        return;
+      }
+
+      if (target.closest('.prep-clear-checks')) {
+        clearChecks();
+        return;
+      }
+
+      if (target.closest('.prep-delete-all')) {
+        deleteAll();
+      }
     });
 
-    root.querySelectorAll('.prep-item input[type="checkbox"]').forEach(input => {
-      input.addEventListener('change', event => {
-        const itemEl = event.target.closest('.prep-item');
-        const item = findItem(itemEl.dataset.itemId);
-        if (!item) return;
-        item.checked = event.target.checked;
-        item.checkedAt = item.checked ? new Date().toISOString() : '';
-        saveState(true);
-        render();
-      });
+    root.addEventListener('change', event => {
+      const target = event.target;
+      if (target.matches('.prep-item input[type="checkbox"]')) {
+        updateItemChecked(target);
+      }
     });
 
-    root.querySelectorAll('.prep-edit-section').forEach(btn => {
-      btn.addEventListener('click', event => {
-        const sectionEl = event.target.closest('.prep-section');
-        const section = findSection(sectionEl.dataset.sectionId);
-        if (!section) return;
-        const nextEmoji = prompt('分類圖示：', section.emoji || '🧳');
-        if (nextEmoji === null) return;
-        const nextTitle = prompt('分類名稱：', section.title || '');
-        if (nextTitle === null) return;
-        const title = String(nextTitle || '').trim();
-        if (!title) return;
-        section.emoji = String(nextEmoji || '').trim() || '🧳';
-        section.title = title;
-        saveState(true);
-        render();
-      });
-    });
+    root.addEventListener('keydown', event => {
+      const target = event.target;
+      if (event.key !== 'Enter') return;
 
-    root.querySelectorAll('.prep-delete-section').forEach(btn => {
-      btn.addEventListener('click', event => {
-        const sectionEl = event.target.closest('.prep-section');
-        const section = findSection(sectionEl.dataset.sectionId);
-        if (!section) return;
-        if (!confirm(`確定刪除「${section.title}」？`)) return;
-        state.sections = state.sections.filter(x => x.id !== section.id);
-        saveState(true);
-        render();
-      });
-    });
-
-    root.querySelectorAll('.prep-edit-item').forEach(btn => {
-      btn.addEventListener('click', event => {
+      if (target.matches('.prep-new-section-title')) {
         event.preventDefault();
-        const itemEl = event.target.closest('.prep-item');
-        const item = findItem(itemEl.dataset.itemId);
-        if (!item) return;
-        const nextText = prompt('項目名稱：', item.text || '');
-        if (nextText === null) return;
-        const text = String(nextText || '').trim();
-        if (!text) return;
-        item.text = text;
-        saveState(true);
-        render();
-      });
-    });
+        addSectionFromInputs();
+        return;
+      }
 
-    root.querySelectorAll('.prep-delete-item').forEach(btn => {
-      btn.addEventListener('click', event => {
+      if (target.matches('.prep-new-item-input')) {
         event.preventDefault();
-        const itemEl = event.target.closest('.prep-item');
-        const itemId = itemEl.dataset.itemId;
-        state.sections.forEach(section => {
-          section.items = section.items.filter(item => item.id !== itemId);
-        });
-        saveState(true);
-        render();
-      });
-    });
-
-    root.querySelector('.prep-clear-checks').addEventListener('click', () => {
-      if (!confirm('確定清空所有勾選？')) return;
-      state.sections.forEach(section => section.items.forEach(item => { item.checked = false; item.checkedAt = ''; }));
-      saveState(true);
-      render();
-    });
-
-    root.querySelector('.prep-delete-all').addEventListener('click', () => {
-      if (!confirm('確定刪除全部準備清單？')) return;
-      state.sections = [];
-      saveState(true);
-      render();
+        addItemFromInput(target);
+      }
     });
   }
 
@@ -495,6 +669,7 @@
     root = document.createElement('div');
     root.id = 'prep-checklist-root';
     document.body.appendChild(root);
+    bindRootEvents();
     loadLocalState();
     render();
     loadFromSheet();
