@@ -1,8 +1,9 @@
-// version: 260702-4
+// version: 260702-5
 // 準備清單功能：分類與項目由使用者自行建立，資料同步到 Google Sheet，並保留 localStorage 作為暫存備援。
 // 260702-4：勾選與新增項目改為局部更新，避免手機鍵盤收起與畫面重繪。
+// 260702-5：分類改為 emoji 與名稱同欄輸入，編輯 / 刪除按鈕改成縮小版行程卡樣式。
 (function () {
-  const VERSION = '260702-4';
+  const VERSION = '260702-5';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v3::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -40,6 +41,29 @@
     return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
   }
 
+  function parseSectionLabel(value) {
+    const text = String(value || '').trim();
+    if (!text) return { emoji: '', title: '' };
+
+    // 使用者通常會輸入「🪪 證件」這種格式；若第一個字不是中英數，就視為 emoji / 圖示。
+    const chars = Array.from(text);
+    const first = chars[0] || '';
+    const rest = text.slice(first.length).trim();
+    const firstLooksLikeText = /^[A-Za-z0-9\u4e00-\u9fff]$/.test(first);
+
+    if (rest && !firstLooksLikeText) {
+      return { emoji: first, title: rest };
+    }
+
+    return { emoji: '', title: text };
+  }
+
+  function getSectionDisplayName(section) {
+    const emoji = String(section && section.emoji || '').trim();
+    const title = String(section && section.title || '').trim();
+    return `${emoji ? emoji + ' ' : ''}${title}`.trim() || '未命名分類';
+  }
+
   function buildEmptyState() {
     return {
       version: VERSION,
@@ -59,7 +83,7 @@
         .map(section => ({
           id: section.id || makeId('section'),
           title: String(section.title || '').trim(),
-          emoji: String(section.emoji || '🧳').trim() || '🧳',
+          emoji: String(section.emoji || '').trim(),
           items: Array.isArray(section.items)
             ? section.items
                 .filter(item => item && String(item.text || '').trim())
@@ -236,14 +260,16 @@
       .prep-sync-pill { background:#e0f2fe; color:#0369a1; border-radius:999px; padding:4px 8px; font-weight:800; white-space:nowrap; }
       .prep-empty { background: white; border: 1px dashed #cbd5e1; color: #64748b; border-radius: 16px; padding: 14px; font-size: 13px; text-align:center; margin-bottom: 12px; }
       .prep-add-box { background: white; border: 1px solid #dbeafe; border-radius: 16px; padding: 12px; display: grid; gap: 8px; margin-bottom: 12px; }
-      .prep-add-row { display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
+      .prep-add-row { display: grid; grid-template-columns: 1fr; gap: 8px; }
       .prep-add-box input, .prep-section-add input { border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-size: 14px; background: white; min-width: 0; }
       .prep-add-box button, .prep-section-add button, .prep-action-btn { border: none; border-radius: 12px; padding: 10px 12px; font-weight: 800; background: #2563eb; color: white; }
       .prep-section { background: white; border: 1px solid #e5e7eb; border-radius: 16px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
       .prep-section-title { font-weight: 800; color: #334155; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .prep-section-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .prep-section-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-      .prep-mini-btn { border: none; background: #f1f5f9; color: #64748b; border-radius: 999px; min-width: 30px; height: 30px; padding: 0 8px; font-size: 12px; font-weight: 800; }
+      .prep-section-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+      .prep-icon-btn { border: none; width: 28px; height: 28px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: #eff6ff; color: #2563eb; font-size: 13px; font-weight: 800; line-height: 1; flex-shrink: 0; }
+      .prep-icon-btn.is-danger { background: #fee2e2; color: #991b1b; }
+      .prep-icon-btn:active { transform: scale(.94); }
       .prep-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #f1f5f9; color: #334155; }
       .prep-item:first-of-type { border-top: none; }
       .prep-item input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; }
@@ -263,8 +289,8 @@
       <label class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
         <input type="checkbox" ${item.checked ? 'checked' : ''} />
         <span class="prep-item-text">${escapeHtml(item.text)}</span>
-        <button class="prep-mini-btn prep-edit-item" type="button">改</button>
-        <button class="prep-mini-btn prep-delete-item" type="button">×</button>
+        <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
+        <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕</button>
       </label>`;
   }
 
@@ -272,11 +298,11 @@
     return `
       <div class="prep-section" data-section-id="${escapeHtml(section.id)}">
         <div class="prep-section-title">
-          <span class="prep-section-name">${escapeHtml(section.emoji)} ${escapeHtml(section.title)}</span>
+          <span class="prep-section-name">${escapeHtml(getSectionDisplayName(section))}</span>
           <span class="prep-section-actions">
             <span class="prep-section-count" style="font-size:12px;color:#94a3b8;">${section.items.filter(i => i.checked).length}/${section.items.length}</span>
-            <button class="prep-mini-btn prep-edit-section" type="button">改名</button>
-            <button class="prep-mini-btn prep-delete-section" type="button">刪除</button>
+            <button class="prep-icon-btn prep-edit-section" title="編輯" type="button">✏️</button>
+            <button class="prep-icon-btn prep-delete-section is-danger" title="刪除" type="button">✕</button>
           </span>
         </div>
         <div class="prep-items">
@@ -319,8 +345,7 @@
             <div class="prep-add-box">
               <div style="font-size:13px;font-weight:900;color:#334155;">新增分類</div>
               <div class="prep-add-row">
-                <input class="prep-new-section-emoji" maxlength="4" placeholder="🧳" />
-                <input class="prep-new-section-title" placeholder="分類名稱" />
+                <input class="prep-new-section-title" placeholder="例如 🪪 證件" />
               </div>
               <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
             </div>
@@ -396,19 +421,17 @@
 
   function addSectionFromInputs() {
     const titleInput = root.querySelector('.prep-new-section-title');
-    const emojiInput = root.querySelector('.prep-new-section-emoji');
-    const title = String(titleInput && titleInput.value || '').trim();
-    const emoji = String(emojiInput && emojiInput.value || '').trim() || '🧳';
-    if (!title) return;
+    const rawTitle = String(titleInput && titleInput.value || '').trim();
+    const parsed = parseSectionLabel(rawTitle);
+    if (!parsed.title) return;
 
-    const section = { id: makeId('section'), title, emoji, items: [] };
+    const section = { id: makeId('section'), title: parsed.title, emoji: parsed.emoji, items: [] };
     state.sections.push(section);
     saveState(true);
 
     const sectionList = root.querySelector('.prep-section-list');
     if (sectionList) sectionList.insertAdjacentHTML('beforeend', renderSection(section));
     if (titleInput) titleInput.value = '';
-    if (emojiInput) emojiInput.value = '';
     updateEmptyUI();
     updateStatsUI();
     updateSyncUI();
@@ -463,19 +486,17 @@
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     if (!section) return;
 
-    const nextEmoji = prompt('分類圖示：', section.emoji || '🧳');
-    if (nextEmoji === null) return;
-    const nextTitle = prompt('分類名稱：', section.title || '');
-    if (nextTitle === null) return;
-    const title = String(nextTitle || '').trim();
-    if (!title) return;
+    const nextLabel = prompt('分類名稱：', getSectionDisplayName(section));
+    if (nextLabel === null) return;
+    const parsed = parseSectionLabel(nextLabel);
+    if (!parsed.title) return;
 
-    section.emoji = String(nextEmoji || '').trim() || '🧳';
-    section.title = title;
+    section.emoji = parsed.emoji;
+    section.title = parsed.title;
     saveState(true);
 
     const name = sectionEl.querySelector('.prep-section-name');
-    if (name) name.textContent = `${section.emoji} ${section.title}`;
+    if (name) name.textContent = getSectionDisplayName(section);
     updateSyncUI();
   }
 
@@ -483,7 +504,7 @@
     const sectionEl = btn.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     if (!section) return;
-    if (!confirm(`確定刪除「${section.title}」？`)) return;
+    if (!confirm(`確定刪除「${getSectionDisplayName(section)}」？`)) return;
 
     state.sections = state.sections.filter(x => x.id !== section.id);
     saveState(true);
