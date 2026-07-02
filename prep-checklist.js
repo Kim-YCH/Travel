@@ -1,14 +1,18 @@
-// version: 260702-2
-// 準備清單功能：分類與項目完全由使用者自行建立，不再預設產生內容。
-// 目前以 localStorage 保存於本機瀏覽器，不會寫入 Google Sheet；換裝置或清除瀏覽器資料後不會同步。
+// version: 260702-3
+// 準備清單功能：分類與項目由使用者自行建立，資料同步到 Google Sheet，並保留 localStorage 作為暫存備援。
 (function () {
-  const VERSION = '260702-2';
-  const STORAGE_PREFIX = 'travel_prepare_checklist_v2::';
+  const VERSION = '260702-3';
+  const STORAGE_PREFIX = 'travel_prepare_checklist_v3::';
+  const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
   let currentTripKey = '';
   let state = null;
   let root = null;
   let panelOpen = false;
+  let syncTimer = null;
+  let isLoadingRemote = false;
+  let syncStatus = '';
+  let lastSyncedAt = '';
 
   function safeJsonParse(value, fallback) {
     try { return JSON.parse(value); } catch (_) { return fallback; }
@@ -25,6 +29,10 @@
 
   function getStorageKey() {
     return STORAGE_PREFIX + getCurrentTripName();
+  }
+
+  function getLegacyStorageKey() {
+    return 'travel_prepare_checklist_v2::' + getCurrentTripName();
   }
 
   function makeId(prefix) {
@@ -65,17 +73,121 @@
     };
   }
 
-  function loadState() {
-    currentTripKey = getStorageKey();
-    const saved = safeJsonParse(localStorage.getItem(currentTripKey), null);
-    state = normalizeState(saved);
-    saveState(false);
+  function hasAnyContent(data) {
+    return !!(data && Array.isArray(data.sections) && data.sections.length > 0);
   }
 
-  function saveState(updateTime = true) {
+  function loadLocalState() {
+    currentTripKey = getStorageKey();
+    const saved = safeJsonParse(localStorage.getItem(currentTripKey), null);
+    const legacy = safeJsonParse(localStorage.getItem(getLegacyStorageKey()), null);
+    state = normalizeState(saved || legacy);
+    saveLocal(false);
+  }
+
+  function saveLocal(updateTime = true) {
     if (!state) return;
     if (updateTime) state.updatedAt = new Date().toISOString();
     localStorage.setItem(currentTripKey, JSON.stringify(state));
+  }
+
+  function scheduleSheetSave() {
+    if (!API_URL || !state) return;
+    syncStatus = '待同步';
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(saveToSheet, 650);
+  }
+
+  async function apiPost(body) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    });
+    return await res.json();
+  }
+
+  async function loadFromSheet() {
+    if (!API_URL || isLoadingRemote) return;
+
+    const tripName = getCurrentTripName();
+    if (!tripName || tripName === '共用清單') return;
+
+    isLoadingRemote = true;
+    syncStatus = '同步中';
+    render();
+
+    try {
+      const url = API_URL
+        + '?action=prep_checklist_get'
+        + '&tripName=' + encodeURIComponent(tripName)
+        + '&t=' + encodeURIComponent(Date.now());
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data && data.status === 'success') {
+        const remote = normalizeState({
+          updatedAt: data.updatedAt || new Date().toISOString(),
+          sections: data.sections || []
+        });
+
+        if (hasAnyContent(remote) || !hasAnyContent(state)) {
+          state = remote;
+          saveLocal(false);
+          syncStatus = '已同步';
+          lastSyncedAt = new Date().toISOString();
+        } else {
+          // 舊版 localStorage 有資料，但 Google Sheet 還沒有資料時，自動補同步一次。
+          syncStatus = '待同步';
+          scheduleSheetSave();
+        }
+      } else {
+        syncStatus = '未同步';
+      }
+    } catch (err) {
+      console.warn('prep checklist load failed:', err);
+      syncStatus = '離線';
+    } finally {
+      isLoadingRemote = false;
+      render();
+    }
+  }
+
+  async function saveToSheet() {
+    if (!API_URL || !state) return;
+
+    const tripName = getCurrentTripName();
+    if (!tripName || tripName === '共用清單') return;
+
+    syncStatus = '同步中';
+    render();
+
+    try {
+      const out = await apiPost({
+        action: 'prep_checklist_save',
+        tripName,
+        data: state
+      });
+
+      if (out && out.status === 'success') {
+        syncStatus = '已同步';
+        lastSyncedAt = new Date().toISOString();
+      } else {
+        syncStatus = '未同步';
+        console.warn('prep checklist save failed:', out);
+      }
+    } catch (err) {
+      syncStatus = '離線';
+      console.warn('prep checklist save failed:', err);
+    }
+
+    render();
+  }
+
+  function saveState(updateTime = true) {
+    saveLocal(updateTime);
+    scheduleSheetSave();
   }
 
   function getStats() {
@@ -118,8 +230,9 @@
       .prep-progress-track { margin-top: 12px; height: 8px; border-radius: 999px; background: rgba(255,255,255,.26); overflow: hidden; }
       .prep-progress-bar { height: 100%; background: white; border-radius: 999px; transition: width .2s; }
       .prep-body { padding: 12px; overflow-y: auto; max-height: calc(88vh - 122px); }
-      .prep-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 4px 2px 12px; }
-      .prep-empty { background: #eff6ff; border: 1px dashed #93c5fd; color: #1e40af; border-radius: 16px; padding: 14px; font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+      .prep-status-line { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#64748b; font-size:11px; margin:0 2px 10px; }
+      .prep-sync-pill { background:#e0f2fe; color:#0369a1; border-radius:999px; padding:4px 8px; font-weight:800; white-space:nowrap; }
+      .prep-empty { background: white; border: 1px dashed #cbd5e1; color: #64748b; border-radius: 16px; padding: 14px; font-size: 13px; text-align:center; margin-bottom: 12px; }
       .prep-add-box { background: white; border: 1px solid #dbeafe; border-radius: 16px; padding: 12px; display: grid; gap: 8px; margin-bottom: 12px; }
       .prep-add-row { display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
       .prep-add-box input, .prep-section-add input { border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-size: 14px; background: white; min-width: 0; }
@@ -136,7 +249,7 @@
       .prep-item.is-checked .prep-item-text { text-decoration: line-through; color: #94a3b8; }
       .prep-section-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
       .prep-muted { color: #94a3b8; font-size: 13px; padding: 8px 0; }
-      .prep-bottom-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+      .prep-bottom-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
       .prep-action-btn.secondary { background: #f1f5f9; color: #475569; }
       .prep-action-btn.danger { background: #fee2e2; color: #b91c1c; }
     `;
@@ -148,6 +261,7 @@
     const stats = getStats();
     const tripName = getCurrentTripName();
     const hasSections = state.sections.length > 0;
+    const syncText = syncStatus || (lastSyncedAt ? '已同步' : '');
 
     root.innerHTML = `
       <button class="prep-fab" type="button" aria-label="開啟準備清單">🎒 準備清單</button>
@@ -157,30 +271,28 @@
             <div class="prep-title-row">
               <div>
                 <div style="font-size:18px;font-weight:900;">🎒 準備清單</div>
-                <div style="font-size:12px;opacity:.85;margin-top:2px;">${escapeHtml(tripName)}｜已完成 ${stats.done}/${stats.total}（${stats.percent}%）</div>
+                <div style="font-size:12px;opacity:.85;margin-top:2px;">${escapeHtml(tripName)}｜${stats.done}/${stats.total}（${stats.percent}%）</div>
               </div>
               <button class="prep-close" type="button" aria-label="關閉">×</button>
             </div>
             <div class="prep-progress-track"><div class="prep-progress-bar" style="width:${stats.percent}%"></div></div>
           </div>
           <div class="prep-body">
-            <div class="prep-note">分類與項目由你自行建立，勾選狀態會儲存在目前瀏覽器。換手機或清除瀏覽器資料後不會同步。</div>
+            <div class="prep-status-line">
+              <span>${lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`}</span>
+              ${syncText ? `<span class="prep-sync-pill">${escapeHtml(syncText)}</span>` : ''}
+            </div>
 
             <div class="prep-add-box">
               <div style="font-size:13px;font-weight:900;color:#334155;">新增分類</div>
               <div class="prep-add-row">
                 <input class="prep-new-section-emoji" maxlength="4" placeholder="🧳" />
-                <input class="prep-new-section-title" placeholder="分類名稱，例如：證件、電器、藥品" />
+                <input class="prep-new-section-title" placeholder="分類名稱" />
               </div>
               <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
             </div>
 
-            ${hasSections ? '' : `
-              <div class="prep-empty">
-                尚未建立準備清單。<br>
-                先新增分類，例如「證件」、「電子用品」、「衣物」、「藥品」，再到分類裡新增項目。
-              </div>
-            `}
+            ${hasSections ? '' : `<div class="prep-empty">尚未建立準備清單</div>`}
 
             ${state.sections.map(section => `
               <div class="prep-section" data-section-id="${escapeHtml(section.id)}">
@@ -199,9 +311,9 @@
                     <button class="prep-mini-btn prep-edit-item" type="button">改</button>
                     <button class="prep-mini-btn prep-delete-item" type="button">×</button>
                   </label>
-                `).join('') : '<div class="prep-muted">這個分類尚無項目。</div>'}
+                `).join('') : '<div class="prep-muted">尚無項目</div>'}
                 <div class="prep-section-add">
-                  <input class="prep-new-item-input" placeholder="新增項目，例如：護照、萬國轉接頭" />
+                  <input class="prep-new-item-input" placeholder="新增項目" />
                   <button class="prep-add-item-btn" type="button">新增</button>
                 </div>
               </div>
@@ -211,7 +323,6 @@
               <button class="prep-action-btn secondary prep-clear-checks" type="button">清空勾選</button>
               <button class="prep-action-btn danger prep-delete-all" type="button">刪除全部</button>
             </div>
-            <div class="prep-note">版本 ${VERSION}｜最後更新：${escapeHtml(formatTime(state.updatedAt) || '尚未更新')}</div>
           </div>
         </div>
       </div>`;
@@ -235,6 +346,15 @@
       state.sections.push({ id: makeId('section'), title, emoji, items: [] });
       saveState(true);
       render();
+    });
+
+    root.querySelectorAll('.prep-new-section-title').forEach(input => {
+      input.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const btn = root.querySelector('.prep-add-section-btn');
+        if (btn) btn.click();
+      });
     });
 
     root.querySelectorAll('.prep-add-item-btn').forEach(btn => {
@@ -295,7 +415,7 @@
         const sectionEl = event.target.closest('.prep-section');
         const section = findSection(sectionEl.dataset.sectionId);
         if (!section) return;
-        if (!confirm(`確定刪除「${section.title}」分類與裡面的所有項目？`)) return;
+        if (!confirm(`確定刪除「${section.title}」？`)) return;
         state.sections = state.sections.filter(x => x.id !== section.id);
         saveState(true);
         render();
@@ -332,14 +452,14 @@
     });
 
     root.querySelector('.prep-clear-checks').addEventListener('click', () => {
-      if (!confirm('確定清空所有勾選狀態？')) return;
+      if (!confirm('確定清空所有勾選？')) return;
       state.sections.forEach(section => section.items.forEach(item => { item.checked = false; item.checkedAt = ''; }));
       saveState(true);
       render();
     });
 
     root.querySelector('.prep-delete-all').addEventListener('click', () => {
-      if (!confirm('確定刪除這個旅程的全部準備清單？')) return;
+      if (!confirm('確定刪除全部準備清單？')) return;
       state.sections = [];
       saveState(true);
       render();
@@ -361,8 +481,9 @@
   function ensureLoadedForCurrentTrip() {
     const key = getStorageKey();
     if (key !== currentTripKey || !state) {
-      loadState();
+      loadLocalState();
       render();
+      loadFromSheet();
     } else {
       const fab = root && root.querySelector('.prep-fab');
       if (fab) fab.classList.toggle('is-visible', !!document.querySelector('.app-header h1'));
@@ -374,8 +495,9 @@
     root = document.createElement('div');
     root.id = 'prep-checklist-root';
     document.body.appendChild(root);
-    loadState();
+    loadLocalState();
     render();
+    loadFromSheet();
     const observer = new MutationObserver(() => ensureLoadedForCurrentTrip());
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     setInterval(ensureLoadedForCurrentTrip, 1200);
