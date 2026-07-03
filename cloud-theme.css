@@ -1,0 +1,416 @@
+/* version: 20260703.4 Cloud Blue theme
+   CSS-only cloud / sky / glass app style. No image assets required. */
+:root {
+  --cloud-primary: #2563EB;
+  --cloud-primary-2: #0EA5E9;
+  --cloud-primary-strong: #1D4ED8;
+  --cloud-accent: #F59E0B;
+  --cloud-sky: #E0F2FE;
+  --cloud-sky-2: #F8FBFF;
+  --cloud-surface: rgba(255,255,255,.82);
+  --cloud-border: rgba(216,232,248,.92);
+  --cloud-text: #0F172A;
+  --cloud-muted: #64748B;
+  --cloud-shadow: 0 16px 38px rgba(37,99,235,.16);
+  --cloud-shadow-soft: 0 10px 28px rgba(15,23,42,.08);
+}
+
+html, body {
+  background:
+    radial-gradient(circle at 10% 12%, rgba(255,255,255,.88) 0 7%, transparent 19%),
+    radial-gradient(circle at 88% 18%, rgba(191,219,254,.72) 0 9%, transparent 23%),
+    linear-gradient(135deg,#DBEAFE 0%,#F8FBFF 42%,#E0F2FE 100%) !important;
+  color: var(--cloud-text);
+}
+
+.mobile-container {
+  max-width: 480px;
+  background: linear-gradient(180deg,#DDF3FF 0%,#F8FBFF 34%,#FFFFFF 100%) !important;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 32px 70px rgba(37,99,235,.22) !important;
+}
+
+.mobile-container::before,
+.mobile-container::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mobile-container::before {
+  inset: -72px -72px auto -72px;
+  height: 380px;
+  background:
+    radial-gradient(circle at 20% 30%,rgba(255,255,255,.88) 0 38px,transparent 39px),
+    radial-gradient(circle at 29% 30%,rgba(255,255,255,.84) 0 58px,transparent 59px),
+    radial-gradient(circle at 40% 34%,rgba(255,255,255,.78) 0 40px,transparent 41px),
+    radial-gradient(circle at 72% 18%,rgba(255,255,255,.72) 0 42px,transparent 43px),
+    radial-gradient(circle at 83% 20%,rgba(255,255,255,.84) 0 66px,transparent 67px),
+    radial-gradient(circle at 94% 24%,rgba(255,255,255,.76) 0 38px,transparent 39px);
+  opacity: .86;
+}
+
+.mobile-container::after {
+  width: 160px;
+  height: 52px;
+  right: -46px;
+  top: 185px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.64);
+  box-shadow:
+    -72px 14px 0 -12px rgba(255,255,255,.48),
+    -280px 224px 0 -18px rgba(255,255,255,.46),
+    -236px 440px 0 -12px rgba(255,255,255,.34);
+  filter: blur(.1px);
+}
+
+.mobile-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+.content-scroll,
+.content-fixed,
+main.bg-gray-50,
+.content-scroll.bg-gray-50 {
+  background: transparent !important;
+}
+
+.app-header {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 82% 18%,rgba(255,255,255,.42),transparent 18%),
+    linear-gradient(135deg,#2563EB 0%,#0EA5E9 58%,#38BDF8 100%) !important;
+  border-bottom-left-radius: 30px;
+  border-bottom-right-radius: 30px;
+  box-shadow: 0 16px 34px rgba(37,99,235,.25) !important;
+  border-bottom: 1px solid rgba(255,255,255,.24);
+}
+
+.app-header::after {
+  content: '';
+  position: absolute;
+  right: -38px;
+  bottom: 18px;
+  width: 180px;
+  height: 54px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.32);
+  box-shadow:
+    -42px -10px 0 8px rgba(255,255,255,.16),
+    -86px 10px 0 -2px rgba(255,255,255,.14);
+  pointer-events: none;
+}
+
+.app-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  background: var(--cloud-surface) !important;
+  border: 1px solid rgba(255,255,255,.92) !important;
+  border-radius: 22px !important;
+  box-shadow: var(--cloud-shadow-soft) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+input, select, textarea {
+  background: rgba(255,255,255,.82) !important;
+  border-color: var(--cloud-border) !important;
+  border-radius: 15px !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.38);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #60A5FA !important;
+  box-shadow: 0 0 0 4px rgba(96,165,250,.16), inset 0 0 0 1px rgba(255,255,255,.46) !important;
+}
+
+button.bg-blue-600,
+button.bg-teal-600,
+button.bg-gray-800,
+button.bg-gray-700,
+.w-full.bg-blue-600,
+.map-mode-btn-active,
+.day-tab-active,
+.bg-blue-600 {
+  background: linear-gradient(135deg,#2563EB,#0EA5E9) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 12px 24px rgba(37,99,235,.22) !important;
+}
+
+.bg-blue-500,
+.stat-bar {
+  background: linear-gradient(90deg,#60A5FA,#2563EB) !important;
+}
+
+.day-tab-active {
+  color: white !important;
+  border-radius: 24px !important;
+}
+
+.day-tab-inactive,
+.day-btn-wrap button:not(.day-tab-active) {
+  background: rgba(255,255,255,.80) !important;
+  border-color: rgba(255,255,255,.90) !important;
+  color: #64748B !important;
+  box-shadow: 0 8px 18px rgba(15,23,42,.06);
+  backdrop-filter: blur(14px);
+}
+
+.itinerary-card,
+.hotel-itinerary-card,
+.alternative-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.itinerary-card::before,
+.alternative-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(180deg,#0EA5E9,#2563EB);
+}
+
+.alternative-card::before {
+  background: linear-gradient(180deg,#F59E0B,#F97316);
+}
+
+.hotel-itinerary-card {
+  border-left: 0 !important;
+}
+
+.hotel-itinerary-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(180deg,#14B8A6,#0EA5E9);
+}
+
+.itinerary-message {
+  background: rgba(248,250,252,.74) !important;
+  border: 1px solid rgba(226,232,240,.72);
+  border-radius: 14px !important;
+}
+
+.icon-btn {
+  background: rgba(241,245,249,.92) !important;
+  border-radius: 14px !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.46);
+}
+
+.suggestions-list {
+  background: rgba(255,255,255,.94) !important;
+  border-color: rgba(216,232,248,.94) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 16px 34px rgba(15,23,42,.12) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+#map {
+  border-radius: 24px !important;
+  border: 1px solid rgba(255,255,255,.92);
+  box-shadow: var(--cloud-shadow-soft);
+  overflow: hidden;
+}
+
+.money-summary {
+  color: #fff !important;
+  background:
+    radial-gradient(circle at 84% 18%,rgba(255,255,255,.18),transparent 22%),
+    linear-gradient(135deg,#0F172A,#1E40AF 70%,#0EA5E9) !important;
+  box-shadow: 0 18px 34px rgba(15,23,42,.22) !important;
+}
+
+.trip-lobby-card {
+  position: relative;
+  overflow: hidden;
+  border-left: 0 !important;
+}
+
+.trip-lobby-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(180deg,#2563EB,#0EA5E9);
+}
+
+.trip-countdown-card {
+  background: linear-gradient(135deg,#FFFFFF,#FFF7ED) !important;
+  border: 1px solid rgba(251,146,60,.25);
+  box-shadow: 0 12px 22px rgba(251,146,60,.18) !important;
+}
+
+.trip-countdown-number {
+  color: #EA580C !important;
+}
+
+.trip-countdown-rings span {
+  background: linear-gradient(90deg, #93C5FD, #2563EB 48%, #DBEAFE 72%, #1D4ED8) !important;
+}
+
+.bottom-nav {
+  background: rgba(255,255,255,.88) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(216,232,248,.92) !important;
+  box-shadow: 0 -10px 28px rgba(15,23,42,.06) !important;
+}
+
+.bottom-nav button {
+  position: relative;
+  border-radius: 18px;
+}
+
+.bottom-nav button.scale-110::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,#2563EB,#0EA5E9);
+}
+
+.text-blue-600,
+.text-purple-600,
+.text-green-600 {
+  color: #2563EB !important;
+}
+
+.border-blue-100,
+.border-blue-200,
+.border-teal-100,
+.border-gray-100 {
+  border-color: var(--cloud-border) !important;
+}
+
+.bg-blue-50,
+.bg-green-100,
+.bg-red-50,
+.bg-teal-50 {
+  background-color: rgba(239,246,255,.86) !important;
+}
+
+.hotel-itinerary-badge,
+.text-green-600.bg-green-100,
+.text-\[10px\].text-green-600 {
+  color: #15803D !important;
+  background: #DCFCE7 !important;
+  border-color: #BBF7D0 !important;
+}
+
+.loading-bar {
+  background: linear-gradient(90deg,#2563EB,#0EA5E9,#38BDF8) !important;
+}
+
+/* Checklist cloud style overrides */
+#prep-checklist-root .prep-fab {
+  background: linear-gradient(135deg,#2563EB,#0EA5E9) !important;
+  box-shadow: 0 14px 28px rgba(37,99,235,.24) !important;
+}
+
+#prep-checklist-root .prep-panel {
+  background: linear-gradient(180deg,#DDF3FF 0%,#F8FBFF 34%,#FFFFFF 100%) !important;
+  border-radius: 30px 30px 0 0 !important;
+}
+
+#prep-checklist-root .prep-header {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 82% 18%,rgba(255,255,255,.42),transparent 18%),
+    linear-gradient(135deg,#2563EB 0%,#0EA5E9 58%,#38BDF8 100%) !important;
+  border-bottom-left-radius: 28px;
+  border-bottom-right-radius: 28px;
+}
+
+#prep-checklist-root .prep-header::after {
+  content: '';
+  position: absolute;
+  right: -38px;
+  bottom: 18px;
+  width: 160px;
+  height: 46px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.28);
+  box-shadow: -42px -10px 0 8px rgba(255,255,255,.13), -86px 10px 0 -2px rgba(255,255,255,.12);
+}
+
+#prep-checklist-root .prep-title-row,
+#prep-checklist-root .prep-progress-track {
+  position: relative;
+  z-index: 1;
+}
+
+#prep-checklist-root .prep-body {
+  background: transparent !important;
+}
+
+#prep-checklist-root .prep-add-box,
+#prep-checklist-root .prep-section,
+#prep-checklist-root .prep-owner-box,
+#prep-checklist-root .prep-empty {
+  background: rgba(255,255,255,.82) !important;
+  border: 1px solid rgba(255,255,255,.92) !important;
+  border-radius: 22px !important;
+  box-shadow: 0 10px 28px rgba(15,23,42,.08) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+#prep-checklist-root input,
+#prep-checklist-root select {
+  background: rgba(255,255,255,.84) !important;
+  border-color: var(--cloud-border) !important;
+  border-radius: 15px !important;
+}
+
+#prep-checklist-root .prep-add-box button,
+#prep-checklist-root .prep-section-add button,
+#prep-checklist-root .prep-action-btn {
+  background: linear-gradient(135deg,#2563EB,#0EA5E9) !important;
+  box-shadow: 0 12px 24px rgba(37,99,235,.20) !important;
+}
+
+#prep-checklist-root .prep-mini-btn {
+  background: rgba(241,245,249,.92) !important;
+  border-radius: 14px !important;
+}
+
+#prep-checklist-root .prep-sync-pill {
+  background: #E0F2FE !important;
+  color: #0369A1 !important;
+}
+
+@media (max-width: 520px) {
+  body { background: #F8FBFF !important; }
+  .mobile-container {
+    width: 100vw;
+    max-width: none;
+    box-shadow: none !important;
+  }
+  .app-header { border-radius: 0 0 28px 28px; }
+}
