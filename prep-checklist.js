@@ -1,10 +1,10 @@
-// version: 20260704.3
+// version: 20260704.4
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
-// 20260704.3：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
-// 20260704.3：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
-// 20260704.3：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
+// 20260704.4：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
+// 20260704.4：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
+// 20260704.4：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260704.3';
+  const VERSION = '20260704.4';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -334,7 +334,7 @@
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.status === 'success') {
-        // 20260704.3：資料庫是主資料。讀取時用 Google Sheet 取代前端快取，但只刷新準備清單區塊。
+        // 20260704.4：資料庫是主資料。讀取時用 Google Sheet 取代前端快取，但只刷新準備清單區塊。
         applyRemoteData(data, '已同步');
         if (options.partial === false) render();
         else refreshPersonalArea();
