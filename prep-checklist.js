@@ -1,9 +1,10 @@
-// version: 20260704.1
+// version: 20260704.2
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
-// 20260704.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
-// 20260704.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
+// 20260704.2：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
+// 20260704.2：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
+// 20260704.2：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260704.1';
+  const VERSION = '20260704.2';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -13,7 +14,8 @@
   let root = null;
   let panelOpen = false;
   let isLoadingRemote = false;
-  let isWriting = false;
+  let pendingWrites = 0;
+  let writeQueue = Promise.resolve();
   let syncStatus = '';
   let lastSyncedAt = '';
   let lastRemoteUpdatedAt = '';
@@ -285,7 +287,7 @@
   }
 
   async function loadFromSheet(options = {}) {
-    if (!API_URL || isLoadingRemote || isWriting || !selectedOwner) return;
+    if (!API_URL || isLoadingRemote || pendingWrites > 0 || !selectedOwner) return;
     const trip = getCurrentTripInfo();
     if (!trip.name || trip.name === '共用清單') return;
 
@@ -309,7 +311,7 @@
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.status === 'success') {
-        // 20260704.1：資料庫是主資料。只要遠端讀取成功，一律用 Google Sheet 取代前端快取。
+        // 20260704.2：資料庫是主資料。只有「讀取」時用 Google Sheet 取代前端快取；寫入成功不整面重畫。
         applyRemoteData(data, '已同步');
         render();
       } else {
@@ -325,6 +327,7 @@
     }
   }
 
+
   function buildBasePayload(action) {
     const trip = getCurrentTripInfo();
     return {
@@ -337,7 +340,12 @@
 
   function canWrite() {
     if (!API_URL || !selectedOwner || !state) return false;
-    if (isWriting) return false;
+    if (isLoadingRemote) {
+      syncStatus = '資料庫讀取中';
+      updateSyncUI();
+      alert('資料庫讀取中，請等讀取完成後再操作準備清單。');
+      return false;
+    }
     if (!isBrowserOnline()) {
       syncStatus = '離線，只可查看';
       updateSyncUI();
@@ -347,36 +355,61 @@
     return true;
   }
 
-  async function mutateChecklist(action, payload, options = {}) {
-    if (!canWrite()) return null;
-    const trip = getCurrentTripInfo();
-    if (!trip.name || trip.name === '共用清單') return null;
 
-    isWriting = true;
+  function mutateChecklist(action, payload, options = {}) {
+    if (!options.skipCanWrite && !canWrite()) return Promise.resolve(null);
+    const trip = getCurrentTripInfo();
+    if (!trip.name || trip.name === '共用清單') return Promise.resolve(null);
+
+    pendingWrites += 1;
     syncStatus = options.status || '儲存中';
     updateSyncUI();
 
-    try {
+    const job = writeQueue.then(async () => {
+      if (!isBrowserOnline()) throw new Error('offline');
+
       const out = await apiPost({ ...buildBasePayload(action), ...(payload || {}) });
       if (!out || out.status !== 'success') {
         throw new Error((out && out.message) || 'write failed');
       }
 
-      applyRemoteData(out, '已儲存');
-      render();
+      lastRemoteUpdatedAt = out.updatedAt || lastRemoteUpdatedAt;
+      lastSyncedAt = new Date().toISOString();
+      if (state && out.updatedAt) state.updatedAt = out.updatedAt;
+      saveLocal(false);
+
+      if (typeof options.onSuccess === 'function') options.onSuccess(out);
+
+      syncStatus = options.successStatus || '已儲存';
+      updateSyncUI();
       return out;
-    } catch (err) {
+    }).catch(err => {
       console.warn('prep checklist mutation failed:', action, err);
+
+      if (typeof options.onError === 'function') {
+        try { options.onError(err); } catch (rollbackErr) { console.warn('prep rollback failed:', rollbackErr); }
+      } else if (isBrowserOnline()) {
+        loadFromSheet({ silent: true });
+      }
+
       syncStatus = isBrowserOnline() ? '儲存失敗' : '離線，只可查看';
       updateSyncUI();
-      alert('準備清單儲存失敗，畫面會保留資料庫最後成功讀取的狀態。請稍後重新整理再試。');
-      if (isBrowserOnline()) loadFromSheet({ silent: true });
+      if (options.alertOnError !== false) {
+        alert('準備清單儲存失敗，已回復剛剛的操作。請稍後再試。');
+      }
       return null;
-    } finally {
-      isWriting = false;
-      updateSyncUI();
-    }
+    }).finally(() => {
+      pendingWrites = Math.max(0, pendingWrites - 1);
+      if (pendingWrites === 0 && isBrowserOnline() && syncStatus !== '儲存失敗') {
+        syncStatus = '已儲存';
+        updateSyncUI();
+      }
+    });
+
+    writeQueue = job.then(() => null, () => null);
+    return job;
   }
+
 
   function getStats() {
     const items = (state && state.sections ? state.sections : []).flatMap(section => section.items || []);
@@ -455,7 +488,7 @@
   function renderItem(item) {
     return `
       <div class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
-        <input type="checkbox" ${item.checked ? 'checked' : ''} ${isWriting ? 'disabled' : ''} />
+        <input type="checkbox" ${item.checked ? 'checked' : ''} ${!isBrowserOnline() ? 'disabled' : ''} />
         <span class="prep-item-text">${escapeHtml(item.text)}</span>
         <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
         <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕</button>
@@ -507,7 +540,7 @@
     const tripName = getCurrentTripName();
     const syncText = selectedOwner ? (syncStatus || (lastSyncedAt ? '已同步' : '')) : '';
     const ownerText = selectedOwner || '請選擇';
-    const disabledClass = (!isBrowserOnline() || isWriting) ? ' prep-disabled' : '';
+    const disabledClass = !isBrowserOnline() ? ' prep-disabled' : '';
 
     root.innerHTML = `
       <button class="prep-fab" type="button" aria-label="開啟準備清單">🎒 準備清單</button>
@@ -557,6 +590,50 @@
     if (updated) updated.textContent = selectedOwner ? (lastSyncedAt ? `更新 ${formatTime(lastSyncedAt)}` : `版本 ${VERSION}`) : '';
   }
 
+  function cloneState(data) {
+    return normalizeState(JSON.parse(JSON.stringify(data || buildEmptyState(selectedOwner))), selectedOwner);
+  }
+
+  function updateStatsUI() {
+    if (!root || !state) return;
+    const stats = getStats();
+    const tripName = getCurrentTripName();
+    const ownerText = selectedOwner || '請選擇';
+    const summary = root.querySelector('.prep-summary');
+    const progressBar = root.querySelector('.prep-progress-bar');
+    if (summary) summary.textContent = selectedOwner
+      ? `${tripName}｜${ownerText}｜${stats.done}/${stats.total}（${stats.percent}%）`
+      : `${tripName}｜${ownerText}`;
+    if (progressBar) progressBar.style.width = `${selectedOwner ? stats.percent : 0}%`;
+  }
+
+  function updateEmptyUI() {
+    if (!root || !state) return;
+    const actions = root.querySelector('.prep-bottom-actions');
+    if (actions) actions.style.display = state.sections.length ? '' : 'none';
+  }
+
+  function updateSectionCount(sectionId) {
+    const sectionEl = root && root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
+    const section = findSection(sectionId);
+    if (!sectionEl || !section) return;
+    const count = sectionEl.querySelector('.prep-section-count');
+    if (count) count.textContent = `${section.items.filter(i => i.checked).length}/${section.items.length}`;
+  }
+
+  function refreshItemMuted(sectionEl, section) {
+    if (!sectionEl || !section) return;
+    const itemsEl = sectionEl.querySelector('.prep-items');
+    if (!itemsEl) return;
+    const muted = itemsEl.querySelector('.prep-muted');
+    if (section.items.length === 0) {
+      if (!muted) itemsEl.innerHTML = '<div class="prep-muted">尚無項目</div>';
+    } else if (muted) {
+      muted.remove();
+    }
+  }
+
+
   function changeSelectedOwner(owner) {
     const next = String(owner || '').trim();
     if (next === selectedOwner) return;
@@ -570,61 +647,142 @@
     if (selectedOwner) loadFromSheet();
   }
 
-  async function addSectionFromInputs() {
+  function addSectionFromInputs() {
     const titleInput = root.querySelector('.prep-new-section-title');
     const rawTitle = String(titleInput && titleInput.value || '').trim();
     const parsed = parseSectionLabel(rawTitle);
     if (!selectedOwner || !parsed.title) return;
+    if (!canWrite()) return;
 
     const sectionId = makeId('section');
-    const out = await mutateChecklist('prep_category_add', {
+    const section = { id: sectionId, title: parsed.title, emoji: parsed.emoji, owner: selectedOwner, items: [] };
+    const sortOrder = (state.sections || []).length + 1;
+
+    state.sections.push(section);
+    saveLocal(true);
+
+    const sectionList = root.querySelector('.prep-section-list');
+    if (sectionList) sectionList.insertAdjacentHTML('beforeend', renderSection(section));
+    if (titleInput) titleInput.value = '';
+    updateEmptyUI();
+    updateStatsUI();
+    updateSyncUI();
+
+    mutateChecklist('prep_category_add', {
       categoryId: sectionId,
       category: parsed.title,
       categoryEmoji: parsed.emoji,
-      sortOrder: (state.sections || []).length + 1
-    }, { status: '新增分類中' });
-
-    if (out && titleInput) titleInput.value = '';
+      sortOrder
+    }, {
+      skipCanWrite: true,
+      status: '新增分類中',
+      onError: () => {
+        state.sections = (state.sections || []).filter(x => String(x.id) !== String(sectionId));
+        saveLocal(false);
+        const sectionEl = root && root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
+        if (sectionEl) sectionEl.remove();
+        updateEmptyUI();
+        updateStatsUI();
+      }
+    });
   }
 
-  async function addItemFromInput(input) {
+
+  function addItemFromInput(input) {
     const sectionEl = input.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     const text = String(input.value || '').trim();
     if (!section || !text) return;
+    if (!canWrite()) return;
 
     const itemId = makeId('item');
-    const out = await mutateChecklist('prep_item_add', {
+    const item = { id: itemId, text, checked: false, checkedAt: '' };
+    const sortOrder = (section.items || []).length + 1;
+
+    section.items.push(item);
+    saveLocal(true);
+
+    const itemsEl = sectionEl.querySelector('.prep-items');
+    if (itemsEl) {
+      const muted = itemsEl.querySelector('.prep-muted');
+      if (muted) muted.remove();
+      itemsEl.insertAdjacentHTML('beforeend', renderItem(item));
+    }
+
+    input.value = '';
+    updateStatsUI();
+    updateSectionCount(section.id);
+    updateSyncUI();
+
+    requestAnimationFrame(() => {
+      try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+    });
+
+    mutateChecklist('prep_item_add', {
       categoryId: section.id,
       itemId,
       itemName: text,
-      sortOrder: (section.items || []).length + 1
-    }, { status: '新增項目中' });
-
-    if (out) {
-      requestAnimationFrame(() => {
-        const nextInput = root.querySelector(`.prep-section[data-section-id="${cssEscape(section.id)}"] .prep-new-item-input`);
-        if (nextInput) {
-          nextInput.value = '';
-          try { nextInput.focus({ preventScroll: true }); } catch (_) { nextInput.focus(); }
-        }
-      });
-    }
+      sortOrder
+    }, {
+      skipCanWrite: true,
+      status: '新增項目中',
+      onError: () => {
+        section.items = (section.items || []).filter(x => String(x.id) !== String(itemId));
+        saveLocal(false);
+        const itemEl = root && root.querySelector(`.prep-item[data-item-id="${cssEscape(itemId)}"]`);
+        if (itemEl) itemEl.remove();
+        refreshItemMuted(sectionEl, section);
+        updateStatsUI();
+        updateSectionCount(section.id);
+      }
+    });
   }
+
 
   function updateItemChecked(input) {
     const itemEl = input.closest('.prep-item');
     const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
     if (!item) return;
+
+    const oldChecked = !!item.checked;
+    const oldCheckedAt = item.checkedAt || '';
     const checked = !!input.checked;
+
+    if (!canWrite()) {
+      input.checked = oldChecked;
+      return;
+    }
+
+    item.checked = checked;
+    item.checkedAt = checked ? new Date().toISOString() : '';
+    saveLocal(true);
+
+    itemEl.classList.toggle('is-checked', item.checked);
+    const sectionEl = itemEl.closest('.prep-section');
+    if (sectionEl) updateSectionCount(sectionEl.dataset.sectionId);
+    updateStatsUI();
+    updateSyncUI();
 
     mutateChecklist('prep_item_check', {
       itemId: item.id,
       checked
-    }, { status: '儲存勾選中' });
+    }, {
+      skipCanWrite: true,
+      status: '儲存勾選中',
+      onError: () => {
+        item.checked = oldChecked;
+        item.checkedAt = oldCheckedAt;
+        input.checked = oldChecked;
+        itemEl.classList.toggle('is-checked', oldChecked);
+        saveLocal(false);
+        if (sectionEl) updateSectionCount(sectionEl.dataset.sectionId);
+        updateStatsUI();
+      }
+    });
   }
 
-  async function editSection(btn) {
+
+  function editSection(btn) {
     const sectionEl = btn.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     if (!section) return;
@@ -633,26 +791,65 @@
     if (nextLabel === null) return;
     const parsed = parseSectionLabel(nextLabel);
     if (!parsed.title) return;
+    if (!canWrite()) return;
 
-    await mutateChecklist('prep_category_edit', {
+    const oldTitle = section.title;
+    const oldEmoji = section.emoji;
+    section.emoji = parsed.emoji;
+    section.title = parsed.title;
+    section.owner = selectedOwner;
+    saveLocal(true);
+
+    const name = sectionEl.querySelector('.prep-section-name');
+    if (name) name.textContent = getSectionDisplayName(section);
+    updateSyncUI();
+
+    mutateChecklist('prep_category_edit', {
       categoryId: section.id,
       category: parsed.title,
       categoryEmoji: parsed.emoji
-    }, { status: '修改分類中' });
+    }, {
+      skipCanWrite: true,
+      status: '修改分類中',
+      onError: () => {
+        section.title = oldTitle;
+        section.emoji = oldEmoji;
+        saveLocal(false);
+        if (name) name.textContent = getSectionDisplayName(section);
+      }
+    });
   }
 
-  async function deleteSection(btn) {
+
+  function deleteSection(btn) {
     const sectionEl = btn.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     if (!section) return;
     if (!confirm(`確定刪除「${getSectionDisplayName(section)}」？`)) return;
+    if (!canWrite()) return;
 
-    await mutateChecklist('prep_category_delete', {
-      categoryId: section.id
-    }, { status: '刪除分類中' });
+    const backup = cloneState(state);
+    const categoryId = section.id;
+    state.sections = (state.sections || []).filter(x => String(x.id) !== String(categoryId));
+    saveLocal(true);
+    if (sectionEl) sectionEl.remove();
+    updateEmptyUI();
+    updateStatsUI();
+    updateSyncUI();
+
+    mutateChecklist('prep_category_delete', { categoryId }, {
+      skipCanWrite: true,
+      status: '刪除分類中',
+      onError: () => {
+        state = backup;
+        saveLocal(false);
+        render();
+      }
+    });
   }
 
-  async function editItem(btn) {
+
+  function editItem(btn) {
     const itemEl = btn.closest('.prep-item');
     const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
     if (!item) return;
@@ -661,35 +858,111 @@
     if (nextText === null) return;
     const text = String(nextText || '').trim();
     if (!text) return;
+    if (!canWrite()) return;
 
-    await mutateChecklist('prep_item_edit', {
+    const oldText = item.text;
+    item.text = text;
+    saveLocal(true);
+
+    const textEl = itemEl.querySelector('.prep-item-text');
+    if (textEl) textEl.textContent = text;
+    updateSyncUI();
+
+    mutateChecklist('prep_item_edit', {
       itemId: item.id,
       itemName: text
-    }, { status: '修改項目中' });
+    }, {
+      skipCanWrite: true,
+      status: '修改項目中',
+      onError: () => {
+        item.text = oldText;
+        saveLocal(false);
+        if (textEl) textEl.textContent = oldText;
+      }
+    });
   }
 
-  async function deleteItem(btn) {
+
+  function deleteItem(btn) {
     const itemEl = btn.closest('.prep-item');
     const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
     if (!item) return;
     if (!confirm(`確定刪除「${item.text}」？`)) return;
+    if (!canWrite()) return;
 
-    await mutateChecklist('prep_item_delete', {
-      itemId: item.id
-    }, { status: '刪除項目中' });
+    const backup = cloneState(state);
+    const itemId = item.id;
+    const sectionEl = itemEl.closest('.prep-section');
+    const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
+
+    if (section) section.items = (section.items || []).filter(x => String(x.id) !== String(itemId));
+    saveLocal(true);
+    itemEl.remove();
+    if (section) refreshItemMuted(sectionEl, section);
+    if (section) updateSectionCount(section.id);
+    updateStatsUI();
+    updateSyncUI();
+
+    mutateChecklist('prep_item_delete', { itemId }, {
+      skipCanWrite: true,
+      status: '刪除項目中',
+      onError: () => {
+        state = backup;
+        saveLocal(false);
+        render();
+      }
+    });
   }
 
-  async function clearChecks() {
+
+  function clearChecks() {
     if (!selectedOwner || !confirm(`確定清空「${selectedOwner}」所有勾選？`)) return;
-    await mutateChecklist('prep_checks_clear', {}, { status: '清空勾選中' });
+    if (!canWrite()) return;
+
+    const backup = cloneState(state);
+    state.sections.forEach(section => section.items.forEach(item => { item.checked = false; item.checkedAt = ''; }));
+    saveLocal(true);
+
+    root.querySelectorAll('.prep-item').forEach(itemEl => itemEl.classList.remove('is-checked'));
+    root.querySelectorAll('.prep-item input[type="checkbox"]').forEach(input => { input.checked = false; });
+    root.querySelectorAll('.prep-section').forEach(sectionEl => updateSectionCount(sectionEl.dataset.sectionId));
+    updateStatsUI();
+    updateSyncUI();
+
+    mutateChecklist('prep_checks_clear', {}, {
+      skipCanWrite: true,
+      status: '清空勾選中',
+      onError: () => {
+        state = backup;
+        saveLocal(false);
+        render();
+      }
+    });
   }
 
-  async function deleteAll() {
+
+  function deleteAll() {
     if (!selectedOwner) return;
     if (!confirm(`確定刪除「${selectedOwner}」的全部準備清單？`)) return;
     if (!confirm('這會刪除資料庫中的全部準備分類與項目，確定繼續？')) return;
-    await mutateChecklist('prep_all_delete', { confirmDeleteAll: true }, { status: '刪除全部中' });
+    if (!canWrite()) return;
+
+    const backup = cloneState(state);
+    state.sections = [];
+    saveLocal(true);
+    render();
+
+    mutateChecklist('prep_all_delete', { confirmDeleteAll: true }, {
+      skipCanWrite: true,
+      status: '刪除全部中',
+      onError: () => {
+        state = backup;
+        saveLocal(false);
+        render();
+      }
+    });
   }
+
 
   function bindRootEvents() {
     root.addEventListener('click', event => {
@@ -761,7 +1034,7 @@
       return;
     }
 
-    if (isWriting || isLoadingRemote) return;
+    if (pendingWrites > 0 || isLoadingRemote) return;
     const now = Date.now();
     if (now - lastAutoRefreshAt >= AUTO_REFRESH_MS && !isEditingChecklistInput()) {
       lastAutoRefreshAt = now;
