@@ -1,10 +1,10 @@
-// version: 20260704.2
+// version: 20260704.3
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
-// 20260704.2：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
-// 20260704.2：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
-// 20260704.2：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
+// 20260704.3：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
+// 20260704.3：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
+// 20260704.3：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260704.2';
+  const VERSION = '20260704.3';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -286,6 +286,29 @@
     saveLocal(false);
   }
 
+  function refreshPersonalArea() {
+    if (!root || !state) return;
+    const area = root.querySelector('.prep-personal-area');
+    if (area) {
+      area.innerHTML = renderSelectedOwnerBody();
+      updateEmptyUI();
+      updateStatsUI();
+      updateSyncUI();
+    } else {
+      render();
+    }
+  }
+
+  function refreshChecklistFromDatabase() {
+    if (!selectedOwner) return;
+    if (pendingWrites > 0) {
+      syncStatus = '儲存中，稍後更新';
+      updateSyncUI();
+      return;
+    }
+    loadFromSheet({ manual: true, partial: true });
+  }
+
   async function loadFromSheet(options = {}) {
     if (!API_URL || isLoadingRemote || pendingWrites > 0 || !selectedOwner) return;
     const trip = getCurrentTripInfo();
@@ -311,9 +334,10 @@
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.status === 'success') {
-        // 20260704.2：資料庫是主資料。只有「讀取」時用 Google Sheet 取代前端快取；寫入成功不整面重畫。
+        // 20260704.3：資料庫是主資料。讀取時用 Google Sheet 取代前端快取，但只刷新準備清單區塊。
         applyRemoteData(data, '已同步');
-        render();
+        if (options.partial === false) render();
+        else refreshPersonalArea();
       } else {
         syncStatus = '讀取失敗';
         updateSyncUI();
@@ -452,7 +476,10 @@
       .prep-progress-bar { height: 100%; background: white; border-radius: 999px; transition: width .2s; }
       .prep-body { padding: 12px; overflow-y: auto; max-height: calc(88vh - 122px); }
       .prep-status-line { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#64748b; font-size:11px; margin:0 2px 10px; }
+      .prep-status-right { display:flex; align-items:center; gap:6px; min-width:0; }
       .prep-sync-pill { background:#e0f2fe; color:#0369a1; border-radius:999px; padding:4px 8px; font-weight:800; white-space:nowrap; }
+      .prep-refresh-btn { border:1px solid #bfdbfe; background:#fff; color:#2563eb; border-radius:999px; padding:4px 8px; font-size:11px; font-weight:900; white-space:nowrap; }
+      .prep-refresh-btn:disabled { opacity:.45; }
       .prep-owner-box { background: white; border: 1px solid #dbeafe; border-radius: 16px; padding: 12px; display: grid; gap: 8px; margin-bottom: 12px; }
       .prep-owner-row { display:grid; grid-template-columns: 80px 1fr; gap:8px; align-items:center; }
       .prep-owner-row label { font-size:13px; font-weight:900; color:#334155; }
@@ -559,7 +586,10 @@
           <div class="prep-body">
             <div class="prep-status-line">
               <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
-              <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
+              <span class="prep-status-right">
+                <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0) ? 'disabled' : ''}>↻ 更新資料</button>
+                <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
+              </span>
             </div>
             <div class="prep-owner-box">
               <div class="prep-owner-row">
@@ -583,6 +613,11 @@
     const syncText = selectedOwner ? (syncStatus || (lastSyncedAt ? '已同步' : '')) : '';
     const pill = root.querySelector('.prep-sync-pill');
     const updated = root.querySelector('.prep-updated-text');
+    const refreshBtn = root.querySelector('.prep-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.style.display = selectedOwner ? '' : 'none';
+      refreshBtn.disabled = !selectedOwner || !isBrowserOnline() || pendingWrites > 0 || isLoadingRemote;
+    }
     if (pill) {
       pill.textContent = syncText;
       pill.style.display = syncText ? '' : 'none';
@@ -971,6 +1006,7 @@
       if (target.closest('.prep-close')) { panelOpen = false; render(); return; }
       const overlay = target.classList && target.classList.contains('prep-overlay') ? target : null;
       if (overlay) { panelOpen = false; render(); return; }
+      if (target.closest('.prep-refresh-btn')) { refreshChecklistFromDatabase(); return; }
       if (!selectedOwner && !target.closest('.prep-owner-select')) return;
 
       if (target.closest('.prep-add-section-btn')) { addSectionFromInputs(); return; }
@@ -1055,6 +1091,11 @@
     });
     window.addEventListener('focus', () => { if (isBrowserOnline()) autoSyncTick(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden && isBrowserOnline()) autoSyncTick(); });
+    document.addEventListener('travel:partial-refresh', event => {
+      const target = event && event.detail && event.detail.target;
+      if (!target || target === 'current' || target === 'prep' || target === 'checklist') refreshChecklistFromDatabase();
+    });
+    window.TRAVEL_PREP_REFRESH = refreshChecklistFromDatabase;
     setInterval(autoSyncTick, AUTO_CHECK_MS);
   }
 

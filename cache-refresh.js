@@ -1,7 +1,8 @@
-// version: 260702-2
-// 首頁手動刷新：給 iOS 加到主畫面 / 捷徑使用，避免瀏覽器快取舊版 HTML。
+// version: 20260704.3
+// 只有使用者明確按「刷新版本 / 重新載入」時才整頁 reload。
+// 平常資料新增、修改、刪除都應交給各模組做局部更新。
 (function () {
-  const VERSION = '260702-2';
+  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260704.3';
 
   async function clearBrowserCaches() {
     try {
@@ -15,6 +16,7 @@
 
   window.TRAVEL_FORCE_REFRESH = async function travelForceRefresh() {
     const btn = document.activeElement;
+    const oldText = btn && btn.tagName === 'BUTTON' ? btn.textContent : '';
     if (btn && btn.tagName === 'BUTTON') {
       btn.disabled = true;
       btn.textContent = '刷新中...';
@@ -26,5 +28,19 @@
     url.searchParams.set('v', `${VERSION}-${Date.now()}`);
     url.searchParams.set('refresh', '1');
     window.location.replace(url.toString());
+
+    setTimeout(() => {
+      if (btn && btn.tagName === 'BUTTON') {
+        btn.disabled = false;
+        btn.textContent = oldText || '↻ 刷新版本 / 重新載入';
+      }
+    }, 2500);
+  };
+
+  // 給模組使用的局部刷新事件；不會 reload 頁面。
+  window.TRAVEL_PARTIAL_REFRESH = function travelPartialRefresh(target) {
+    document.dispatchEvent(new CustomEvent('travel:partial-refresh', {
+      detail: { target: target || 'current' }
+    }));
   };
 })();
