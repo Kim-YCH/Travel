@@ -1,14 +1,10 @@
-// version: 20260703.4
-// 準備清單功能：依照成員建立獨立準備清單；分類與項目都歸屬於選定成員。
-// 260702-4：勾選與新增項目改為局部更新，避免手機鍵盤收起與畫面重繪。
-// 260702-5：分類改為 emoji 與名稱同欄輸入，編輯 / 刪除按鈕改成縮小版行程卡樣式。
-// 260702-6：新增自動重試同步、回到前景自動刷新，避免閒置後長時間停在離線狀態。
-// 20260703.4：分類也依照成員分表；首次使用停在「請選擇」，並用 Cookie 記住上次查看的成員。
-// 20260703.4：新增分類固定使用目前查看對象，不再在分類旁邊重複選擇成員。
-// 20260703.4：套用 Cloud Blue 視覺風格。
+// version: 20260704.1
+// 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
+// 20260704.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
+// 20260704.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 (function () {
-  const VERSION = '20260703.4';
-  const STORAGE_PREFIX = 'travel_prepare_checklist_v4::';
+  const VERSION = '20260704.1';
+  const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
   let currentTripKey = '';
@@ -16,16 +12,15 @@
   let state = null;
   let root = null;
   let panelOpen = false;
-  let syncTimer = null;
   let isLoadingRemote = false;
+  let isWriting = false;
   let syncStatus = '';
   let lastSyncedAt = '';
   let lastRemoteUpdatedAt = '';
-  let hasPendingSheetSave = false;
   let lastAutoRefreshAt = 0;
   let lastMembersFingerprint = '';
   const AUTO_REFRESH_MS = 60000;
-  const AUTO_RETRY_MS = 30000;
+  const AUTO_CHECK_MS = 30000;
 
   function safeJsonParse(value, fallback) {
     try { return JSON.parse(value); } catch (_) { return fallback; }
@@ -119,10 +114,6 @@
     return STORAGE_PREFIX + getTripIdentity() + '::owner::' + String(owner || '').trim();
   }
 
-  function getLegacyStorageKey() {
-    return 'travel_prepare_checklist_v3::' + getCurrentTripName();
-  }
-
   function makeId(prefix) {
     return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
   }
@@ -136,10 +127,7 @@
     const rest = text.slice(first.length).trim();
     const firstLooksLikeText = /^[A-Za-z0-9\u4e00-\u9fff]$/.test(first);
 
-    if (rest && !firstLooksLikeText) {
-      return { emoji: first, title: rest };
-    }
-
+    if (rest && !firstLooksLikeText) return { emoji: first, title: rest };
     return { emoji: '', title: text };
   }
 
@@ -160,9 +148,7 @@
       const tripsCache = safeJsonParse(localStorage.getItem('trips_cache'), null);
       const trips = Array.isArray(tripsCache && tripsCache.data) ? tripsCache.data : [];
       trips.forEach(trip => {
-        if (String(trip && trip.name || '').trim() === tripName && trip.id) {
-          candidates.push(String(trip.id));
-        }
+        if (String(trip && trip.name || '').trim() === tripName && trip.id) candidates.push(String(trip.id));
       });
     } catch (_) {}
 
@@ -183,7 +169,6 @@
       const cache = safeJsonParse(localStorage.getItem('trip_cache_' + tripId), null);
       if (cache) return cache;
     }
-
     return null;
   }
 
@@ -199,7 +184,6 @@
       seen.add(name);
       names.push(name);
     });
-
     return names;
   }
 
@@ -213,37 +197,25 @@
     if (selected && !names.includes(selected)) names.unshift(selected);
 
     const options = [];
-    if (includePlaceholder) {
-      options.push(`<option value=""${selected ? '' : ' selected'}>請選擇</option>`);
-    }
-
-    names.forEach(name => {
-      options.push(`<option value="${escapeHtml(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`);
-    });
-
+    if (includePlaceholder) options.push(`<option value=""${selected ? '' : ' selected'}>請選擇</option>`);
+    names.forEach(name => options.push(`<option value="${escapeHtml(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`));
     return options.join('');
   }
 
   function buildEmptyState(owner = selectedOwner) {
-    return {
-      version: VERSION,
-      owner: String(owner || '').trim(),
-      updatedAt: new Date().toISOString(),
-      sections: []
-    };
+    return { version: VERSION, owner: String(owner || '').trim(), updatedAt: '', sections: [] };
   }
 
   function normalizeState(saved, owner = selectedOwner) {
     if (!saved || !Array.isArray(saved.sections)) return buildEmptyState(owner);
-
     return {
       version: VERSION,
       owner: String(saved.owner || owner || '').trim(),
-      updatedAt: saved.updatedAt || new Date().toISOString(),
+      updatedAt: saved.updatedAt || '',
       sections: saved.sections
         .filter(section => section && String(section.title || '').trim())
         .map(section => ({
-          id: section.id || makeId('section'),
+          id: String(section.id || makeId('section')),
           title: String(section.title || '').trim(),
           emoji: String(section.emoji || '').trim(),
           owner: String(section.owner || saved.owner || owner || '').trim(),
@@ -251,7 +223,7 @@
             ? section.items
                 .filter(item => item && String(item.text || '').trim())
                 .map(item => ({
-                  id: item.id || makeId('item'),
+                  id: String(item.id || makeId('item')),
                   text: String(item.text || '').trim(),
                   checked: !!item.checked,
                   checkedAt: item.checkedAt || ''
@@ -259,18 +231,6 @@
             : []
         }))
     };
-  }
-
-  function hasAnyContent(data) {
-    return !!(data && Array.isArray(data.sections) && data.sections.length > 0);
-  }
-
-  function stateFingerprint(data) {
-    try {
-      return JSON.stringify((data && data.sections) || []);
-    } catch (_) {
-      return '';
-    }
   }
 
   function isBrowserOnline() {
@@ -283,38 +243,22 @@
   }
 
   function loadLocalState() {
+    currentTripKey = getStorageKey(selectedOwner);
     if (!selectedOwner) {
-      currentTripKey = getStorageKey('');
       state = buildEmptyState('');
       return;
     }
 
-    currentTripKey = getStorageKey(selectedOwner);
     const saved = safeJsonParse(localStorage.getItem(currentTripKey), null);
-    const legacy = safeJsonParse(localStorage.getItem(getLegacyStorageKey()), null);
     state = normalizeState(saved || null, selectedOwner);
-
-    // 舊版全域資料不自動搬到個人，避免第一次選人時誤塞資料；只在本機完全沒資料時保留備援參考。
-    if (!saved && legacy && false) state = normalizeState(legacy, selectedOwner);
-
-    saveLocal(false);
   }
 
-  function saveLocal(updateTime = true) {
+  function saveLocal(updateTime = false) {
     if (!state || !selectedOwner) return;
     state.owner = selectedOwner;
     state.sections.forEach(section => { section.owner = selectedOwner; });
     if (updateTime) state.updatedAt = new Date().toISOString();
-    localStorage.setItem(currentTripKey, JSON.stringify(state));
-  }
-
-  function scheduleSheetSave() {
-    if (!API_URL || !state || !selectedOwner) return;
-    hasPendingSheetSave = true;
-    syncStatus = '待同步';
-    updateSyncUI();
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(saveToSheet, 650);
+    try { localStorage.setItem(currentTripKey, JSON.stringify(state)); } catch (_) {}
   }
 
   async function apiPost(body) {
@@ -326,22 +270,34 @@
     return await res.json();
   }
 
-  async function loadFromSheet(options = {}) {
-    if (!API_URL || isLoadingRemote || !selectedOwner) return;
+  function applyRemoteData(data, statusText) {
+    const remote = normalizeState({
+      owner: data.owner || selectedOwner,
+      updatedAt: data.updatedAt || new Date().toISOString(),
+      sections: data.sections || []
+    }, selectedOwner);
 
+    state = remote;
+    lastRemoteUpdatedAt = data.updatedAt || lastRemoteUpdatedAt;
+    lastSyncedAt = new Date().toISOString();
+    syncStatus = statusText || '已同步';
+    saveLocal(false);
+  }
+
+  async function loadFromSheet(options = {}) {
+    if (!API_URL || isLoadingRemote || isWriting || !selectedOwner) return;
     const trip = getCurrentTripInfo();
     if (!trip.name || trip.name === '共用清單') return;
 
     const silent = !!options.silent;
     isLoadingRemote = true;
     if (!silent) {
-      syncStatus = '同步中';
+      syncStatus = isBrowserOnline() ? '讀取資料庫' : '離線，只可查看';
       updateSyncUI();
     }
 
-    let shouldRender = false;
-
     try {
+      if (!isBrowserOnline()) throw new Error('offline');
       let url = API_URL
         + '?action=prep_checklist_get'
         + '&owner=' + encodeURIComponent(selectedOwner)
@@ -352,84 +308,74 @@
 
       const res = await fetch(url);
       const data = await res.json();
-
       if (data && data.status === 'success') {
-        const remote = normalizeState({
-          owner: data.owner || selectedOwner,
-          updatedAt: data.updatedAt || new Date().toISOString(),
-          sections: data.sections || []
-        }, selectedOwner);
-        const remoteFingerprint = stateFingerprint(remote);
-        const localFingerprint = stateFingerprint(state);
-        lastRemoteUpdatedAt = data.updatedAt || lastRemoteUpdatedAt;
-
-        if (hasPendingSheetSave) {
-          syncStatus = '待同步';
-        } else if (hasAnyContent(remote) || !hasAnyContent(state)) {
-          if (remoteFingerprint !== localFingerprint) {
-            state = remote;
-            saveLocal(false);
-            shouldRender = true;
-          }
-          syncStatus = '已同步';
-          lastSyncedAt = new Date().toISOString();
-        } else {
-          syncStatus = '已同步';
-          lastSyncedAt = new Date().toISOString();
-        }
+        // 20260704.1：資料庫是主資料。只要遠端讀取成功，一律用 Google Sheet 取代前端快取。
+        applyRemoteData(data, '已同步');
+        render();
       } else {
-        syncStatus = '未同步';
+        syncStatus = '讀取失敗';
+        updateSyncUI();
       }
     } catch (err) {
       console.warn('prep checklist load failed:', err);
-      syncStatus = isBrowserOnline() ? '未同步' : '離線';
+      syncStatus = isBrowserOnline() ? '讀取失敗' : '離線，只可查看';
+      updateSyncUI();
     } finally {
       isLoadingRemote = false;
-      if (!silent || shouldRender) render();
-      else updateSyncUI();
     }
   }
 
-  async function saveToSheet() {
-    if (!API_URL || !state || !selectedOwner) return;
-
+  function buildBasePayload(action) {
     const trip = getCurrentTripInfo();
-    if (!trip.name || trip.name === '共用清單') return;
+    return {
+      action,
+      tripId: trip.id || '',
+      tripName: trip.name,
+      owner: selectedOwner
+    };
+  }
 
-    syncStatus = '同步中';
+  function canWrite() {
+    if (!API_URL || !selectedOwner || !state) return false;
+    if (isWriting) return false;
+    if (!isBrowserOnline()) {
+      syncStatus = '離線，只可查看';
+      updateSyncUI();
+      alert('目前離線。為了避免資料不一致，準備清單離線時只能查看，不能新增、編輯、刪除或勾選。');
+      return false;
+    }
+    return true;
+  }
+
+  async function mutateChecklist(action, payload, options = {}) {
+    if (!canWrite()) return null;
+    const trip = getCurrentTripInfo();
+    if (!trip.name || trip.name === '共用清單') return null;
+
+    isWriting = true;
+    syncStatus = options.status || '儲存中';
     updateSyncUI();
 
     try {
-      const out = await apiPost({
-        action: 'prep_checklist_save',
-        tripId: trip.id || '',
-        tripName: trip.name,
-        owner: selectedOwner,
-        data: state
-      });
-
-      if (out && out.status === 'success') {
-        hasPendingSheetSave = false;
-        syncStatus = '已同步';
-        lastSyncedAt = new Date().toISOString();
-        lastRemoteUpdatedAt = out.updatedAt || lastSyncedAt;
-      } else {
-        hasPendingSheetSave = true;
-        syncStatus = '未同步';
-        console.warn('prep checklist save failed:', out);
+      const out = await apiPost({ ...buildBasePayload(action), ...(payload || {}) });
+      if (!out || out.status !== 'success') {
+        throw new Error((out && out.message) || 'write failed');
       }
+
+      applyRemoteData(out, '已儲存');
+      render();
+      return out;
     } catch (err) {
-      hasPendingSheetSave = true;
-      syncStatus = isBrowserOnline() ? '未同步' : '離線';
-      console.warn('prep checklist save failed:', err);
+      console.warn('prep checklist mutation failed:', action, err);
+      syncStatus = isBrowserOnline() ? '儲存失敗' : '離線，只可查看';
+      updateSyncUI();
+      alert('準備清單儲存失敗，畫面會保留資料庫最後成功讀取的狀態。請稍後重新整理再試。');
+      if (isBrowserOnline()) loadFromSheet({ silent: true });
+      return null;
+    } finally {
+      isWriting = false;
+      updateSyncUI();
     }
-
-    updateSyncUI();
-  }
-
-  function saveState(updateTime = true) {
-    saveLocal(updateTime);
-    scheduleSheetSave();
   }
 
   function getStats() {
@@ -500,6 +446,8 @@
       .prep-action-btn.secondary { background: #f1f5f9; color: #475569; }
       .prep-action-btn.danger { background: #fee2e2; color: #b91c1c; }
       .prep-blank { min-height: 220px; }
+      .prep-offline-note { color:#b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:8px 10px; font-size:12px; font-weight:800; margin-bottom:10px; }
+      .prep-disabled button:not(.prep-close), .prep-disabled input[type="checkbox"] { opacity:.55; }
     `;
     document.head.appendChild(style);
   }
@@ -507,7 +455,7 @@
   function renderItem(item) {
     return `
       <div class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
-        <input type="checkbox" ${item.checked ? 'checked' : ''} />
+        <input type="checkbox" ${item.checked ? 'checked' : ''} ${isWriting ? 'disabled' : ''} />
         <span class="prep-item-text">${escapeHtml(item.text)}</span>
         <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
         <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕</button>
@@ -538,19 +486,15 @@
   function renderSelectedOwnerBody() {
     if (!selectedOwner) return '<div class="prep-blank"></div>';
     const hasSections = state && state.sections && state.sections.length > 0;
+    const offlineNote = !isBrowserOnline() ? '<div class="prep-offline-note">目前離線，只可查看。新增、編輯、刪除與勾選都會被阻擋。</div>' : '';
     return `
+      ${offlineNote}
       <div class="prep-add-box">
         <div style="font-size:13px;font-weight:900;color:#334155;">新增分類</div>
-        <div class="prep-add-row">
-          <input class="prep-new-section-title" placeholder="例如 🪪 證件" />
-        </div>
+        <div class="prep-add-row"><input class="prep-new-section-title" placeholder="例如 🪪 證件" /></div>
         <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
       </div>
-
-      <div class="prep-section-list">
-        ${hasSections ? state.sections.map(renderSection).join('') : ''}
-      </div>
-
+      <div class="prep-section-list">${hasSections ? state.sections.map(renderSection).join('') : ''}</div>
       <div class="prep-bottom-actions" style="${hasSections ? '' : 'display:none;'}">
         <button class="prep-action-btn secondary prep-clear-checks" type="button">清空勾選</button>
         <button class="prep-action-btn danger prep-delete-all" type="button">刪除全部</button>
@@ -563,11 +507,12 @@
     const tripName = getCurrentTripName();
     const syncText = selectedOwner ? (syncStatus || (lastSyncedAt ? '已同步' : '')) : '';
     const ownerText = selectedOwner || '請選擇';
+    const disabledClass = (!isBrowserOnline() || isWriting) ? ' prep-disabled' : '';
 
     root.innerHTML = `
       <button class="prep-fab" type="button" aria-label="開啟準備清單">🎒 準備清單</button>
       <div class="prep-overlay" role="dialog" aria-modal="true">
-        <div class="prep-panel">
+        <div class="prep-panel${disabledClass}">
           <div class="prep-header">
             <div class="prep-title-row">
               <div>
@@ -583,46 +528,21 @@
               <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
               <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
             </div>
-
             <div class="prep-owner-box">
               <div class="prep-owner-row">
                 <label for="prep-owner-select">查看對象</label>
-                <select id="prep-owner-select" class="prep-owner-select">
-                  ${renderOwnerOptions(selectedOwner, true)}
-                </select>
+                <select id="prep-owner-select" class="prep-owner-select">${renderOwnerOptions(selectedOwner, true)}</select>
               </div>
             </div>
-
-            <div class="prep-personal-area">
-              ${renderSelectedOwnerBody()}
-            </div>
+            <div class="prep-personal-area">${renderSelectedOwnerBody()}</div>
           </div>
         </div>
       </div>`;
 
     const fab = root.querySelector('.prep-fab');
     const overlay = root.querySelector('.prep-overlay');
-    fab.classList.toggle('is-visible', !!document.querySelector('.app-header h1'));
-    overlay.classList.toggle('is-open', panelOpen);
-  }
-
-  function updateStatsUI() {
-    if (!root || !state) return;
-    const stats = getStats();
-    const tripName = getCurrentTripName();
-    const ownerText = selectedOwner || '請選擇';
-    const summary = root.querySelector('.prep-summary');
-    const progressBar = root.querySelector('.prep-progress-bar');
-    if (summary) summary.textContent = selectedOwner
-      ? `${tripName}｜${ownerText}｜${stats.done}/${stats.total}（${stats.percent}%）`
-      : `${tripName}｜${ownerText}`;
-    if (progressBar) progressBar.style.width = `${selectedOwner ? stats.percent : 0}%`;
-
-    root.querySelectorAll('.prep-section').forEach(sectionEl => {
-      const section = findSection(sectionEl.dataset.sectionId);
-      const count = sectionEl.querySelector('.prep-section-count');
-      if (section && count) count.textContent = `${section.items.filter(i => i.checked).length}/${section.items.length}`;
-    });
+    if (fab) fab.classList.toggle('is-visible', !!document.querySelector('.app-header h1'));
+    if (overlay) overlay.classList.toggle('is-open', panelOpen);
   }
 
   function updateSyncUI() {
@@ -634,30 +554,7 @@
       pill.textContent = syncText;
       pill.style.display = syncText ? '' : 'none';
     }
-    if (updated) {
-      updated.textContent = selectedOwner
-        ? (lastSyncedAt ? `更新 ${formatTime(lastSyncedAt)}` : `版本 ${VERSION}`)
-        : '';
-    }
-  }
-
-  function updateEmptyUI() {
-    if (!root || !state) return;
-    const actions = root.querySelector('.prep-bottom-actions');
-    if (actions) actions.style.display = state.sections.length ? '' : 'none';
-  }
-
-  function updateSectionCount(sectionId) {
-    const sectionEl = root && root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
-    const section = findSection(sectionId);
-    if (!sectionEl || !section) return;
-    const count = sectionEl.querySelector('.prep-section-count');
-    if (count) count.textContent = `${section.items.filter(i => i.checked).length}/${section.items.length}`;
-  }
-
-  function cssEscape(value) {
-    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
-    return String(value).replace(/"/g, '\\"');
+    if (updated) updated.textContent = selectedOwner ? (lastSyncedAt ? `更新 ${formatTime(lastSyncedAt)}` : `版本 ${VERSION}`) : '';
   }
 
   function changeSelectedOwner(owner) {
@@ -665,77 +562,69 @@
     if (next === selectedOwner) return;
     selectedOwner = next;
     storeOwner(selectedOwner);
-    syncStatus = '';
+    syncStatus = selectedOwner ? '讀取資料庫' : '';
     lastSyncedAt = '';
     lastRemoteUpdatedAt = '';
-    hasPendingSheetSave = false;
     loadLocalState();
     render();
     if (selectedOwner) loadFromSheet();
   }
 
-  function addSectionFromInputs() {
+  async function addSectionFromInputs() {
     const titleInput = root.querySelector('.prep-new-section-title');
     const rawTitle = String(titleInput && titleInput.value || '').trim();
     const parsed = parseSectionLabel(rawTitle);
     if (!selectedOwner || !parsed.title) return;
 
-    const section = { id: makeId('section'), title: parsed.title, emoji: parsed.emoji, owner: selectedOwner, items: [] };
-    state.sections.push(section);
-    saveState(true);
+    const sectionId = makeId('section');
+    const out = await mutateChecklist('prep_category_add', {
+      categoryId: sectionId,
+      category: parsed.title,
+      categoryEmoji: parsed.emoji,
+      sortOrder: (state.sections || []).length + 1
+    }, { status: '新增分類中' });
 
-    const sectionList = root.querySelector('.prep-section-list');
-    if (sectionList) sectionList.insertAdjacentHTML('beforeend', renderSection(section));
-    if (titleInput) titleInput.value = '';
-    updateEmptyUI();
-    updateStatsUI();
-    updateSyncUI();
+    if (out && titleInput) titleInput.value = '';
   }
 
-  function addItemFromInput(input) {
+  async function addItemFromInput(input) {
     const sectionEl = input.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     const text = String(input.value || '').trim();
     if (!section || !text) return;
 
-    const item = { id: makeId('item'), text, checked: false, checkedAt: '' };
-    section.items.push(item);
-    saveState(true);
+    const itemId = makeId('item');
+    const out = await mutateChecklist('prep_item_add', {
+      categoryId: section.id,
+      itemId,
+      itemName: text,
+      sortOrder: (section.items || []).length + 1
+    }, { status: '新增項目中' });
 
-    const itemsEl = sectionEl.querySelector('.prep-items');
-    if (itemsEl) {
-      const muted = itemsEl.querySelector('.prep-muted');
-      if (muted) muted.remove();
-      itemsEl.insertAdjacentHTML('beforeend', renderItem(item));
+    if (out) {
+      requestAnimationFrame(() => {
+        const nextInput = root.querySelector(`.prep-section[data-section-id="${cssEscape(section.id)}"] .prep-new-item-input`);
+        if (nextInput) {
+          nextInput.value = '';
+          try { nextInput.focus({ preventScroll: true }); } catch (_) { nextInput.focus(); }
+        }
+      });
     }
-
-    input.value = '';
-    updateStatsUI();
-    updateSectionCount(section.id);
-    updateSyncUI();
-
-    requestAnimationFrame(() => {
-      try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
-    });
   }
 
   function updateItemChecked(input) {
     const itemEl = input.closest('.prep-item');
     const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
     if (!item) return;
+    const checked = !!input.checked;
 
-    item.checked = input.checked;
-    item.checkedAt = item.checked ? new Date().toISOString() : '';
-    saveState(true);
-
-    itemEl.classList.toggle('is-checked', item.checked);
-    const sectionEl = itemEl.closest('.prep-section');
-    if (sectionEl) updateSectionCount(sectionEl.dataset.sectionId);
-    updateStatsUI();
-    updateSyncUI();
+    mutateChecklist('prep_item_check', {
+      itemId: item.id,
+      checked
+    }, { status: '儲存勾選中' });
   }
 
-  function editSection(btn) {
+  async function editSection(btn) {
     const sectionEl = btn.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     if (!section) return;
@@ -745,31 +634,25 @@
     const parsed = parseSectionLabel(nextLabel);
     if (!parsed.title) return;
 
-    section.emoji = parsed.emoji;
-    section.title = parsed.title;
-    section.owner = selectedOwner;
-    saveState(true);
-
-    const name = sectionEl.querySelector('.prep-section-name');
-    if (name) name.textContent = getSectionDisplayName(section);
-    updateSyncUI();
+    await mutateChecklist('prep_category_edit', {
+      categoryId: section.id,
+      category: parsed.title,
+      categoryEmoji: parsed.emoji
+    }, { status: '修改分類中' });
   }
 
-  function deleteSection(btn) {
+  async function deleteSection(btn) {
     const sectionEl = btn.closest('.prep-section');
     const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
     if (!section) return;
     if (!confirm(`確定刪除「${getSectionDisplayName(section)}」？`)) return;
 
-    state.sections = state.sections.filter(x => x.id !== section.id);
-    saveState(true);
-    if (sectionEl) sectionEl.remove();
-    updateEmptyUI();
-    updateStatsUI();
-    updateSyncUI();
+    await mutateChecklist('prep_category_delete', {
+      categoryId: section.id
+    }, { status: '刪除分類中' });
   }
 
-  function editItem(btn) {
+  async function editItem(btn) {
     const itemEl = btn.closest('.prep-item');
     const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
     if (!item) return;
@@ -779,180 +662,106 @@
     const text = String(nextText || '').trim();
     if (!text) return;
 
-    item.text = text;
-    saveState(true);
-    const textEl = itemEl.querySelector('.prep-item-text');
-    if (textEl) textEl.textContent = text;
-    updateSyncUI();
+    await mutateChecklist('prep_item_edit', {
+      itemId: item.id,
+      itemName: text
+    }, { status: '修改項目中' });
   }
 
-  function deleteItem(btn) {
+  async function deleteItem(btn) {
     const itemEl = btn.closest('.prep-item');
-    if (!itemEl) return;
-    const itemId = itemEl.dataset.itemId;
-    const sectionEl = itemEl.closest('.prep-section');
-    const section = sectionEl ? findSection(sectionEl.dataset.sectionId) : null;
+    const item = itemEl ? findItem(itemEl.dataset.itemId) : null;
+    if (!item) return;
+    if (!confirm(`確定刪除「${item.text}」？`)) return;
 
-    if (section) section.items = section.items.filter(item => item.id !== itemId);
-    saveState(true);
-    itemEl.remove();
-
-    if (sectionEl && section && section.items.length === 0) {
-      const itemsEl = sectionEl.querySelector('.prep-items');
-      if (itemsEl) itemsEl.innerHTML = '<div class="prep-muted">尚無項目</div>';
-    }
-
-    if (section) updateSectionCount(section.id);
-    updateStatsUI();
-    updateSyncUI();
+    await mutateChecklist('prep_item_delete', {
+      itemId: item.id
+    }, { status: '刪除項目中' });
   }
 
-  function clearChecks() {
-    if (!confirm(`確定清空「${selectedOwner}」所有勾選？`)) return;
-    state.sections.forEach(section => section.items.forEach(item => { item.checked = false; item.checkedAt = ''; }));
-    saveState(true);
-
-    root.querySelectorAll('.prep-item').forEach(itemEl => itemEl.classList.remove('is-checked'));
-    root.querySelectorAll('.prep-item input[type="checkbox"]').forEach(input => { input.checked = false; });
-    updateStatsUI();
-    updateSyncUI();
+  async function clearChecks() {
+    if (!selectedOwner || !confirm(`確定清空「${selectedOwner}」所有勾選？`)) return;
+    await mutateChecklist('prep_checks_clear', {}, { status: '清空勾選中' });
   }
 
-  function deleteAll() {
+  async function deleteAll() {
+    if (!selectedOwner) return;
     if (!confirm(`確定刪除「${selectedOwner}」的全部準備清單？`)) return;
-    state.sections = [];
-    saveState(true);
-    render();
+    if (!confirm('這會刪除資料庫中的全部準備分類與項目，確定繼續？')) return;
+    await mutateChecklist('prep_all_delete', { confirmDeleteAll: true }, { status: '刪除全部中' });
   }
 
   function bindRootEvents() {
     root.addEventListener('click', event => {
       const target = event.target;
-
-      if (target.closest('.prep-fab')) {
-        panelOpen = true;
-        render();
-        return;
-      }
-
-      if (target.closest('.prep-close')) {
-        panelOpen = false;
-        render();
-        return;
-      }
-
+      if (target.closest('.prep-fab')) { panelOpen = true; render(); return; }
+      if (target.closest('.prep-close')) { panelOpen = false; render(); return; }
       const overlay = target.classList && target.classList.contains('prep-overlay') ? target : null;
-      if (overlay) {
-        panelOpen = false;
-        render();
-        return;
-      }
-
+      if (overlay) { panelOpen = false; render(); return; }
       if (!selectedOwner && !target.closest('.prep-owner-select')) return;
 
-      if (target.closest('.prep-add-section-btn')) {
-        addSectionFromInputs();
-        return;
-      }
-
+      if (target.closest('.prep-add-section-btn')) { addSectionFromInputs(); return; }
       if (target.closest('.prep-add-item-btn')) {
         const sectionEl = target.closest('.prep-section');
         const input = sectionEl && sectionEl.querySelector('.prep-new-item-input');
         if (input) addItemFromInput(input);
         return;
       }
-
-      if (target.closest('.prep-edit-section')) {
-        editSection(target.closest('.prep-edit-section'));
-        return;
-      }
-
-      if (target.closest('.prep-delete-section')) {
-        deleteSection(target.closest('.prep-delete-section'));
-        return;
-      }
-
-      if (target.closest('.prep-edit-item')) {
-        event.preventDefault();
-        editItem(target.closest('.prep-edit-item'));
-        return;
-      }
-
-      if (target.closest('.prep-delete-item')) {
-        event.preventDefault();
-        deleteItem(target.closest('.prep-delete-item'));
-        return;
-      }
-
-      if (target.closest('.prep-clear-checks')) {
-        clearChecks();
-        return;
-      }
-
-      if (target.closest('.prep-delete-all')) {
-        deleteAll();
-      }
+      if (target.closest('.prep-edit-section')) { editSection(target.closest('.prep-edit-section')); return; }
+      if (target.closest('.prep-delete-section')) { deleteSection(target.closest('.prep-delete-section')); return; }
+      if (target.closest('.prep-edit-item')) { event.preventDefault(); editItem(target.closest('.prep-edit-item')); return; }
+      if (target.closest('.prep-delete-item')) { event.preventDefault(); deleteItem(target.closest('.prep-delete-item')); return; }
+      if (target.closest('.prep-clear-checks')) { clearChecks(); return; }
+      if (target.closest('.prep-delete-all')) { deleteAll(); }
     });
 
     root.addEventListener('change', event => {
       const target = event.target;
-      if (target.matches('.prep-owner-select')) {
-        changeSelectedOwner(target.value);
-        return;
-      }
-      if (target.matches('.prep-item input[type="checkbox"]')) {
-        updateItemChecked(target);
-      }
+      if (target.matches('.prep-owner-select')) { changeSelectedOwner(target.value); return; }
+      if (target.matches('.prep-item input[type="checkbox"]')) updateItemChecked(target);
     });
 
     root.addEventListener('keydown', event => {
       const target = event.target;
       if (event.key !== 'Enter') return;
-
-      if (target.matches('.prep-new-section-title')) {
-        event.preventDefault();
-        addSectionFromInputs();
-        return;
-      }
-
-      if (target.matches('.prep-new-item-input')) {
-        event.preventDefault();
-        addItemFromInput(target);
-      }
+      if (target.matches('.prep-new-section-title')) { event.preventDefault(); addSectionFromInputs(); return; }
+      if (target.matches('.prep-new-item-input')) { event.preventDefault(); addItemFromInput(target); }
     });
   }
 
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
+    return String(value).replace(/"/g, '\\"');
+  }
+
   function findSection(sectionId) {
-    return (state.sections || []).find(section => section.id === sectionId) || null;
+    return (state.sections || []).find(section => String(section.id) === String(sectionId)) || null;
   }
 
   function findItem(itemId) {
     for (const section of state.sections || []) {
-      const item = (section.items || []).find(x => x.id === itemId);
+      const item = (section.items || []).find(x => String(x.id) === String(itemId));
       if (item) return item;
     }
     return null;
   }
 
   function autoSyncTick() {
-    if (!API_URL || !state) return;
+    if (!API_URL || !state || !selectedOwner) return;
     ensureLoadedForCurrentTrip();
 
     const tripName = getCurrentTripName();
-    if (!tripName || tripName === '共用清單' || !selectedOwner) return;
+    if (!tripName || tripName === '共用清單') return;
+
     if (!isBrowserOnline()) {
-      if (syncStatus !== '離線') {
-        syncStatus = '離線';
+      if (syncStatus !== '離線，只可查看') {
+        syncStatus = '離線，只可查看';
         updateSyncUI();
       }
       return;
     }
 
-    if (hasPendingSheetSave || syncStatus === '離線' || syncStatus === '未同步' || syncStatus === '待同步') {
-      saveToSheet();
-      return;
-    }
-
+    if (isWriting || isLoadingRemote) return;
     const now = Date.now();
     if (now - lastAutoRefreshAt >= AUTO_REFRESH_MS && !isEditingChecklistInput()) {
       lastAutoRefreshAt = now;
@@ -962,20 +771,18 @@
 
   function bindAutoSyncEvents() {
     window.addEventListener('online', () => {
-      syncStatus = hasPendingSheetSave ? '待同步' : '同步中';
+      syncStatus = '重新讀取資料庫';
       updateSyncUI();
-      autoSyncTick();
+      loadFromSheet();
     });
-
-    window.addEventListener('focus', () => {
-      autoSyncTick();
+    window.addEventListener('offline', () => {
+      syncStatus = '離線，只可查看';
+      updateSyncUI();
+      render();
     });
-
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) autoSyncTick();
-    });
-
-    setInterval(autoSyncTick, AUTO_RETRY_MS);
+    window.addEventListener('focus', () => { if (isBrowserOnline()) autoSyncTick(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && isBrowserOnline()) autoSyncTick(); });
+    setInterval(autoSyncTick, AUTO_CHECK_MS);
   }
 
   function ensureLoadedForCurrentTrip() {
@@ -988,12 +795,11 @@
     if (key !== currentTripKey || !state) {
       loadLocalState();
       render();
-      if (selectedOwner) loadFromSheet();
+      if (selectedOwner && isBrowserOnline()) loadFromSheet();
       lastMembersFingerprint = memberFp;
     } else {
       const fab = root && root.querySelector('.prep-fab');
       if (fab) fab.classList.toggle('is-visible', !!document.querySelector('.app-header h1'));
-
       if (memberFp !== lastMembersFingerprint && !isEditingChecklistInput()) {
         lastMembersFingerprint = memberFp;
         render();
@@ -1018,9 +824,6 @@
     setInterval(ensureLoadedForCurrentTrip, 1200);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
