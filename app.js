@@ -1213,10 +1213,14 @@ createApp({
 
     const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
       const title = String(nameKo || name || '地點').trim();
-      const query = lat != null && lng != null
-        ? `${lat},${lng}`
-        : title || [lat, lng].filter(v => v != null).join(',');
-      openMapWindow(`https://map.naver.com/p/search/${encodeURIComponent(query)}`);
+      const encodedTitle = encodeURIComponent(title);
+
+      if (lat != null && lng != null) {
+        window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${encodedTitle}&appname=tripplanner`;
+        return;
+      }
+
+      window.location.href = `nmap://search?query=${encodedTitle}&appname=tripplanner`;
     };
 
     const hydratedPhotoAttempts = new Map();
