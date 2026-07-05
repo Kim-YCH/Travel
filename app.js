@@ -35,11 +35,13 @@ createApp({
 
     const newPlace = ref('');
     const newTime = ref('');
+    const newPlaceType = ref('景點');
     const newNote = ref('');
     const newPerson = ref('');
     const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
+    const itineraryTypes = ['景點', '早餐', '午餐', '晚餐', '美食', '購物', '交通', '住宿', '活動', '其他'];
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
@@ -63,6 +65,9 @@ createApp({
     const mapAddDay = ref(1);
     const mapDisplayFilter = ref('all');
     const isMapReady = ref(false);
+    const tripWeather = ref({ status: 'idle' });
+    const weatherCache = new Map();
+    const weatherLocationCache = new Map();
     let mapInstance = null;
     let mapElementRef = null;
     let markers = [];
@@ -71,6 +76,7 @@ createApp({
     let infoWindow = null;
     let autocompleteService = null;
     let mapSearchTimeout = null;
+    let weatherLoadTimer = null;
 
     const newHotel = ref({ start_day: 1, end_day: 1 });
     const hotelSearchQuery = ref('');
@@ -112,7 +118,7 @@ createApp({
 
     const showEditModal = ref(false);
     const editPlaceId = ref('');
-    const editPlace = ref({ name: '', time: '', message: '', day: 1 });
+    const editPlace = ref({ name: '', type: '景點', time: '', message: '', day: 1 });
 
     const showEditExpenseModal = ref(false);
     const editExpenseId = ref('');
@@ -177,6 +183,7 @@ createApp({
 
     const getPlacePredictionsAsync = async (request) => {
       if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!window.google || !google.maps?.places?.AutocompleteService) return [];
       if (!autocompleteService) autocompleteService = new google.maps.places.AutocompleteService();
 
       return await new Promise((resolve) => {
@@ -202,6 +209,53 @@ createApp({
       return out;
     };
 
+    const geocodePlaceCandidates = async (keyword, options = {}) => {
+      const q = String(keyword || '').trim();
+      if (!q) return [];
+      if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!window.google || !google.maps?.Geocoder) return [];
+
+      const city = String(currentTrip.value?.city || '').trim();
+      const address = city && !q.includes(city) ? `${q} ${city}` : q;
+      const geocoder = new google.maps.Geocoder();
+
+      return await new Promise((resolve) => {
+        geocoder.geocode(
+          {
+            address,
+            ...(options.bounds ? { bounds: options.bounds } : {})
+          },
+          (results, status) => {
+            if (status !== 'OK' || !Array.isArray(results)) {
+              resolve([]);
+              return;
+            }
+
+            const candidates = results.slice(0, 4).map((result) => {
+              const firstComponent = result.address_components?.[0]?.long_name || '';
+              const mainText = firstComponent || result.formatted_address || q;
+              const lat = result.geometry?.location ? result.geometry.location.lat() : null;
+              const lng = result.geometry?.location ? result.geometry.location.lng() : null;
+              return {
+                source: 'geocoder',
+                place_id: result.place_id || `geocoder_${mainText}_${lat}_${lng}`,
+                description: result.formatted_address || mainText,
+                address: result.formatted_address || '',
+                lat,
+                lng,
+                structured_formatting: {
+                  main_text: mainText,
+                  secondary_text: result.formatted_address || city || 'Google Maps'
+                }
+              };
+            });
+
+            resolve(candidates);
+          }
+        );
+      });
+    };
+
     const searchPlacesWithTranslation = async (q, options = {}) => {
       const target = getTripTranslateTarget();
       const baseReq = {
@@ -212,15 +266,16 @@ createApp({
       if (options.bounds) baseReq.bounds = options.bounds;
 
       const originalPredictions = await getPlacePredictionsAsync(baseReq);
+      const geocodePredictions = await geocodePlaceCandidates(q, options);
 
       if (!target) {
-        return { predictions: originalPredictions, hint: '' };
+        return { predictions: mergePredictions(originalPredictions, geocodePredictions), hint: '' };
       }
 
       const translatedInfo = await translatePlaceKeyword(q);
       const translatedKeyword = String(translatedInfo.keyword || '').trim();
       if (!translatedKeyword || translatedKeyword === q) {
-        return { predictions: originalPredictions, hint: '' };
+        return { predictions: mergePredictions(originalPredictions, geocodePredictions), hint: '' };
       }
 
       const translatedReq = {
@@ -231,8 +286,9 @@ createApp({
       if (options.bounds) translatedReq.bounds = options.bounds;
 
       const translatedPredictions = await getPlacePredictionsAsync(translatedReq);
+      const translatedGeocodePredictions = await geocodePlaceCandidates(translatedKeyword, options);
       return {
-        predictions: mergePredictions(translatedPredictions, originalPredictions),
+        predictions: mergePredictions(translatedPredictions, originalPredictions, translatedGeocodePredictions, geocodePredictions),
         hint: translatedInfo.translated ? `翻譯搜尋：${translatedInfo.translated}` : ''
       };
     };
@@ -301,6 +357,44 @@ createApp({
       return `${dt.getFullYear()}/${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())} (${wk})`;
     };
 
+    const dayDateYMD = (day) => {
+      const base = parseYMD(currentTrip.value?.start_date);
+      if (!base) return toYMD(new Date());
+      return toYMD(addDays(base, (parseInt(day, 10) || 1) - 1));
+    };
+
+    const daysFromToday = (ymd) => {
+      const target = parseYMD(ymd);
+      const today = parseYMD(todayKey.value || toYMD(new Date())) || new Date();
+      if (!target) return null;
+      today.setHours(12, 0, 0, 0);
+      target.setHours(12, 0, 0, 0);
+      return Math.round((target.getTime() - today.getTime()) / 86400000);
+    };
+
+    const weatherCodeInfo = (code) => {
+      const n = Number(code);
+      if (n === 0) return { icon: '☀️', text: '晴朗' };
+      if ([1, 2].includes(n)) return { icon: '🌤️', text: '多雲時晴' };
+      if (n === 3) return { icon: '☁️', text: '多雲' };
+      if ([45, 48].includes(n)) return { icon: '🌫️', text: '有霧' };
+      if ([51, 53, 55, 56, 57].includes(n)) return { icon: '🌦️', text: '毛毛雨' };
+      if ([61, 63, 65, 66, 67, 80, 81, 82].includes(n)) return { icon: '🌧️', text: '有雨' };
+      if ([71, 73, 75, 77, 85, 86].includes(n)) return { icon: '❄️', text: '降雪' };
+      if ([95, 96, 99].includes(n)) return { icon: '⛈️', text: '雷雨' };
+      return { icon: '🌤️', text: '天氣' };
+    };
+
+    const uvLevelLabel = (uv) => {
+      const n = Number(uv);
+      if (!Number.isFinite(n)) return '';
+      if (n < 3) return '低';
+      if (n < 6) return '中等';
+      if (n < 8) return '高';
+      if (n < 11) return '過量';
+      return '危險';
+    };
+
     const normalizeInvolved = (list) => {
       if (Array.isArray(list)) return list.filter(Boolean);
       if (typeof list === 'string') {
@@ -347,10 +441,130 @@ createApp({
 
     const isAlternativeItem = (item) => getAlternativeFlag(item) === 'v';
 
+    const normalizeItineraryType = (value) => {
+      const type = String(value || '').trim();
+      return type || '景點';
+    };
+
+    const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
+
+    const getItineraryTypeTone = (item) => {
+      const type = getItineraryType(item);
+      if (['早餐', '午餐', '晚餐', '餐廳', '美食', '飲食'].includes(type)) return 'food';
+      if (['購物', '商圈'].includes(type)) return 'shopping';
+      if (['住宿', '飯店'].includes(type)) return 'hotel';
+      if (['交通', '移動'].includes(type)) return 'transport';
+      if (['活動', '門票'].includes(type)) return 'activity';
+      return 'sightseeing';
+    };
+
+    const getItineraryIcon = (item) => {
+      const tone = getItineraryTypeTone(item);
+      if (tone === 'food') return '🍽️';
+      if (tone === 'shopping') return '🛍️';
+      if (tone === 'hotel') return '🏠';
+      if (tone === 'transport') return '🚇';
+      if (tone === 'activity') return '🎟️';
+      return '📷';
+    };
+
+    const ITINERARY_FALLBACK_IMAGES = Object.freeze({
+      sightseeing: './assets/default-sightseeing.svg',
+      food: './assets/default-food.svg',
+      shopping: './assets/default-shopping.svg',
+      hotel: './assets/default-hotel.svg',
+      transport: './assets/default-transport.svg',
+      activity: './assets/default-travel.svg',
+      default: './assets/default-travel.svg'
+    });
+
+    const getFallbackItineraryImage = (item = {}) => (
+      ITINERARY_FALLBACK_IMAGES[getItineraryTypeTone(item)] || ITINERARY_FALLBACK_IMAGES.default
+    );
+
+    const getItineraryImage = (item = {}) => {
+      const url = String(item?.image_url || '').trim();
+      return url || getFallbackItineraryImage(item);
+    };
+
+    const getHotelItineraryImage = (hotel = {}) => getItineraryImage({
+      ...hotel,
+      type: '住宿'
+    });
+
+    const buildFallbackImageFields = () => ({
+      image_url: '',
+      image_source: 'fallback',
+      photo_attributions: '',
+      image_updated_at: new Date().toISOString()
+    });
+
+    const extractPlacePhotoInfo = (place) => {
+      const photos = Array.isArray(place?.photos) ? place.photos : [];
+      const photo = photos[0] || null;
+
+      if (!photo || typeof photo.getUrl !== 'function') {
+        return buildFallbackImageFields();
+      }
+
+      let imageUrl = '';
+      try {
+        imageUrl = photo.getUrl({ maxWidth: 800, maxHeight: 600 }) || '';
+      } catch (err) {
+        console.warn('Place photo getUrl failed:', err);
+      }
+
+      const attributionsRaw = photo.html_attributions || photo.photo_attributions || [];
+      const photoAttributions = Array.isArray(attributionsRaw)
+        ? attributionsRaw.join(' ')
+        : String(attributionsRaw || '');
+
+      if (!imageUrl) return buildFallbackImageFields();
+
+      return {
+        image_url: imageUrl,
+        image_source: 'google_places',
+        photo_attributions: photoAttributions,
+        image_updated_at: new Date().toISOString()
+      };
+    };
+
+    const handleItineraryImageError = (event, item = {}) => {
+      const img = event?.target;
+      if (!img) return;
+
+      if (item && typeof item === 'object' && String(item.image_url || '').trim()) {
+        item.image_url = '';
+      }
+
+      if (img.dataset.fallbackStage === 'category') {
+        img.dataset.fallbackStage = 'default';
+        img.src = ITINERARY_FALLBACK_IMAGES.default;
+        return;
+      }
+
+      if (img.dataset.fallbackStage === 'default') {
+        img.removeAttribute('src');
+        return;
+      }
+
+      img.dataset.fallbackStage = 'category';
+      img.src = getFallbackItineraryImage(item);
+    };
+
+    const handleHotelItineraryImageError = (event) => {
+      handleItineraryImageError(event, { type: '住宿' });
+    };
+
     const normalizeItineraryRecord = (item) => ({
       ...item,
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       order: normalizeOrderValue(item?.order),
+      type: getItineraryType(item),
+      image_url: String(item?.image_url || '').trim(),
+      image_source: String(item?.image_source || '').trim(),
+      photo_attributions: String(item?.photo_attributions || '').trim(),
+      image_updated_at: String(item?.image_updated_at || '').trim(),
       is_alternative: getAlternativeFlag(item)
     });
 
@@ -371,8 +585,13 @@ createApp({
       lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
       lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
       name: String(item?.name || '').trim(),
+      type: getItineraryType(item),
       address: String(item?.address || '').trim(),
       place_id: String(item?.place_id || '').trim(),
+      image_url: String(item?.image_url || '').trim(),
+      image_source: String(item?.image_source || '').trim(),
+      photo_attributions: String(item?.photo_attributions || '').trim(),
+      image_updated_at: String(item?.image_updated_at || '').trim(),
       message: String(item?.message || '')
     });
 
@@ -763,6 +982,29 @@ createApp({
       .replaceAll('"','&quot;')
       .replaceAll("'","&#39;");
 
+    const sanitizePhotoAttributions = (value) => {
+      const raw = Array.isArray(value) ? value.join(' ') : String(value || '');
+      if (!raw.trim()) return '';
+
+      const template = document.createElement('template');
+      template.innerHTML = raw;
+      const links = Array.from(template.content.querySelectorAll('a'))
+        .map((a) => {
+          const href = String(a.getAttribute('href') || '').trim();
+          const text = String(a.textContent || '').trim();
+          if (!text || !/^https?:\/\//i.test(href)) return '';
+          return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;
+        })
+        .filter(Boolean);
+
+      if (links.length) return links.join(' ');
+
+      const plain = String(template.content.textContent || raw)
+        .replace(/\s+/g, ' ')
+        .trim();
+      return escapeHtml(plain);
+    };
+
     const linkifyMessage = (text) => {
       const raw = String(text || '');
       if (!raw) return '';
@@ -826,13 +1068,18 @@ createApp({
           await loadGoogleMaps();
         }
 
+        if (!window.google || !window.google.maps || !google.maps.places?.PlacesService) {
+          resolve(null);
+          return;
+        }
+
         const dummyMap = new google.maps.Map(document.createElement('div'));
         const service = new google.maps.places.PlacesService(dummyMap);
 
         service.getDetails(
           {
             placeId,
-            fields: ['place_id', 'name', 'formatted_address', 'geometry'],
+            fields: ['place_id', 'name', 'formatted_address', 'geometry', 'photos'],
             language
           },
           (place, status) => {
@@ -844,6 +1091,358 @@ createApp({
           }
         );
       });
+    };
+
+    const getPlaceFromQuery = async (query, options = {}) => {
+      const q = String(query || '').replace(/\s+/g, ' ').trim();
+      if (!q) return null;
+
+      if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!window.google || !google.maps?.places?.PlacesService) return null;
+
+      const dummyMap = new google.maps.Map(document.createElement('div'));
+      const service = new google.maps.places.PlacesService(dummyMap);
+      const fields = ['place_id', 'name', 'formatted_address', 'geometry', 'photos'];
+
+      const found = await new Promise((resolve) => {
+        if (typeof service.findPlaceFromQuery !== 'function') {
+          resolve(null);
+          return;
+        }
+
+        service.findPlaceFromQuery(
+          {
+            query: q,
+            fields,
+            language: 'zh-TW',
+            ...(options.locationBias ? { locationBias: options.locationBias } : {})
+          },
+          (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(results) && results.length) {
+              resolve(results.find(item => Array.isArray(item.photos) && item.photos.length) || results[0]);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+
+      if (found) return found;
+
+      return await new Promise((resolve) => {
+        if (typeof service.textSearch !== 'function') {
+          resolve(null);
+          return;
+        }
+
+        service.textSearch(
+          {
+            query: q,
+            language: 'zh-TW',
+            ...(options.location ? { location: options.location } : {}),
+            ...(options.radius ? { radius: options.radius } : {})
+          },
+          (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(results) && results.length) {
+              resolve(results.find(item => Array.isArray(item.photos) && item.photos.length) || results[0]);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      });
+    };
+
+    const buildImageRepairQueries = (item = {}) => {
+      const city = String(currentTrip.value?.city || '').trim();
+      const name = String(item.name || '').trim();
+      const nameKo = String(item.name_ko || '').trim();
+      const address = String(item.address || '').trim();
+      const message = String(item.message || '').replace(/https?:\/\/\S+/g, '').trim();
+      const bits = [
+        [name, address, city],
+        [name, city],
+        [name, address],
+        [nameKo, address, city],
+        [nameKo, city],
+        [name, message, city]
+      ];
+
+      const seen = new Set();
+      return bits
+        .map(parts => parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim())
+        .filter((q) => {
+          if (!q || seen.has(q)) return false;
+          seen.add(q);
+          return true;
+        });
+    };
+
+    const resolveItineraryPhotoFields = async (item = {}) => {
+      if (!item) return buildFallbackImageFields();
+
+      if (item.place_id) {
+        const place = await getPlaceDetails(item.place_id, 'zh-TW');
+        const fields = extractPlacePhotoInfo(place);
+        if (fields.image_url) return { ...fields, place };
+      }
+
+      const lat = item.lat !== '' && item.lat != null ? Number(item.lat) : null;
+      const lng = item.lng !== '' && item.lng != null ? Number(item.lng) : null;
+      const location = lat != null && lng != null && window.google && google.maps?.LatLng
+        ? new google.maps.LatLng(lat, lng)
+        : null;
+
+      for (const query of buildImageRepairQueries(item)) {
+        const place = await getPlaceFromQuery(query, {
+          location,
+          locationBias: location,
+          radius: location ? 1500 : undefined
+        });
+        const fields = extractPlacePhotoInfo(place);
+        if (fields.image_url) return { ...fields, place };
+      }
+
+      return buildFallbackImageFields();
+    };
+
+    const isMobileDevice = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+    const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
+      const title = String(nameKo || name || '地點').trim();
+      const encodedTitle = encodeURIComponent(title);
+
+      if (isMobileDevice()) {
+        if (lat != null && lng != null) {
+          window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${encodedTitle}&appname=tripplanner`;
+          return;
+        }
+        window.location.href = `nmap://search?query=${encodedTitle}&appname=tripplanner`;
+        return;
+      }
+
+      const query = encodeURIComponent(title || [lat, lng].filter(v => v != null).join(','));
+      window.open(`https://map.naver.com/p/search/${query}`, '_blank', 'noopener,noreferrer');
+    };
+
+    const hydratedPhotoAttempts = new Map();
+    let hydratePhotoTimer = null;
+
+    const persistItineraryImageFields = async (item) => {
+      if (!item?.id || !currentTrip.value?.id) return;
+
+      try {
+        await postJSON({
+          action: 'edit',
+          type: 'itinerary',
+          data: {
+            id: item.id,
+            trip_id: item.trip_id || currentTrip.value.id,
+            place_id: item.place_id || '',
+            address: item.address || '',
+            lat: item.lat ?? '',
+            lng: item.lng ?? '',
+            image_url: item.image_url || '',
+            image_source: item.image_source || '',
+            photo_attributions: item.photo_attributions || '',
+            image_updated_at: item.image_updated_at || ''
+          }
+        }, { queueOnFail: false });
+      } catch (err) {
+        console.warn('persistItineraryImageFields failed:', err);
+      }
+    };
+
+    const hydrateMissingPlacePhotos = async () => {
+      if (!currentTrip.value || !GOOGLE_MAPS_API_KEY) return;
+
+      const visibleItems = getDayOrderedItems(currentDay.value, false)
+        .concat(getDayOrderedItems(currentDay.value, true))
+        .filter(item =>
+          item?.name &&
+          !String(item.image_url || '').trim() &&
+          (hydratedPhotoAttempts.get(String(item.id)) || 0) < 2
+        )
+        .slice(0, 8);
+
+      if (!visibleItems.length) return;
+
+      for (const item of visibleItems) {
+        const itemKey = String(item.id);
+        hydratedPhotoAttempts.set(itemKey, (hydratedPhotoAttempts.get(itemKey) || 0) + 1);
+
+        const result = await resolveItineraryPhotoFields(item);
+        const { place, ...imageFields } = result;
+        Object.assign(item, imageFields);
+
+        if (imageFields.image_url) {
+          if (place?.place_id) item.place_id = place.place_id;
+          if (place?.formatted_address && !String(item.address || '').trim()) item.address = place.formatted_address;
+          if (place?.geometry?.location) {
+            item.lat = place.geometry.location.lat();
+            item.lng = place.geometry.location.lng();
+          }
+          scheduleTripCacheSave();
+          await persistItineraryImageFields(item);
+        }
+      }
+    };
+
+    const scheduleMissingPlacePhotoHydration = (delay = 250) => {
+      clearTimeout(hydratePhotoTimer);
+      hydratePhotoTimer = setTimeout(() => {
+        hydrateMissingPlacePhotos().catch(err => console.warn('hydrateMissingPlacePhotos failed:', err));
+      }, delay);
+    };
+
+    const resolveWeatherLocation = async (day = currentDay.value) => {
+      const d = parseInt(day, 10) || 1;
+      const dayItem = getDayOrderedItems(d, false).find(item => item.lat != null && item.lng != null);
+      if (dayItem) {
+        return {
+          lat: Number(dayItem.lat),
+          lng: Number(dayItem.lng),
+          label: dayItem.name || currentTrip.value?.city || '目的地'
+        };
+      }
+
+      const dayHotel = getHotelsForDay(d).find(hotel => hotel.lat != null && hotel.lng != null);
+      if (dayHotel) {
+        return {
+          lat: Number(dayHotel.lat),
+          lng: Number(dayHotel.lng),
+          label: dayHotel.name || currentTrip.value?.city || '住宿'
+        };
+      }
+
+      const city = String(currentTrip.value?.city || '').trim();
+      if (!city) return null;
+
+      const cacheKey = city.toLowerCase();
+      if (weatherLocationCache.has(cacheKey)) return weatherLocationCache.get(cacheKey);
+
+      if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!window.google || !google.maps?.Geocoder) return null;
+
+      const geocoder = new google.maps.Geocoder();
+      const location = await new Promise((resolve) => {
+        geocoder.geocode({ address: city }, (results, status) => {
+          if (status === 'OK' && results?.[0]?.geometry?.location) {
+            resolve({
+              lat: results[0].geometry.location.lat(),
+              lng: results[0].geometry.location.lng(),
+              label: city
+            });
+          } else {
+            resolve(null);
+          }
+        });
+      });
+
+      if (location) weatherLocationCache.set(cacheKey, location);
+      return location;
+    };
+
+    const loadTripWeather = async () => {
+      if (!currentTrip.value) return;
+
+      const targetDate = dayDateYMD(currentDay.value);
+      const diff = daysFromToday(targetDate);
+      const dayText = `Day ${currentDay.value}`;
+
+      if (diff == null) {
+        tripWeather.value = { status: 'unavailable', title: '天氣', subtitle: '尚未設定日期', dayText };
+        return;
+      }
+
+      if (diff < 0) {
+        tripWeather.value = { status: 'unavailable', title: '日期已過', subtitle: targetDate, dayText };
+        return;
+      }
+
+      if (diff > 15) {
+        const availableDate = toYMD(addDays(parseYMD(targetDate), -15));
+        tripWeather.value = {
+          status: 'future',
+          title: '預報尚早',
+          subtitle: `${availableDate} 後可查`,
+          dayText,
+          targetDate
+        };
+        return;
+      }
+
+      const location = await resolveWeatherLocation(currentDay.value);
+      if (!location) {
+        tripWeather.value = { status: 'unavailable', title: '天氣', subtitle: '找不到目的地座標', dayText };
+        return;
+      }
+
+      const cacheKey = `${currentTrip.value.id}_${currentDay.value}_${targetDate}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}`;
+      if (weatherCache.has(cacheKey)) {
+        tripWeather.value = weatherCache.get(cacheKey);
+        return;
+      }
+
+      tripWeather.value = { status: 'loading', title: '天氣載入中', subtitle: location.label, dayText };
+
+      const params = new URLSearchParams({
+        latitude: String(location.lat),
+        longitude: String(location.lng),
+        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,wind_speed_10m_max',
+        timezone: 'auto',
+        forecast_days: String(Math.min(16, Math.max(1, diff + 1))),
+        wind_speed_unit: 'ms'
+      });
+
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+        if (!res.ok) throw new Error(`weather api ${res.status}`);
+        const data = await res.json();
+        const times = data?.daily?.time || [];
+        const idx = times.indexOf(targetDate);
+        if (idx < 0) throw new Error('target date not in forecast');
+
+        const codeInfo = weatherCodeInfo(data.daily.weather_code?.[idx]);
+        const max = Math.round(Number(data.daily.temperature_2m_max?.[idx]));
+        const min = Math.round(Number(data.daily.temperature_2m_min?.[idx]));
+        const rain = data.daily.precipitation_probability_max?.[idx];
+        const uv = data.daily.uv_index_max?.[idx];
+        const wind = data.daily.wind_speed_10m_max?.[idx];
+        const weather = {
+          status: 'ready',
+          icon: codeInfo.icon,
+          title: codeInfo.text,
+          subtitle: location.label,
+          dayText,
+          targetDate,
+          max,
+          min,
+          rain: rain != null ? Math.round(Number(rain)) : null,
+          uv: uv != null ? Number(uv).toFixed(0) : '',
+          uvLabel: uvLevelLabel(uv),
+          wind: wind != null ? Number(wind).toFixed(1) : ''
+        };
+
+        weatherCache.set(cacheKey, weather);
+        tripWeather.value = weather;
+      } catch (err) {
+        console.warn('loadTripWeather failed:', err);
+        tripWeather.value = {
+          status: 'unavailable',
+          title: '天氣暫不可用',
+          subtitle: location.label,
+          dayText,
+          targetDate
+        };
+      }
+    };
+
+    const scheduleTripWeatherLoad = (delay = 250) => {
+      clearTimeout(weatherLoadTimer);
+      weatherLoadTimer = setTimeout(() => {
+        loadTripWeather().catch(err => console.warn('loadTripWeather failed:', err));
+      }, delay);
     };
 
     const initGoogleMap = () => {
@@ -961,30 +1560,27 @@ createApp({
       const lat = hotel.lat !== '' && hotel.lat != null ? Number(hotel.lat) : null;
       const lng = hotel.lng !== '' && hotel.lng != null ? Number(hotel.lng) : null;
       const queryText = [name, address].filter(Boolean).join(' ') || name || '住宿';
-      const encodedName = encodeURIComponent(name || '住宿');
       const encodedQuery = encodeURIComponent(queryText);
 
       if (isKoreaTrip.value) {
-        if (lat != null && lng != null) {
-          // 住宿跟一般行程一樣，直接呼叫 Naver Map App。
-          // 不再使用 setTimeout 自動開網頁，避免點住宿後跳到瀏覽器網站。
-          window.location.href =
-            `nmap://place?lat=${lat}&lng=${lng}&name=${encodedName}&appname=tripplanner`;
-          return;
-        }
-
-        // 沒有座標時仍優先呼叫 Naver Map App 搜尋，不自動跳網站。
-        window.location.href = `nmap://search?query=${encodedQuery}&appname=tripplanner`;
+        openNaverMap({ name: queryText, nameKo: name, lat, lng });
         return;
       }
 
       if (lat != null && lng != null) {
-        // iPhone 已安裝 Google Maps 時會直接開 App；未安裝時才可能由系統改用網頁。
-        window.location.href = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}&zoom=16`;
+        if (isMobileDevice()) {
+          window.location.href = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}&zoom=16`;
+        } else {
+          window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank', 'noopener,noreferrer');
+        }
         return;
       }
 
-      window.location.href = `comgooglemaps://?q=${encodedQuery}`;
+      if (isMobileDevice()) {
+        window.location.href = `comgooglemaps://?q=${encodedQuery}`;
+      } else {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`, '_blank', 'noopener,noreferrer');
+      }
     };
 
     const showHotelInfoWindow = (hotel, marker) => {
@@ -1029,7 +1625,17 @@ createApp({
       updateMapMarkers();
     };
 
-    const showSearchResultOnMap = ({ name = '', address = '', lat = null, lng = null, place_id = '' }) => {
+    const showSearchResultOnMap = ({
+      name = '',
+      address = '',
+      lat = null,
+      lng = null,
+      place_id = '',
+      image_url = '',
+      image_source = '',
+      photo_attributions = '',
+      image_updated_at = ''
+    }) => {
       if (!mapInstance || !window.google || lat == null || lng == null) return;
 
       clearMapSearchMarker();
@@ -1039,7 +1645,11 @@ createApp({
         address: address || '',
         lat: Number(lat),
         lng: Number(lng),
-        place_id: place_id || ''
+        place_id: place_id || '',
+        image_url: String(image_url || ''),
+        image_source: String(image_source || ''),
+        photo_attributions: String(photo_attributions || ''),
+        image_updated_at: String(image_updated_at || '')
       };
 
       mapSearchMarker = new google.maps.Marker({
@@ -1299,11 +1909,16 @@ createApp({
         id,
         name: mapLatestResult.value.name || mapSearchQuery.value || '搜尋結果',
         name_ko: '',
+        type: '景點',
         address: mapLatestResult.value.address || '',
         day: d,
         lat: Number(mapLatestResult.value.lat),
         lng: Number(mapLatestResult.value.lng),
         place_id: mapLatestResult.value.place_id || '',
+        image_url: mapLatestResult.value.image_url || '',
+        image_source: mapLatestResult.value.image_source || (mapLatestResult.value.image_url ? 'google_places' : 'fallback'),
+        photo_attributions: mapLatestResult.value.photo_attributions || '',
+        image_updated_at: mapLatestResult.value.image_updated_at || new Date().toISOString(),
         message: '',
         time: '',
         trip_id: currentTrip.value.id,
@@ -1450,7 +2065,22 @@ createApp({
             address: place.formatted_address || '',
             lat: place.geometry.location.lat(),
             lng: place.geometry.location.lng(),
-            place_id: mapSelectedPlaceData.value.place_id
+            place_id: mapSelectedPlaceData.value.place_id,
+            ...extractPlacePhotoInfo(place)
+          });
+          mapSearchResults.value = [];
+          return;
+        }
+
+        if (mapSelectedPlaceData.value.lat != null && mapSelectedPlaceData.value.lng != null) {
+          showSearchResultOnMap({
+            name: mapSelectedPlaceData.value.structured_formatting?.main_text || q,
+            address: mapSelectedPlaceData.value.address || mapSelectedPlaceData.value.description || '',
+            lat: Number(mapSelectedPlaceData.value.lat),
+            lng: Number(mapSelectedPlaceData.value.lng),
+            place_id: mapSelectedPlaceData.value.place_id || '',
+            image_source: 'fallback',
+            image_updated_at: new Date().toISOString()
           });
           mapSearchResults.value = [];
           return;
@@ -1464,21 +2094,32 @@ createApp({
       const geocodeQuery = translatedInfo?.keyword || fallbackQuery;
       if (translatedInfo?.translated) mapTranslatedSearchHint.value = `翻譯搜尋：${translatedInfo.translated}`;
 
-      geocoder.geocode({ address: geocodeQuery }, (results, status) => {
-        if (status === 'OK' && results[0]) {
-          const r = results[0];
-          showSearchResultOnMap({
-            name: r.address_components?.[0]?.long_name || q,
-            address: r.formatted_address || geocodeQuery,
-            lat: r.geometry.location.lat(),
-            lng: r.geometry.location.lng(),
-            place_id: r.place_id || ''
-          });
-          mapSearchResults.value = [];
-          return;
-        }
-        alert('找不到這個地點');
+      const geocoded = await new Promise((resolve) => {
+        geocoder.geocode({ address: geocodeQuery }, (results, status) => {
+          resolve(status === 'OK' && results?.[0] ? results[0] : null);
+        });
       });
+
+      if (geocoded) {
+        let imageFields = buildFallbackImageFields();
+        if (geocoded.place_id) {
+          const place = await getPlaceDetails(geocoded.place_id, 'zh-TW');
+          imageFields = extractPlacePhotoInfo(place);
+        }
+
+        showSearchResultOnMap({
+          name: geocoded.address_components?.[0]?.long_name || q,
+          address: geocoded.formatted_address || geocodeQuery,
+          lat: geocoded.geometry.location.lat(),
+          lng: geocoded.geometry.location.lng(),
+          place_id: geocoded.place_id || '',
+          ...imageFields
+        });
+        mapSearchResults.value = [];
+        return;
+      }
+
+      alert('找不到這個地點');
     };
 
     const fetchTrips = async () => {
@@ -1573,6 +2214,7 @@ createApp({
       pendingSyncQueue.value = [];
       syncStatus.value = 'synced';
       syncMessage.value = '';
+      tripWeather.value = { status: 'idle' };
       mapSearchQuery.value = '';
       mapDisplayFilter.value = 'all';
       clearMapSearchResult();
@@ -1642,6 +2284,8 @@ createApp({
         }
 
         saveTripCache(tripId);
+        scheduleMissingPlacePhotoHydration(500);
+        scheduleTripWeatherLoad(500);
       } finally {
         console.log("fetchData total ms =", Math.round(performance.now() - t_start));
         isLoading.value = false;
@@ -1652,6 +2296,8 @@ createApp({
       currentDay.value = d;
       await nextTick();
       scheduleSortableInit();
+      scheduleMissingPlacePhotoHydration(250);
+      scheduleTripWeatherLoad(250);
     };
 
     const onDayDblClick = (d) => {
@@ -2049,7 +2695,7 @@ createApp({
     };
 
     const selectPlace = (item) => {
-      newPlace.value = item.structured_formatting.main_text;
+      newPlace.value = item.structured_formatting?.main_text || item.description || '';
       selectedPlaceData.value = item;
       searchResults.value = [];
       translatedSearchHint.value = '';
@@ -2075,16 +2721,19 @@ createApp({
       const selectedLngSnapshot = selectedLng.value;
       const noteSnapshot = newNote.value || '';
       const timeSnapshot = newTime.value || '';
+      const typeSnapshot = normalizeItineraryType(newPlaceType.value);
 
       const item = {
         id,
         name: placeName,
         name_ko: '',
+        type: typeSnapshot,
         address: '',
         day: d,
-        lat: selectedLatSnapshot != null ? selectedLatSnapshot : null,
-        lng: selectedLngSnapshot != null ? selectedLngSnapshot : null,
+        lat: selectedLatSnapshot != null ? selectedLatSnapshot : (selectedPlaceSnapshot?.lat != null ? Number(selectedPlaceSnapshot.lat) : null),
+        lng: selectedLngSnapshot != null ? selectedLngSnapshot : (selectedPlaceSnapshot?.lng != null ? Number(selectedPlaceSnapshot.lng) : null),
         place_id: selectedPlaceSnapshot?.place_id || '',
+        ...buildFallbackImageFields(),
         message: noteSnapshot,
         time: timeSnapshot,
         trip_id: currentTrip.value.id,
@@ -2118,9 +2767,10 @@ createApp({
         let lat = item.lat;
         let lng = item.lng;
         let placeId = item.place_id || '';
-        let displayName = placeName;
+        let displayName = selectedPlaceSnapshot?.structured_formatting?.main_text || placeName;
         let nameKo = '';
-        let address = '';
+        let address = selectedPlaceSnapshot?.address || selectedPlaceSnapshot?.description || '';
+        let imageFields = buildFallbackImageFields();
 
         if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
@@ -2133,6 +2783,10 @@ createApp({
               lat = normalPlace.geometry.location.lat();
               lng = normalPlace.geometry.location.lng();
             }
+            imageFields = extractPlacePhotoInfo(normalPlace);
+          } else if (selectedPlaceSnapshot?.lat != null && selectedPlaceSnapshot?.lng != null) {
+            lat = Number(selectedPlaceSnapshot.lat);
+            lng = Number(selectedPlaceSnapshot.lng);
           }
 
           if (isKoreaTrip.value) {
@@ -2166,17 +2820,48 @@ createApp({
               }
             );
           });
+
+          if (placeId) {
+            const detailPlace = await getPlaceDetails(placeId, 'zh-TW');
+            if (detailPlace) {
+              imageFields = extractPlacePhotoInfo(detailPlace);
+            }
+          }
+        }
+
+        if (!imageFields.image_url) {
+          const repairResult = await resolveItineraryPhotoFields({
+            ...item,
+            name: displayName || placeName,
+            address,
+            lat,
+            lng,
+            place_id: placeId,
+            message: noteSnapshot
+          });
+          const { place: repairedPlace, ...repairedImageFields } = repairResult;
+          imageFields = repairedImageFields;
+          if (imageFields.image_url && repairedPlace) {
+            placeId = repairedPlace.place_id || placeId;
+            address = address || repairedPlace.formatted_address || '';
+            if ((lat == null || lng == null) && repairedPlace.geometry?.location) {
+              lat = repairedPlace.geometry.location.lat();
+              lng = repairedPlace.geometry.location.lng();
+            }
+          }
         }
 
         const updatedItem = {
           id,
           name: displayName || placeName,
           name_ko: nameKo || '',
+          type: typeSnapshot,
           address: address || '',
           day: d,
           lat,
           lng,
           place_id: placeId,
+          ...imageFields,
           message: noteSnapshot,
           time: timeSnapshot,
           trip_id: currentTrip.value.id,
@@ -2310,9 +2995,11 @@ createApp({
         trip_id: currentTrip.value.id,
         day: d,
         name,
+        type: '景點',
         lat: null,
         lng: null,
         place_id: selectedPlaceSnapshot?.place_id || '',
+        ...buildFallbackImageFields(),
         address: '',
         message: messageSnapshot,
         created_at: new Date().toISOString()
@@ -2334,6 +3021,7 @@ createApp({
         let placeId = alt.place_id || '';
         let displayName = name;
         let address = '';
+        let imageFields = buildFallbackImageFields();
 
         if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
@@ -2346,6 +3034,7 @@ createApp({
               lat = place.geometry.location.lat();
               lng = place.geometry.location.lng();
             }
+            imageFields = extractPlacePhotoInfo(place);
           }
         } else if (window.google) {
           const geocoder = new google.maps.Geocoder();
@@ -2363,6 +3052,11 @@ createApp({
               }
             );
           });
+
+          if (placeId) {
+            const detailPlace = await getPlaceDetails(placeId, 'zh-TW');
+            if (detailPlace) imageFields = extractPlacePhotoInfo(detailPlace);
+          }
         }
 
         const updatedAlt = normalizeAlternativeRecord({
@@ -2371,7 +3065,8 @@ createApp({
           lat,
           lng,
           place_id: placeId,
-          address
+          address,
+          ...imageFields
         });
 
         const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
@@ -2438,11 +3133,16 @@ createApp({
         id,
         name: alt.name || '備案',
         name_ko: '',
+        type: getItineraryType(alt),
         address: alt.address || '',
         day: d,
         lat: alt.lat != null ? Number(alt.lat) : null,
         lng: alt.lng != null ? Number(alt.lng) : null,
         place_id: alt.place_id || '',
+        image_url: alt.image_url || '',
+        image_source: alt.image_source || (alt.image_url ? 'google_places' : 'fallback'),
+        photo_attributions: alt.photo_attributions || '',
+        image_updated_at: alt.image_updated_at || '',
         message: alt.message || '',
         time: '',
         trip_id: currentTrip.value.id
@@ -2490,19 +3190,14 @@ createApp({
 
     const openExternalMap = (p) => {
       if (isKoreaTrip.value) {
-        const displayName = encodeURIComponent(p.name_ko || p.name || '地點');
-        const searchName = encodeURIComponent(p.name_ko || p.name || '');
         const lat = p.lat !== '' && p.lat != null ? Number(p.lat) : null;
         const lng = p.lng !== '' && p.lng != null ? Number(p.lng) : null;
-
-        // 韓國旅程一律優先直接呼叫 Naver Map App。
-        // 不自動 fallback 到 Naver 網站，避免點 marker 後又跳回瀏覽器。
-        if (lat != null && lng != null) {
-          window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${displayName}&appname=tripplanner`;
-          return;
-        }
-
-        window.location.href = `nmap://search?query=${searchName}&appname=tripplanner`;
+        openNaverMap({
+          name: p.name || '',
+          nameKo: p.name_ko || '',
+          lat,
+          lng
+        });
         return;
       }
 
@@ -2522,6 +3217,7 @@ createApp({
       editPlaceId.value = String(p.id);
       editPlace.value = {
         name: String(p.name || ''),
+        type: getItineraryType(p),
         time: formatTime(p.time || ''),
         message: String(p.message || ''),
         day: p.day ? parseInt(p.day, 10) : 1
@@ -2553,6 +3249,7 @@ createApp({
 
       // 先更新前端，讓編輯結果立即顯示。
       itinerary.value[idx].name = editPlace.value.name || '';
+      itinerary.value[idx].type = normalizeItineraryType(editPlace.value.type);
       itinerary.value[idx].time = editPlace.value.time || '';
       itinerary.value[idx].message = editPlace.value.message || '';
       itinerary.value[idx].day = newDay;
@@ -2580,6 +3277,20 @@ createApp({
         const editedItem = itinerary.value.find(x => String(x.id) === String(id));
         if (!editedItem) throw new Error('edited itinerary item missing');
 
+        if (!String(editedItem.image_url || '').trim()) {
+          const result = await resolveItineraryPhotoFields(editedItem);
+          const { place, ...imageFields } = result;
+          Object.assign(editedItem, imageFields);
+          if (imageFields.image_url && place) {
+            if (place.place_id) editedItem.place_id = place.place_id;
+            if (place.formatted_address && !String(editedItem.address || '').trim()) editedItem.address = place.formatted_address;
+            if (place.geometry?.location) {
+              editedItem.lat = place.geometry.location.lat();
+              editedItem.lng = place.geometry.location.lng();
+            }
+          }
+        }
+
         const res = await postJSON({
           action: 'edit',
           type: 'itinerary',
@@ -2587,9 +3298,18 @@ createApp({
             id,
             trip_id: tripId,
             name: editedItem.name || '',
+            type: getItineraryType(editedItem),
+            address: editedItem.address || '',
+            lat: editedItem.lat ?? '',
+            lng: editedItem.lng ?? '',
+            place_id: editedItem.place_id || '',
             time: editedItem.time || '',
             message: editedItem.message || '',
             day: newDay,
+            image_url: editedItem.image_url || '',
+            image_source: editedItem.image_source || '',
+            photo_attributions: editedItem.photo_attributions || '',
+            image_updated_at: editedItem.image_updated_at || '',
             is_alternative: currentIsAlt ? 'v' : ''
           }
         });
@@ -3451,12 +4171,17 @@ createApp({
       }
       scheduleSortableInit();
       if (currentTab.value === 'map') updateMapMarkers();
+      if (currentTab.value === 'itinerary') scheduleMissingPlacePhotoHydration(250);
+      scheduleTripWeatherLoad(250);
     });
 
     watch(currentTab, () => {
       scheduleSortableInit();
       if (currentTab.value === 'map') {
         setTimeout(() => updateMapMarkers(), 80);
+      } else if (currentTab.value === 'itinerary') {
+        scheduleMissingPlacePhotoHydration(250);
+        scheduleTripWeatherLoad(250);
       }
     });
 
@@ -3511,10 +4236,11 @@ createApp({
       isAddingAlternative, isDeletingAlternative, isAddingAlternativeToItinerary,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
-      newPlace, newTime, newNote, newPerson, newExpense, expenseFilter, categories,
+      newPlace, newTime, newPlaceType, newNote, newPerson, newExpense, expenseFilter, categories, itineraryTypes,
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
       mapSearchQuery, mapSearchResults, mapTranslatedSearchHint, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
       mapLatestResult, mapAddDay, mapDisplayFilter,
+      tripWeather,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
       newAlternative, alternativeSearchQuery, alternativeSearchResults, alternativeIsSearching,
@@ -3528,6 +4254,8 @@ createApp({
 
       searchPlacesInput, useCoordinateInput, selectPlace,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
+      getItineraryImage, getHotelItineraryImage, handleItineraryImageError, handleHotelItineraryImageError,
+      getItineraryType, getItineraryTypeTone, getItineraryIcon, sanitizePhotoAttributions,
       itineraryListEl, alternativeListEl, formatTime,
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace,
