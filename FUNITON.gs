@@ -1,4 +1,4 @@
-// version: 20260705.6 complete backend; itinerary image columns are auto-added by header name.
+// version: 20260705.7 complete backend; itinerary image columns are auto-added by header name.
 /************ CONFIG ************/
 const SPREADSHEET_ID = '11H-wsAJRRBbiGxCIbovY_o4bvEB7m6eayT27Wafmtkw';
 const ALLOWED_TYPES = ['trips', 'itinerary', 'expenses', 'people', 'hotels', 'prep_checklist', 'tripData'];
@@ -802,15 +802,15 @@ function naverLocalSearch_(query) {
 }
 function translatePlaceKeywordGET_(e) {
   const text = getParam(e, 'text', '').trim();
-  const target = getParam(e, 'target', 'ko').trim().toLowerCase();
+  const targetRaw = getParam(e, 'target', 'ko').trim();
+  const target = normalizeTranslateTarget_(targetRaw);
 
   if (!text) {
     return { status: 'error', message: 'missing text' };
   }
 
-  const allowedTargets = ['ko', 'ja', 'th', 'en'];
-  if (allowedTargets.indexOf(target) === -1) {
-    return { status: 'error', message: 'unsupported target: ' + target };
+  if (!target) {
+    return { status: 'error', message: 'unsupported target: ' + targetRaw };
   }
 
   const out = translateTextBasic_(text, target);
@@ -821,6 +821,19 @@ function translatePlaceKeywordGET_(e) {
     translatedText: out.translatedText || '',
     detectedSourceLanguage: out.detectedSourceLanguage || ''
   };
+}
+
+function normalizeTranslateTarget_(target) {
+  const normalized = String(target || '').trim().toLowerCase().replace('_', '-');
+  const map = {
+    ko: 'ko',
+    ja: 'ja',
+    th: 'th',
+    en: 'en',
+    'zh-tw': 'zh-TW',
+    'zh-hant': 'zh-TW'
+  };
+  return map[normalized] || '';
 }
 
 function translateTextBasic_(text, target) {
