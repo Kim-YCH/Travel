@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260705.3 -->
+<!-- version: 20260705.6 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260705.3" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260705.3" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260705.3" />
-  <link rel="manifest" href="./site.webmanifest?v=20260705.3" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260705.6" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260705.6" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260705.6" />
+  <link rel="manifest" href="./site.webmanifest?v=20260705.6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260705.3" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260705.3" />
+  <link rel="stylesheet" href="./style.css?v=20260705.6" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260705.6" />
 </head>
 <body>
 
@@ -80,7 +80,7 @@
   <!-- App -->
   <div v-else class="flex flex-col h-full overflow-hidden">
     <header class="app-header bg-blue-600 text-white shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
-      <div>
+      <div class="app-header-title">
         <h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1>
         <div class="text-xs text-blue-200">
           Day {{ currentDay }} | {{ dayLabel(currentDay) }} | {{ currentTrip.city }}
@@ -95,6 +95,31 @@
         @click="manualSync"
         class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95"
       >↻ 同步</button>
+
+      <div v-if="tripWeather.status !== 'idle'" class="trip-weather-card" :class="'trip-weather-' + tripWeather.status">
+        <template v-if="tripWeather.status === 'ready'">
+          <div class="trip-weather-icon">{{ tripWeather.icon }}</div>
+          <div class="trip-weather-main">
+            <div class="trip-weather-temp">{{ tripWeather.max }}°</div>
+            <div class="trip-weather-desc">{{ tripWeather.title }}</div>
+            <div class="trip-weather-range">{{ tripWeather.min }}° / {{ tripWeather.max }}°</div>
+          </div>
+          <div class="trip-weather-metrics">
+            <span>💧 {{ tripWeather.rain != null ? tripWeather.rain + '%' : '—' }}</span>
+            <span>☀️ UV {{ tripWeather.uv || '—' }}<em v-if="tripWeather.uvLabel">{{ tripWeather.uvLabel }}</em></span>
+            <span>🌬️ {{ tripWeather.wind || '—' }} m/s</span>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="trip-weather-icon">🌤️</div>
+          <div class="trip-weather-main">
+            <div class="trip-weather-temp">{{ tripWeather.title }}</div>
+            <div class="trip-weather-desc">{{ tripWeather.subtitle }}</div>
+            <div class="trip-weather-range">{{ tripWeather.dayText }}</div>
+          </div>
+        </template>
+      </div>
     </header>
 
     <main
@@ -173,32 +198,52 @@
             </div>
           </div>
 
-          <div class="flex gap-2 items-start">
-            <input v-model="newTime" type="time" class="w-1/3 text-center font-mono">
-            <textarea v-model="newNote" rows="2" placeholder="備註..." class="flex-1 min-h-[54px] resize-none"></textarea>
+          <div class="itinerary-meta-row">
+            <input v-model="newTime" type="time" class="itinerary-time-input text-center font-mono">
+            <select v-model="newPlaceType" class="itinerary-type-select">
+              <option v-for="type in itineraryTypes" :key="'new-place-type-' + type" :value="type">{{ type }}</option>
+            </select>
+          </div>
+
+          <div class="itinerary-note-row">
+            <textarea v-model="newNote" rows="2" placeholder="備註..." class="itinerary-note-input min-h-[54px] resize-none"></textarea>
           </div>
         </div>
 
-        <div class="space-y-3 pb-20" ref="itineraryListEl">
+        <div class="itinerary-day-stack pb-20" ref="itineraryListEl">
           <div
             v-for="place in filteredItinerary"
             :key="place.id"
             :data-id="place.id"
-            class="card itinerary-card flex justify-between items-start gap-3 active:scale-[0.99] transition"
+            class="itinerary-timeline-row"
           >
-            <div class="itinerary-main flex items-start gap-2">
-              <div class="drag-handle text-gray-300 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
+            <div class="itinerary-rail">
+              <div class="itinerary-rail-time">{{ place.time ? formatTime(place.time) : '未定' }}</div>
+              <div class="itinerary-rail-node">{{ getItineraryIcon(place) }}</div>
+            </div>
+
+            <div class="card itinerary-card itinerary-card-with-media active:scale-[0.99] transition">
+              <div class="drag-handle itinerary-drag-handle select-none">≡</div>
+
+              <img
+                class="itinerary-image"
+                :src="getItineraryImage(place)"
+                :alt="place.name || '行程圖片'"
+                loading="lazy"
+                @error="handleItineraryImageError($event, place)"
+                @click="handleItineraryContentClick($event, place)"
+              >
 
               <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
                 <div class="itinerary-title-row">
-                  <span
-                    v-if="place.time"
-                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
-                  >{{ formatTime(place.time) }}</span>
+                  <span class="itinerary-type-pill" :class="'itinerary-type-' + getItineraryTypeTone(place)">
+                    {{ getItineraryIcon(place) }} {{ getItineraryType(place) }}
+                  </span>
                   <span class="itinerary-title">{{ place.name }}</span>
                 </div>
 
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
+                <div v-if="place.address" class="itinerary-address">📍 {{ place.address }}</div>
 
                 <div class="itinerary-tags">
                   <span
@@ -211,33 +256,44 @@
                   >無座標</span>
 
                   <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
+                  <div v-if="place.photo_attributions" class="itinerary-photo-attribution" v-html="sanitizePhotoAttributions(place.photo_attributions)"></div>
                 </div>
               </div>
-            </div>
 
-            <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
-              <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
-              <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
+              <div class="itinerary-actions">
+                <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
+                <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading">✕</button>
+              </div>
             </div>
           </div>
 
           <div
             v-for="hotel in currentDayHotels"
             :key="'hotel-itinerary-' + hotel.id"
-            class="card hotel-itinerary-card flex justify-between items-start gap-3 active:scale-[0.99] transition"
-            @click="openHotelMap(hotel)"
+            class="itinerary-timeline-row hotel-timeline-row"
           >
-            <div class="itinerary-main flex items-start gap-2">
-              <div class="text-teal-500 select-none text-2xl leading-none pt-1 shrink-0">🏠</div>
+            <div class="itinerary-rail">
+              <div class="itinerary-rail-time">住宿</div>
+              <div class="itinerary-rail-node hotel-node">🏠</div>
+            </div>
 
+            <div class="card hotel-itinerary-card itinerary-card-with-media active:scale-[0.99] transition" @click="openHotelMap(hotel)">
+              <div class="itinerary-drag-handle hotel-static-icon select-none">•</div>
+              <img
+                class="itinerary-image"
+                :src="getHotelItineraryImage(hotel)"
+                :alt="hotel.name || '住宿圖片'"
+                loading="lazy"
+                @error="handleHotelItineraryImageError($event)"
+              >
               <div class="itinerary-content">
                 <div class="itinerary-title-row">
                   <span class="hotel-itinerary-badge">住宿</span>
-                
                   <span class="itinerary-title">{{ hotel.name || '住宿' }}</span>
                 </div>
 
                 <div class="itinerary-subtitle">{{ hotelDayRangeLabel(hotel) }}</div>
+                <div v-if="hotel.address" class="itinerary-address">📍 {{ hotel.address }}</div>
 
                 <div class="itinerary-tags">
                   <span
@@ -249,16 +305,14 @@
                     class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
                   >無座標</span>
 
-                  <div v-if="hotel.address" class="itinerary-message">
-                    {{ hotel.address }}
-                  </div>
+                  <div v-if="hotel.note" class="itinerary-message">{{ hotel.note }}</div>
                 </div>
               </div>
-            </div>
 
-            <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
-              <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel">✏️</button>
-              <button class="icon-btn" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel" style="background:#fee2e2;color:#991b1b;">✕</button>
+              <div class="itinerary-actions">
+                <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel">✏️</button>
+                <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel">✕</button>
+              </div>
             </div>
           </div>
 
@@ -277,41 +331,53 @@
               v-for="place in filteredAlternatives"
               :key="place.id"
               :data-id="place.id"
-              class="card alternative-card flex justify-between items-start gap-3 active:scale-[0.99] transition py-3 mb-2"
+              class="card alternative-card itinerary-card-with-media active:scale-[0.99] transition py-3 mb-2"
             >
-              <div class="itinerary-main flex items-start gap-2">
-                <div class="drag-handle text-amber-400 select-none text-2xl leading-none pt-1 shrink-0">≡</div>
+              <div class="drag-handle itinerary-drag-handle alternative-drag-handle select-none">≡</div>
 
-                <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
-                  <div class="itinerary-title-row">
-                    <span class="text-[10px] text-amber-700 bg-amber-100 px-1.5 rounded font-bold border border-amber-200 shrink-0">備案</span>
-                    <span
-                      v-if="place.time"
-                      class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
-                    >{{ formatTime(place.time) }}</span>
-                    <span class="itinerary-title">{{ place.name }}</span>
-                  </div>
+              <img
+                class="itinerary-image"
+                :src="getItineraryImage(place)"
+                :alt="place.name || '備案圖片'"
+                loading="lazy"
+                @error="handleItineraryImageError($event, place)"
+                @click="handleItineraryContentClick($event, place)"
+              >
 
-                  <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
+              <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
+                <div class="itinerary-title-row">
+                  <span class="itinerary-type-pill itinerary-type-alternative">📌 備案</span>
+                  <span
+                    v-if="place.time"
+                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
+                  >{{ formatTime(place.time) }}</span>
+                  <span class="itinerary-type-pill" :class="'itinerary-type-' + getItineraryTypeTone(place)">
+                    {{ getItineraryIcon(place) }} {{ getItineraryType(place) }}
+                  </span>
+                  <span class="itinerary-title">{{ place.name }}</span>
+                </div>
 
-                  <div class="itinerary-tags">
-                    <span
-                      v-if="place.lat && place.lng"
-                      class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
-                    >已定位</span>
-                    <span
-                      v-else
-                      class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
-                    >無座標</span>
+                <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
+                <div v-if="place.address" class="itinerary-address">📍 {{ place.address }}</div>
 
-                    <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
-                  </div>
+                <div class="itinerary-tags">
+                  <span
+                    v-if="place.lat && place.lng"
+                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
+                  >已定位</span>
+                  <span
+                    v-else
+                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
+                  >無座標</span>
+
+                  <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
+                  <div v-if="place.photo_attributions" class="itinerary-photo-attribution" v-html="sanitizePhotoAttributions(place.photo_attributions)"></div>
                 </div>
               </div>
 
-              <div class="itinerary-actions flex items-center gap-2 pl-3 border-l ml-2">
+              <div class="itinerary-actions">
                 <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
-                <button class="icon-btn" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading" style="background:#fee2e2;color:#991b1b;">✕</button>
+                <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading">✕</button>
               </div>
             </div>
 
@@ -610,7 +676,7 @@
             </div>
             <div class="flex items-center gap-2 shrink-0 pl-2">
               <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel">✏️</button>
-              <button class="icon-btn" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel" style="background:#fee2e2;color:#991b1b;">✕</button>
+          <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel">✕</button>
             </div>
           </div>
         </div>
@@ -691,6 +757,11 @@
       <div class="space-y-2">
         <div class="text-xs font-bold text-gray-500 ml-1">名稱</div>
         <input v-model="editPlace.name" placeholder="地點名稱">
+
+        <div class="text-xs font-bold text-gray-500 ml-1">類型</div>
+        <select v-model="editPlace.type">
+          <option v-for="type in itineraryTypes" :key="'edit-place-type-' + type" :value="type">{{ type }}</option>
+        </select>
 
         <div class="text-xs font-bold text-gray-500 ml-1">Day</div>
         <select v-model.number="editPlace.day">
@@ -834,12 +905,12 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260705.3"></script>
-<script src="./cache-refresh.js?v=20260705.3"></script>
-<script src="./keyword-map.js?v=20260705.3"></script>
-<script src="./app.js?v=20260705.3"></script>
-<script src="./search-zh-label.js?v=20260705.3"></script>
-<script src="./prep-checklist.js?v=20260705.3"></script>
+<script src="./config.js?v=20260705.6"></script>
+<script src="./cache-refresh.js?v=20260705.6"></script>
+<script src="./keyword-map.js?v=20260705.6"></script>
+<script src="./app.js?v=20260705.6"></script>
+<script src="./search-zh-label.js?v=20260705.6"></script>
+<script src="./prep-checklist.js?v=20260705.6"></script>
 
 </body>
 </html>
