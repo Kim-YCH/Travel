@@ -1,17 +1,19 @@
-// version: 20260705.1
-// Search result helper: translate Korean/Japanese/Thai Google Places result titles into Chinese labels.
+// version: 20260705.3
+// Search result helper: progressively translate Korean/Japanese/Thai Google Places result titles into Chinese labels. Runs up to 3 translations in parallel.
 // Example: 서울타워（首爾塔）. The label is translated from the result title, not copied from the user's keyword.
 (function () {
-  const VERSION = '20260705.1';
+  const VERSION = '20260705.3';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
   const TARGET_LANG = 'zh-TW';
+  const TRANSLATE_TIMEOUT_MS = 60000;
+  const MAX_ACTIVE_TRANSLATIONS = 3;
   const FOREIGN_RE = /[\u3131-\u318e\uac00-\ud7a3\u3040-\u30ff\u0e00-\u0e7f]/;
   const CJK_RE = /[\u4e00-\u9fff]/;
+
   const translateCache = new Map();
-  const pendingKeys = new Set();
+  const translationPromises = new Map();
   const translateQueue = [];
   let activeTranslations = 0;
-  const MAX_ACTIVE_TRANSLATIONS = 2;
 
   function hasForeign(value) {
     return FOREIGN_RE.test(String(value || ''));
@@ -49,30 +51,31 @@
     label.textContent = text ? `（${text}）` : '';
     titleEl.classList.remove('truncate');
     titleEl.dataset.zhPatched = VERSION;
+    titleEl.dataset.zhPending = '';
   }
 
   function parseMaybeJson(value) {
     try { return JSON.parse(String(value || '')); } catch (_) { return null; }
   }
 
-  function jsonp(url, timeoutMs = 60000) {
+  function jsonp(url, timeoutMs = TRANSLATE_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
       const cb = 'searchTranslateCb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
       const sep = url.includes('?') ? '&' : '?';
       const full = `${url}${sep}callback=${encodeURIComponent(cb)}`;
       const script = document.createElement('script');
       let settled = false;
+
       const timer = setTimeout(() => {
-        // Apps Script sometimes responds after our timeout. Keep a no-op callback briefly
-        // so the late JSONP response will not throw "callback is not defined".
         settled = true;
+        // Keep a temporary no-op callback so a very late JSONP response does not throw.
         try { window[cb] = function () {}; } catch (_) {}
         if (script.parentNode) script.parentNode.removeChild(script);
         setTimeout(() => { try { delete window[cb]; } catch (_) { window[cb] = undefined; } }, 90000);
         reject(new Error('translate timeout'));
       }, timeoutMs);
 
-      function cleanupSuccess() {
+      function cleanup() {
         clearTimeout(timer);
         if (script.parentNode) script.parentNode.removeChild(script);
         try { delete window[cb]; } catch (_) { window[cb] = undefined; }
@@ -81,16 +84,14 @@
       window[cb] = (data) => {
         if (settled) return;
         settled = true;
-        cleanupSuccess();
+        cleanup();
         resolve(data);
       };
 
       script.onerror = () => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
-        if (script.parentNode) script.parentNode.removeChild(script);
-        try { delete window[cb]; } catch (_) { window[cb] = undefined; }
+        cleanup();
         reject(new Error('translate jsonp failed'));
       };
 
@@ -100,11 +101,17 @@
   }
 
   async function requestTranslation(url) {
-    // Prefer fetch because it avoids JSONP callback race conditions. If CORS fails,
-    // fall back to JSONP.
+    // Fetch is preferred because Apps Script web apps in this project already return readable JSON text.
+    // If fetch fails immediately because of CORS/network, fallback to JSONP. If fetch times out,
+    // do not spend another full minute on JSONP; release the queue slot instead.
+    let aborted = false;
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), 60000) : null;
+      const timer = controller ? setTimeout(() => {
+        aborted = true;
+        controller.abort();
+      }, TRANSLATE_TIMEOUT_MS) : null;
+
       const res = await fetch(url, controller ? { signal: controller.signal } : undefined);
       if (timer) clearTimeout(timer);
       const text = await res.text();
@@ -112,47 +119,44 @@
       if (!data) throw new Error('translate response is not JSON');
       return data;
     } catch (err) {
-      return await jsonp(url);
+      if (aborted || String(err && err.name || '').toLowerCase() === 'aborterror') {
+        throw new Error('translate timeout');
+      }
+      return await jsonp(url, TRANSLATE_TIMEOUT_MS);
     }
   }
 
-  async function translateTitle(rawTitle) {
-    const key = cleanText(rawTitle);
-    if (!API_URL || !key || !hasForeign(key)) return '';
-    if (translateCache.has(key)) return translateCache.get(key);
-
+  function runQueuedTranslation(key) {
     const url = API_URL
       + '?action=translate_place_keyword'
       + '&text=' + encodeURIComponent(key)
       + '&target=' + encodeURIComponent(TARGET_LANG);
 
-    try {
-      const res = await requestTranslation(url);
-      const translated = cleanText(res && (res.translatedText || res.text || res.translation || ''));
-      const out = translated && translated !== key ? translated : '';
-      translateCache.set(key, out);
-      return out;
-    } catch (err) {
-      console.warn('search result title translate failed:', err);
-      translateCache.set(key, '');
-      return '';
-    }
-  }
-
-  function enqueuePatch(titleEl, rawTitle) {
-    const key = cleanText(rawTitle);
-    if (!key || pendingKeys.has(key)) return;
-    pendingKeys.add(key);
-    translateQueue.push({ titleEl, key });
-    drainTranslateQueue();
+    return requestTranslation(url)
+      .then(res => {
+        const translated = cleanText(res && (res.translatedText || res.text || res.translation || ''));
+        const out = translated && translated !== key ? translated : '';
+        translateCache.set(key, out);
+        return out;
+      })
+      .catch(err => {
+        console.warn('search result title translate failed:', key, err);
+        // Cache failure only briefly through the active promise. Do not permanently cache an empty result,
+        // otherwise a slow Apps Script response can make this title never translate until page reload.
+        return '';
+      })
+      .finally(() => {
+        translationPromises.delete(key);
+      });
   }
 
   function drainTranslateQueue() {
     while (activeTranslations < MAX_ACTIVE_TRANSLATIONS && translateQueue.length) {
       const job = translateQueue.shift();
       activeTranslations++;
-      patchTitle(job.titleEl, job.key)
-        .catch(err => console.warn('search result title patch failed:', err))
+      job.start()
+        .then(job.resolve)
+        .catch(job.reject)
         .finally(() => {
           activeTranslations--;
           drainTranslateQueue();
@@ -160,19 +164,44 @@
     }
   }
 
+  function queuedTranslate(key) {
+    if (translateCache.has(key)) return Promise.resolve(translateCache.get(key));
+    if (translationPromises.has(key)) return translationPromises.get(key);
+
+    const promise = new Promise((resolve, reject) => {
+      translateQueue.push({
+        start: () => runQueuedTranslation(key),
+        resolve,
+        reject
+      });
+      drainTranslateQueue();
+    });
+
+    translationPromises.set(key, promise);
+    return promise;
+  }
+
+  async function translateTitle(rawTitle) {
+    const key = cleanText(rawTitle);
+    if (!API_URL || !key || !hasForeign(key)) return '';
+    return await queuedTranslate(key);
+  }
+
   async function patchTitle(titleEl, rawTitle) {
     const key = cleanText(rawTitle);
-    if (!key) return;
+    if (!key || titleEl.dataset.zhPending === key) return;
+
+    titleEl.dataset.zhPending = key;
 
     const translated = await translateTitle(key);
-    pendingKeys.delete(key);
-
-    if (!translated) return;
     if (!document.body.contains(titleEl)) return;
 
     const currentRawTitle = getPlainTitle(titleEl);
     if (currentRawTitle !== key) return;
 
+    titleEl.dataset.zhPending = '';
+
+    if (!translated) return;
     // Avoid labels like 서울타워（서울타워） or labels that are only another foreign-language result.
     if (translated === key || (!hasChinese(translated) && hasForeign(translated))) return;
     setLabel(titleEl, translated);
@@ -196,7 +225,7 @@
         return;
       }
 
-      enqueuePatch(title, rawTitle);
+      patchTitle(title, rawTitle).catch(err => console.warn('search result title patch failed:', err));
     });
   }
 
@@ -236,6 +265,10 @@
 
     const observer = new MutationObserver(schedulePatch);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    // Also retry periodically while the dropdown is open. This covers cases where Vue reuses nodes
+    // without enough DOM mutations to trigger the observer.
+    setInterval(patchAllSuggestionLists, 1800);
   }
 
   if (document.readyState === 'loading') {
