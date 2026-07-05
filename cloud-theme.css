@@ -66,9 +66,20 @@ html, body {
   filter: blur(.1px);
 }
 
-.mobile-container > * {
+.mobile-container > :not(.modal-mask) {
   position: relative;
   z-index: 1;
+}
+
+.mobile-container > .modal-mask {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 12000 !important;
+}
+
+.mobile-container > .modal-mask .modal-card {
+  position: relative;
+  z-index: 12001;
 }
 
 .content-scroll,
