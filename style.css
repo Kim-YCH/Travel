@@ -284,19 +284,28 @@ html, body {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.4);
-      z-index: 9999;
+      z-index: 12000;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
+      width: 100vw;
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 18px) 14px calc(env(safe-area-inset-bottom, 0px) + 18px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      box-sizing: border-box;
     }
 
     .modal-card {
-      width: 92%;
+      width: min(100%, 380px);
       max-width: 380px;
+      max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 36px);
+      overflow-y: auto;
       background: #fff;
       border-radius: 18px;
       padding: 16px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+      -webkit-overflow-scrolling: touch;
     }
 
     .day-btn-wrap {
@@ -457,13 +466,13 @@ html, body {
 
     .itinerary-card-with-media {
       display: grid;
-      grid-template-columns: 20px minmax(84px, 106px) minmax(0, 1fr);
+      grid-template-columns: 18px clamp(82px, 24vw, 108px) minmax(0, 1fr) 42px;
       gap: 10px;
       align-items: start;
       width: 100%;
       min-width: 0;
       margin-bottom: 0;
-      padding: 12px 54px 12px 12px;
+      padding: 12px;
       position: relative;
     }
 
@@ -487,6 +496,8 @@ html, body {
     }
 
     .itinerary-image {
+      grid-column: 2;
+      grid-row: 1;
       width: 100%;
       aspect-ratio: 4 / 3;
       border-radius: 14px;
@@ -502,7 +513,8 @@ html, body {
     }
 
     .itinerary-content {
-      flex: 1;
+      grid-column: 3;
+      grid-row: 1;
       min-width: 0;
       cursor: pointer;
     }
@@ -615,13 +627,13 @@ html, body {
     .itinerary-message {
       width: 100%;
       min-width: 0;
-      margin-top: 4px;
-      padding: 10px 12px;
-      border-radius: 14px;
+      margin-top: 0;
+      padding: 9px 11px;
+      border-radius: 12px;
       background: #f3f4f6;
       color: #6b7280;
-      font-size: 14px;
-      line-height: 1.55;
+      font-size: 13px;
+      line-height: 1.45;
       white-space: normal;
       overflow-wrap: anywhere;
       word-break: break-word;
@@ -647,6 +659,16 @@ html, body {
       overflow-wrap: anywhere;
     }
 
+    .itinerary-card-footer {
+      grid-column: 2 / 4;
+      grid-row: 2;
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      margin-top: -2px;
+      cursor: pointer;
+    }
+
     .itinerary-photo-attribution a {
       color: #64748b;
       text-decoration: underline;
@@ -654,14 +676,15 @@ html, body {
     }
 
     .itinerary-actions {
-      flex-shrink: 0;
+      grid-column: 4;
+      grid-row: 1 / span 2;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      position: absolute;
-      top: 12px;
-      right: 10px;
-      padding-left: 7px;
+      position: static;
+      align-self: stretch;
+      justify-content: flex-start;
+      padding-left: 8px;
       border-left: 1px solid #e5e7eb;
     }
 
@@ -913,8 +936,62 @@ html, body {
   padding-bottom: 4px;
 }
 
-.bottom-nav button span:last-child {
-  line-height: 1.1;
+    .bottom-nav button span:last-child {
+      line-height: 1.1;
+    }
+
+@media (max-width: 430px) {
+  .itinerary-timeline-row {
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .itinerary-card-with-media {
+    grid-template-columns: 14px minmax(78px, 92px) minmax(0, 1fr) 38px;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .itinerary-drag-handle {
+    font-size: 18px;
+  }
+
+  .itinerary-actions {
+    gap: 7px;
+    padding-left: 6px;
+  }
+
+  .itinerary-title-row {
+    gap: 6px;
+    margin-bottom: 3px;
+  }
+
+  .itinerary-title {
+    font-size: 17px;
+    -webkit-line-clamp: 3;
+  }
+
+  .itinerary-address,
+  .itinerary-subtitle {
+    font-size: 12px;
+    line-height: 1.32;
+  }
+
+  .itinerary-type-pill {
+    font-size: 10px;
+    padding: 2px 7px;
+  }
+
+  .itinerary-card-footer {
+    grid-column: 2 / 4;
+    margin-top: 0;
+  }
+
+  .itinerary-message {
+    font-size: 13px;
+    line-height: 1.42;
+    padding: 8px 10px;
+  }
 }
 
 @media (max-width: 380px) {
@@ -928,15 +1005,14 @@ html, body {
   }
 
   .itinerary-card-with-media {
-    grid-template-columns: 18px minmax(68px, 78px) minmax(0, 1fr);
-    gap: 8px;
-    padding: 10px 48px 10px 10px;
+    grid-template-columns: 12px minmax(68px, 78px) minmax(0, 1fr) 36px;
+    gap: 7px;
+    padding: 9px;
   }
 
   .itinerary-actions {
-    top: 10px;
-    right: 8px;
-    gap: 7px;
+    gap: 6px;
+    padding-left: 5px;
   }
 
   .itinerary-rail-time {

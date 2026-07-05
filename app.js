@@ -1206,23 +1206,17 @@ createApp({
       return buildFallbackImageFields();
     };
 
-    const isMobileDevice = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    const openMapWindow = (url) => {
+      if (!url) return;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    };
 
     const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
       const title = String(nameKo || name || '地點').trim();
-      const encodedTitle = encodeURIComponent(title);
-
-      if (isMobileDevice()) {
-        if (lat != null && lng != null) {
-          window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${encodedTitle}&appname=tripplanner`;
-          return;
-        }
-        window.location.href = `nmap://search?query=${encodedTitle}&appname=tripplanner`;
-        return;
-      }
-
-      const query = encodeURIComponent(title || [lat, lng].filter(v => v != null).join(','));
-      window.open(`https://map.naver.com/p/search/${query}`, '_blank', 'noopener,noreferrer');
+      const query = lat != null && lng != null
+        ? `${lat},${lng}`
+        : title || [lat, lng].filter(v => v != null).join(',');
+      openMapWindow(`https://map.naver.com/p/search/${encodeURIComponent(query)}`);
     };
 
     const hydratedPhotoAttempts = new Map();
@@ -1568,19 +1562,11 @@ createApp({
       }
 
       if (lat != null && lng != null) {
-        if (isMobileDevice()) {
-          window.location.href = `comgooglemaps://?q=${lat},${lng}&center=${lat},${lng}&zoom=16`;
-        } else {
-          window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank', 'noopener,noreferrer');
-        }
+        openMapWindow(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
         return;
       }
 
-      if (isMobileDevice()) {
-        window.location.href = `comgooglemaps://?q=${encodedQuery}`;
-      } else {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`, '_blank', 'noopener,noreferrer');
-      }
+      openMapWindow(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`);
     };
 
     const showHotelInfoWindow = (hotel, marker) => {
@@ -3202,14 +3188,14 @@ createApp({
       }
 
       if (p.place_id) {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`, '_blank');
+        openMapWindow(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`);
         return;
       }
       if (p.lat && p.lng) {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`, '_blank');
+        openMapWindow(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`);
         return;
       }
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`, '_blank');
+      openMapWindow(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'') + ' ' + (currentTrip.value?.city||''))}`);
     };
 
     const openEditModal = (p) => {
