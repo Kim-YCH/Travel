@@ -41,7 +41,7 @@ createApp({
     const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
-    const itineraryTypes = ['景點', '早餐', '午餐', '晚餐', '美食', '購物', '交通', '住宿', '活動', '其他'];
+    const itineraryTypes = ['景點', '購物', '活動', '美食', '其他'];
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
@@ -443,18 +443,34 @@ createApp({
 
     const normalizeItineraryType = (value) => {
       const type = String(value || '').trim();
-      return type || '景點';
+      if (!type) return '景點';
+
+      const aliases = {
+        早餐: '美食',
+        午餐: '美食',
+        晚餐: '美食',
+        餐廳: '美食',
+        飲食: '美食',
+        咖啡: '美食',
+        商圈: '購物',
+        門票: '活動',
+        交通: '其他',
+        移動: '其他',
+        住宿: '其他',
+        飯店: '其他'
+      };
+
+      return itineraryTypes.includes(type) ? type : (aliases[type] || '其他');
     };
 
     const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
 
     const getItineraryTypeTone = (item) => {
       const type = getItineraryType(item);
-      if (['早餐', '午餐', '晚餐', '餐廳', '美食', '飲食'].includes(type)) return 'food';
-      if (['購物', '商圈'].includes(type)) return 'shopping';
-      if (['住宿', '飯店'].includes(type)) return 'hotel';
-      if (['交通', '移動'].includes(type)) return 'transport';
-      if (['活動', '門票'].includes(type)) return 'activity';
+      if (type === '美食') return 'food';
+      if (type === '購物') return 'shopping';
+      if (type === '活動') return 'activity';
+      if (type === '其他') return 'other';
       return 'sightseeing';
     };
 
@@ -462,9 +478,8 @@ createApp({
       const tone = getItineraryTypeTone(item);
       if (tone === 'food') return '🍽️';
       if (tone === 'shopping') return '🛍️';
-      if (tone === 'hotel') return '🏠';
-      if (tone === 'transport') return '🚇';
       if (tone === 'activity') return '🎟️';
+      if (tone === 'other') return '✨';
       return '📷';
     };
 
@@ -475,12 +490,14 @@ createApp({
       hotel: './assets/default-hotel.svg',
       transport: './assets/default-transport.svg',
       activity: './assets/default-travel.svg',
+      other: './assets/default-travel.svg',
       default: './assets/default-travel.svg'
     });
 
-    const getFallbackItineraryImage = (item = {}) => (
-      ITINERARY_FALLBACK_IMAGES[getItineraryTypeTone(item)] || ITINERARY_FALLBACK_IMAGES.default
-    );
+    const getFallbackItineraryImage = (item = {}) => {
+      const tone = item?._fallbackTone || getItineraryTypeTone(item);
+      return ITINERARY_FALLBACK_IMAGES[tone] || ITINERARY_FALLBACK_IMAGES.default;
+    };
 
     const getItineraryImage = (item = {}) => {
       const url = String(item?.image_url || '').trim();
@@ -489,7 +506,7 @@ createApp({
 
     const getHotelItineraryImage = (hotel = {}) => getItineraryImage({
       ...hotel,
-      type: '住宿'
+      _fallbackTone: 'hotel'
     });
 
     const buildFallbackImageFields = () => ({
@@ -553,7 +570,7 @@ createApp({
     };
 
     const handleHotelItineraryImageError = (event) => {
-      handleItineraryImageError(event, { type: '住宿' });
+      handleItineraryImageError(event, { _fallbackTone: 'hotel' });
     };
 
     const normalizeItineraryRecord = (item) => ({

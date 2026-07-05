@@ -610,6 +610,12 @@ html, body {
       border-color: #fecdd3;
     }
 
+    .itinerary-type-other {
+      color: #475569;
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+    }
+
     .itinerary-type-alternative {
       color: #92400e;
       background: #fef3c7;
