@@ -1,4 +1,4 @@
-/* version: 20260704.6 Cloud Blue theme
+/* version: 20260705.1 Cloud Blue theme
    CSS-only cloud / sky / glass app style. No image assets required. */
 :root {
   --cloud-primary: #2563EB;
@@ -416,7 +416,7 @@ button.bg-gray-700,
 }
 
 
-/* 20260704.6：搜尋候選清單層級修正
+/* 20260705.1：搜尋候選清單層級修正
    讓搜尋結果浮在行程卡片 / 住宿卡片上方，不被後續卡片蓋住。 */
 .itinerary-search-card,
 .hotel-search-card,

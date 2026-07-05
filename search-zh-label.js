@@ -1,14 +1,17 @@
-// version: 20260704.6
+// version: 20260705.1
 // Search result helper: translate Korean/Japanese/Thai Google Places result titles into Chinese labels.
 // Example: 서울타워（首爾塔）. The label is translated from the result title, not copied from the user's keyword.
 (function () {
-  const VERSION = '20260704.6';
+  const VERSION = '20260705.1';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
   const TARGET_LANG = 'zh-TW';
   const FOREIGN_RE = /[\u3131-\u318e\uac00-\ud7a3\u3040-\u30ff\u0e00-\u0e7f]/;
   const CJK_RE = /[\u4e00-\u9fff]/;
   const translateCache = new Map();
   const pendingKeys = new Set();
+  const translateQueue = [];
+  let activeTranslations = 0;
+  const MAX_ACTIVE_TRANSLATIONS = 2;
 
   function hasForeign(value) {
     return FOREIGN_RE.test(String(value || ''));
@@ -48,36 +51,69 @@
     titleEl.dataset.zhPatched = VERSION;
   }
 
-  function jsonp(url, timeoutMs = 12000) {
+  function parseMaybeJson(value) {
+    try { return JSON.parse(String(value || '')); } catch (_) { return null; }
+  }
+
+  function jsonp(url, timeoutMs = 60000) {
     return new Promise((resolve, reject) => {
       const cb = 'searchTranslateCb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
       const sep = url.includes('?') ? '&' : '?';
       const full = `${url}${sep}callback=${encodeURIComponent(cb)}`;
       const script = document.createElement('script');
+      let settled = false;
       const timer = setTimeout(() => {
-        cleanup();
+        // Apps Script sometimes responds after our timeout. Keep a no-op callback briefly
+        // so the late JSONP response will not throw "callback is not defined".
+        settled = true;
+        try { window[cb] = function () {}; } catch (_) {}
+        if (script.parentNode) script.parentNode.removeChild(script);
+        setTimeout(() => { try { delete window[cb]; } catch (_) { window[cb] = undefined; } }, 90000);
         reject(new Error('translate timeout'));
       }, timeoutMs);
 
-      function cleanup() {
+      function cleanupSuccess() {
         clearTimeout(timer);
         if (script.parentNode) script.parentNode.removeChild(script);
         try { delete window[cb]; } catch (_) { window[cb] = undefined; }
       }
 
       window[cb] = (data) => {
-        cleanup();
+        if (settled) return;
+        settled = true;
+        cleanupSuccess();
         resolve(data);
       };
 
       script.onerror = () => {
-        cleanup();
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (script.parentNode) script.parentNode.removeChild(script);
+        try { delete window[cb]; } catch (_) { window[cb] = undefined; }
         reject(new Error('translate jsonp failed'));
       };
 
       script.src = full;
       document.head.appendChild(script);
     });
+  }
+
+  async function requestTranslation(url) {
+    // Prefer fetch because it avoids JSONP callback race conditions. If CORS fails,
+    // fall back to JSONP.
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 60000) : null;
+      const res = await fetch(url, controller ? { signal: controller.signal } : undefined);
+      if (timer) clearTimeout(timer);
+      const text = await res.text();
+      const data = parseMaybeJson(text);
+      if (!data) throw new Error('translate response is not JSON');
+      return data;
+    } catch (err) {
+      return await jsonp(url);
+    }
   }
 
   async function translateTitle(rawTitle) {
@@ -91,7 +127,7 @@
       + '&target=' + encodeURIComponent(TARGET_LANG);
 
     try {
-      const res = await jsonp(url);
+      const res = await requestTranslation(url);
       const translated = cleanText(res && (res.translatedText || res.text || res.translation || ''));
       const out = translated && translated !== key ? translated : '';
       translateCache.set(key, out);
@@ -103,10 +139,30 @@
     }
   }
 
-  async function patchTitle(titleEl, rawTitle) {
+  function enqueuePatch(titleEl, rawTitle) {
     const key = cleanText(rawTitle);
     if (!key || pendingKeys.has(key)) return;
     pendingKeys.add(key);
+    translateQueue.push({ titleEl, key });
+    drainTranslateQueue();
+  }
+
+  function drainTranslateQueue() {
+    while (activeTranslations < MAX_ACTIVE_TRANSLATIONS && translateQueue.length) {
+      const job = translateQueue.shift();
+      activeTranslations++;
+      patchTitle(job.titleEl, job.key)
+        .catch(err => console.warn('search result title patch failed:', err))
+        .finally(() => {
+          activeTranslations--;
+          drainTranslateQueue();
+        });
+    }
+  }
+
+  async function patchTitle(titleEl, rawTitle) {
+    const key = cleanText(rawTitle);
+    if (!key) return;
 
     const translated = await translateTitle(key);
     pendingKeys.delete(key);
@@ -140,7 +196,7 @@
         return;
       }
 
-      patchTitle(title, rawTitle);
+      enqueuePatch(title, rawTitle);
     });
   }
 
