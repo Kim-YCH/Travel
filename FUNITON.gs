@@ -1,11 +1,28 @@
-// version: 20260705.7 complete backend; itinerary image columns are auto-added by header name.
+// version: 20260706.1 complete backend; itinerary image columns are auto-added by header name.
 /************ CONFIG ************/
+const BACKEND_VERSION = '20260706.1';
 const SPREADSHEET_ID = '11H-wsAJRRBbiGxCIbovY_o4bvEB7m6eayT27Wafmtkw';
 const ALLOWED_TYPES = ['trips', 'itinerary', 'expenses', 'people', 'hotels', 'prep_checklist', 'tripData'];
 const TRIPDATA_CACHE_TTL_SEC = 300; // 5 分鐘
 const REQUIRED_TYPE_HEADERS = {
   itinerary: ['type', 'image_url', 'image_source', 'photo_attributions', 'image_updated_at']
 };
+const TRANSLATION_DICTIONARY_SHEET_NAME = 'TranslationDictionary';
+const TRANSLATION_DICTIONARY_HEADERS = [
+  'langA',
+  'textA',
+  'normA',
+  'langB',
+  'textB',
+  'normB',
+  'enabled',
+  'note'
+];
+const BUILTIN_TRANSLATION_DICTIONARY = [
+  { langA: 'zh-TW', textA: '首爾站', langB: 'ko', textB: '서울역' },
+  { langA: 'zh-TW', textA: '明洞', langB: 'ko', textB: '명동' },
+  { langA: 'zh-TW', textA: '東京鐵塔', langB: 'ja', textB: '東京タワー' }
+];
 
 /************ ENTRY ************/
 function doGet(e) {
@@ -231,6 +248,16 @@ function handleActionGET(ss, action, type, e) {
     };
   }
 
+  if (action === 'health_check') {
+    const dictSheet = getOrCreateTranslationDictionarySheet_(ss);
+    return {
+      status: 'success',
+      backendVersion: BACKEND_VERSION,
+      translationDictionary: !!dictSheet,
+      dictionarySheetName: TRANSLATION_DICTIONARY_SHEET_NAME
+    };
+  }
+
   if (action === 'prep_checklist_get') {
     const tripId = getParam(e, 'tripId', '');
     const tripName = getParam(e, 'tripName', '');
@@ -239,7 +266,7 @@ function handleActionGET(ss, action, type, e) {
   }
 
   if (action === 'translate_place_keyword') {
-    return translatePlaceKeywordGET_(e);
+    return translatePlaceKeywordGET_(e, ss);
   }
   if (action === 'naver_local_search') {
     const keyword = getParam(e, 'keyword', '');
@@ -800,10 +827,11 @@ function naverLocalSearch_(query) {
     }
   }));
 }
-function translatePlaceKeywordGET_(e) {
+function translatePlaceKeywordGET_(e, ss) {
   const text = getParam(e, 'text', '').trim();
   const targetRaw = getParam(e, 'target', 'ko').trim();
   const target = normalizeTranslateTarget_(targetRaw);
+  const inputNorm = normalizeDictionaryText_(text);
 
   if (!text) {
     return { status: 'error', message: 'missing text' };
@@ -813,27 +841,221 @@ function translatePlaceKeywordGET_(e) {
     return { status: 'error', message: 'unsupported target: ' + targetRaw };
   }
 
+  const builtin = findBuiltinDictionaryTranslation_(text, target);
+  if (builtin) {
+    return {
+      status: 'success',
+      originalText: text,
+      target: target,
+      translatedText: builtin.translatedText,
+      source: 'builtin_dictionary'
+    };
+  }
+
+  const activeSs = ss || SpreadsheetApp.openById(SPREADSHEET_ID);
+  const dictSheet = getOrCreateTranslationDictionarySheet_(activeSs);
+  const dictEntries = getTranslationDictionaryEntries_(dictSheet);
+  const database = findDatabaseDictionaryTranslation_(text, target, dictEntries);
+  if (database) {
+    return {
+      status: 'success',
+      originalText: text,
+      target: target,
+      translatedText: database.translatedText,
+      source: 'database_dictionary'
+    };
+  }
+
   const out = translateTextBasic_(text, target);
+  const translatedText = out.translatedText || '';
+  if (translatedText) {
+    const sourceLang = normalizeTranslateTarget_(out.detectedSourceLanguage) || detectTextLanguage_(text, target);
+    appendTranslationDictionaryPair_(activeSs, text, sourceLang, translatedText, target, dictEntries);
+  }
+
   return {
-    status: 'ok',
+    status: 'success',
     originalText: text,
     target: target,
-    translatedText: out.translatedText || '',
-    detectedSourceLanguage: out.detectedSourceLanguage || ''
+    translatedText: translatedText,
+    source: 'translator',
+    detectedSourceLanguage: out.detectedSourceLanguage || '',
+    inputNorm: inputNorm
   };
 }
 
 function normalizeTranslateTarget_(target) {
-  const normalized = String(target || '').trim().toLowerCase().replace('_', '-');
+  const normalized = String(target || '').trim().toLowerCase().replace(/_/g, '-');
   const map = {
     ko: 'ko',
     ja: 'ja',
     th: 'th',
     en: 'en',
+    zh: 'zh-TW',
     'zh-tw': 'zh-TW',
-    'zh-hant': 'zh-TW'
+    'zh-hant': 'zh-TW',
+    '繁中': 'zh-TW',
+    '中文': 'zh-TW'
   };
   return map[normalized] || '';
+}
+
+function normalizeDictionaryText_(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function normalizeDictionaryEntry_(entry) {
+  const rawLangA = entry.langA || entry[0] || '';
+  const rawLangB = entry.langB || entry[3] || '';
+  return {
+    langA: normalizeTranslateTarget_(rawLangA) || String(rawLangA || '').trim(),
+    textA: String(entry.textA || entry[1] || '').trim(),
+    normA: normalizeDictionaryText_(entry.normA || entry.textA || entry[2] || entry[1] || ''),
+    langB: normalizeTranslateTarget_(rawLangB) || String(rawLangB || '').trim(),
+    textB: String(entry.textB || entry[4] || '').trim(),
+    normB: normalizeDictionaryText_(entry.normB || entry.textB || entry[5] || entry[4] || ''),
+    enabled: entry.enabled === undefined ? true : isTranslationDictionaryEnabled_(entry.enabled),
+    note: String(entry.note || entry[7] || '')
+  };
+}
+
+function isTranslationDictionaryEnabled_(value) {
+  if (value === true) return true;
+  const s = String(value || '').trim().toLowerCase();
+  return s === 'true' || s === '1' || s === 'yes' || s === 'y' || s === 'v';
+}
+
+function findDictionaryTranslationInEntries_(entries, text, target) {
+  const normalizedTarget = normalizeTranslateTarget_(target);
+  const inputNorm = normalizeDictionaryText_(text);
+  if (!inputNorm || !normalizedTarget) return null;
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = normalizeDictionaryEntry_(entries[i]);
+    if (!entry.enabled) continue;
+    if (!entry.langA || !entry.langB || !entry.textA || !entry.textB) continue;
+
+    if (entry.normA === inputNorm && entry.langB === normalizedTarget) {
+      return { translatedText: entry.textB, entry: entry };
+    }
+
+    if (entry.normB === inputNorm && entry.langA === normalizedTarget) {
+      return { translatedText: entry.textA, entry: entry };
+    }
+  }
+
+  return null;
+}
+
+function findBuiltinDictionaryTranslation_(text, target) {
+  return findDictionaryTranslationInEntries_(BUILTIN_TRANSLATION_DICTIONARY, text, target);
+}
+
+function getOrCreateTranslationDictionarySheet_(ss) {
+  let sheet = ss.getSheetByName(TRANSLATION_DICTIONARY_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(TRANSLATION_DICTIONARY_SHEET_NAME);
+
+  if (sheet.getLastRow() < 1 || sheet.getLastColumn() < 1) {
+    sheet.getRange(1, 1, 1, TRANSLATION_DICTIONARY_HEADERS.length).setValues([TRANSLATION_DICTIONARY_HEADERS]);
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+    .map(h => String(h).trim())
+    .filter(Boolean);
+  const currentLower = currentHeaders.map(h => h.toLowerCase());
+  const missing = TRANSLATION_DICTIONARY_HEADERS.filter(h => currentLower.indexOf(h.toLowerCase()) === -1);
+  if (missing.length) sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+
+  sheet.setFrozenRows(1);
+  return sheet;
+}
+
+function getTranslationDictionaryEntries_(sheet) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return [];
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+    .map(h => String(h).trim().toLowerCase());
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+  return rows.map(row => ({
+    langA: row[headers.indexOf('langa')],
+    textA: row[headers.indexOf('texta')],
+    normA: row[headers.indexOf('norma')],
+    langB: row[headers.indexOf('langb')],
+    textB: row[headers.indexOf('textb')],
+    normB: row[headers.indexOf('normb')],
+    enabled: row[headers.indexOf('enabled')],
+    note: row[headers.indexOf('note')]
+  }));
+}
+
+function findDatabaseDictionaryTranslation_(text, target, entries) {
+  return findDictionaryTranslationInEntries_(entries || [], text, target);
+}
+
+function dictionaryPairExists_(entries, sourceText, sourceLang, translatedText, targetLang) {
+  const sourceNorm = normalizeDictionaryText_(sourceText);
+  const translatedNorm = normalizeDictionaryText_(translatedText);
+  const langA = normalizeTranslateTarget_(sourceLang) || String(sourceLang || '').trim();
+  const langB = normalizeTranslateTarget_(targetLang);
+  if (!sourceNorm || !translatedNorm || !langA || !langB) return true;
+
+  return (entries || []).some(entryRaw => {
+    const entry = normalizeDictionaryEntry_(entryRaw);
+    if (!entry.enabled) return false;
+
+    const sameForward = entry.langA === langA && entry.normA === sourceNorm &&
+      entry.langB === langB && entry.normB === translatedNorm;
+    const sameReverse = entry.langA === langB && entry.normA === translatedNorm &&
+      entry.langB === langA && entry.normB === sourceNorm;
+    return sameForward || sameReverse;
+  });
+}
+
+function appendTranslationDictionaryPair_(ss, sourceText, sourceLang, translatedText, targetLang, existingEntries) {
+  const sheet = getOrCreateTranslationDictionarySheet_(ss);
+  const entries = existingEntries || getTranslationDictionaryEntries_(sheet);
+  const langA = normalizeTranslateTarget_(sourceLang) || String(sourceLang || '').trim() || 'auto';
+  const langB = normalizeTranslateTarget_(targetLang);
+  const textA = String(sourceText || '').trim();
+  const textB = String(translatedText || '').trim();
+
+  if (!textA || !textB || !langB) return false;
+  if (dictionaryPairExists_(entries, textA, langA, textB, langB)) return false;
+
+  sheet.appendRow([
+    langA,
+    textA,
+    normalizeDictionaryText_(textA),
+    langB,
+    textB,
+    normalizeDictionaryText_(textB),
+    'TRUE',
+    ''
+  ]);
+  return true;
+}
+
+function detectTextLanguage_(text, target) {
+  const normalizedTarget = normalizeTranslateTarget_(target);
+  const s = String(text || '');
+
+  if (/[\u3131-\u318e\uac00-\ud7a3]/.test(s)) return 'ko';
+  if (/[\u3040-\u30ff]/.test(s)) return 'ja';
+  if (/[\u0e00-\u0e7f]/.test(s)) return 'th';
+  if (/[\u4e00-\u9fff]/.test(s)) return 'zh-TW';
+  if (/[a-z]/i.test(s)) return 'en';
+  if (normalizedTarget && normalizedTarget !== 'zh-TW') return 'zh-TW';
+  return 'auto';
 }
 
 function translateTextBasic_(text, target) {
