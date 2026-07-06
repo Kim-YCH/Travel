@@ -1,6 +1,6 @@
-// version: 20260706.1 complete backend; itinerary image columns are auto-added by header name.
+// version: 20260706.2 complete backend; itinerary image columns are auto-added by header name.
 /************ CONFIG ************/
-const BACKEND_VERSION = '20260706.1';
+const BACKEND_VERSION = '20260706.2';
 const SPREADSHEET_ID = '11H-wsAJRRBbiGxCIbovY_o4bvEB7m6eayT27Wafmtkw';
 const ALLOWED_TYPES = ['trips', 'itinerary', 'expenses', 'people', 'hotels', 'prep_checklist', 'tripData'];
 const TRIPDATA_CACHE_TTL_SEC = 300; // 5 分鐘
@@ -24,12 +24,17 @@ const BUILTIN_TRANSLATION_DICTIONARY = [
   { langA: 'zh-TW', textA: '東京鐵塔', langB: 'ja', textB: '東京タワー' }
 ];
 
+function ensureBackendSupportSheets_(ss) {
+  getOrCreateTranslationDictionarySheet_(ss);
+}
+
 /************ ENTRY ************/
 function doGet(e) {
   const callback = getParam(e, 'callback', '');
 
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    ensureBackendSupportSheets_(ss);
     const action = getParam(e, 'action', '');
     const type = getParam(e, 'type', '');
     const tripId = getParam(e, 'tripId', '');
@@ -90,6 +95,7 @@ function doPost(e) {
     }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    ensureBackendSupportSheets_(ss);
     const contents = JSON.parse(e.postData.contents);
     const action = contents.action;
     const type = contents.type;
