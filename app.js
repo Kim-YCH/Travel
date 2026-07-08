@@ -5,11 +5,6 @@ createApp({
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
     const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260624.01';
-    const TravelUtils = window.TravelUtils || {};
-    const TravelApi = window.TravelApi?.create
-      ? window.TravelApi.create({ apiUrl: API_URL })
-      : {};
-    const TravelCache = window.TravelCache || {};
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -47,13 +42,6 @@ createApp({
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
     const itineraryTypes = ['景點', '購物', '活動', '美食', '其他'];
-    // Keep feature modules loaded, but use the proven in-file logic until
-    // the extracted helpers reach parity with production image behavior.
-    const TravelItinerary = {};
-    const TravelHotels = {};
-    const TravelExpenses = {};
-    const TravelMaps = {};
-    const TravelPlaces = {};
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
@@ -137,7 +125,7 @@ createApp({
     const editExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const isSavingExpense = ref(false);
 
-    const generateId = TravelUtils.generateId || (() => Date.now() + '_' + Math.floor(Math.random() * 1000));
+    const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
 
     const isKoreaCity = (city) => {
       const s = String(city || '').trim().toLowerCase();
@@ -209,7 +197,7 @@ createApp({
       });
     };
 
-    const mergePredictions = TravelPlaces.mergePredictions || ((...groups) => {
+    const mergePredictions = (...groups) => {
       const seen = new Set();
       const out = [];
       groups.flat().forEach((item) => {
@@ -219,7 +207,7 @@ createApp({
         out.push(item);
       });
       return out;
-    });
+    };
 
     const geocodePlaceCandidates = async (keyword, options = {}) => {
       const q = String(keyword || '').trim();
@@ -407,55 +395,53 @@ createApp({
       return '危險';
     };
 
-    const normalizeInvolved = TravelExpenses.normalizeInvolved || ((list) => {
+    const normalizeInvolved = (list) => {
       if (Array.isArray(list)) return list.filter(Boolean);
       if (typeof list === 'string') {
         return list.split(',').map(s => s.trim()).filter(Boolean);
       }
       return [];
-    });
+    };
 
-    const normalizeExpenseRecord = TravelExpenses.normalizeExpenseRecord || ((item) => ({
+    const normalizeExpenseRecord = (item) => ({
       ...item,
       amount: Number(item?.amount) || 0,
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       involved: normalizeInvolved(item?.involved),
       category: item?.category || '其他',
       payer: item?.payer || ''
-    }));
+    });
 
     // 公帳規則：只要「分攤給」包含公帳，就視為放入公帳。
     // 這類紀錄仍保留在分帳計算中，但不顯示於前端支出列表，也不納入總支出/消費分析。
     const PUBLIC_ACCOUNT_NAME = '公帳';
-    const normalizePersonName = TravelExpenses.normalizePersonName || ((name) => String(name || '').trim());
-    const isPublicAccountFund = TravelExpenses.isPublicAccountFund
-      ? ((expense) => TravelExpenses.isPublicAccountFund(expense, PUBLIC_ACCOUNT_NAME))
-      : ((expense) => {
+    const normalizePersonName = (name) => String(name || '').trim();
+    const isPublicAccountFund = (expense) => {
       const involved = normalizeInvolved(expense?.involved).map(normalizePersonName);
       return involved.includes(PUBLIC_ACCOUNT_NAME);
-    });
-    const expenseCreatedTime = TravelExpenses.expenseCreatedTime || ((expense) => {
+    };
+    const expenseCreatedTime = (expense) => {
       const fromId = parseInt(String(expense?.id || '').split('_')[0], 10);
       if (Number.isFinite(fromId)) return fromId;
       const fromDate = Date.parse(expense?.created_at || expense?.updated_at || '');
       return Number.isFinite(fromDate) ? fromDate : 0;
-    });
+    };
 
-    const normalizeOrderValue = TravelItinerary.normalizeOrderValue || ((value) => {
+    const normalizeOrderValue = (value) => {
       if (value === '' || value == null) return null;
       const num = Number(value);
       return Number.isFinite(num) && num > 0 ? num : null;
-    });
+    };
 
-    const normalizeAlternativeFlag = TravelItinerary.normalizeAlternativeFlag || ((value) => {
+    const normalizeAlternativeFlag = (value) => {
       return String(value || '').trim().toLowerCase() === 'v' ? 'v' : '';
-    });
+    };
 
-    const getAlternativeFlag = TravelItinerary.getAlternativeFlag || ((item) => normalizeAlternativeFlag(item?.is_alternative ?? item?.['是否為備案']));
+    const getAlternativeFlag = (item) => normalizeAlternativeFlag(item?.is_alternative ?? item?.['是否為備案']);
 
-    const isAlternativeItem = TravelItinerary.isAlternativeItem || ((item) => getAlternativeFlag(item) === 'v');
+    const isAlternativeItem = (item) => getAlternativeFlag(item) === 'v';
 
-    const normalizeItineraryType = TravelItinerary.normalizeItineraryType || ((value) => {
+    const normalizeItineraryType = (value) => {
       const type = String(value || '').trim();
       if (!type) return '景點';
 
@@ -475,29 +461,29 @@ createApp({
       };
 
       return itineraryTypes.includes(type) ? type : (aliases[type] || '其他');
-    });
+    };
 
-    const getItineraryType = TravelItinerary.getItineraryType || ((item) => normalizeItineraryType(item?.type || item?.category || item?.place_type));
+    const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
 
-    const getItineraryTypeTone = TravelItinerary.getItineraryTypeTone || ((item) => {
+    const getItineraryTypeTone = (item) => {
       const type = getItineraryType(item);
       if (type === '美食') return 'food';
       if (type === '購物') return 'shopping';
       if (type === '活動') return 'activity';
       if (type === '其他') return 'other';
       return 'sightseeing';
-    });
+    };
 
-    const getItineraryIcon = TravelItinerary.getItineraryIcon || ((item) => {
+    const getItineraryIcon = (item) => {
       const tone = getItineraryTypeTone(item);
       if (tone === 'food') return '🍽️';
       if (tone === 'shopping') return '🛍️';
       if (tone === 'activity') return '🎟️';
       if (tone === 'other') return '✨';
       return '📷';
-    });
+    };
 
-    const ITINERARY_FALLBACK_IMAGES = TravelItinerary.fallbackImages || Object.freeze({
+    const ITINERARY_FALLBACK_IMAGES = Object.freeze({
       sightseeing: './assets/default-sightseeing.svg',
       food: './assets/default-food.svg',
       shopping: './assets/default-shopping.svg',
@@ -508,31 +494,29 @@ createApp({
       default: './assets/default-travel.svg'
     });
 
-    const getFallbackItineraryImage = TravelItinerary.getFallbackItineraryImage || ((item = {}) => {
+    const getFallbackItineraryImage = (item = {}) => {
       const tone = item?._fallbackTone || getItineraryTypeTone(item);
       return ITINERARY_FALLBACK_IMAGES[tone] || ITINERARY_FALLBACK_IMAGES.default;
-    });
+    };
 
-    const getItineraryImage = TravelItinerary.getItineraryImage || ((item = {}) => {
+    const getItineraryImage = (item = {}) => {
       const url = String(item?.image_url || '').trim();
       return url || getFallbackItineraryImage(item);
-    });
+    };
 
-    const getHotelItineraryImage = TravelItinerary.getHotelItineraryImage || ((hotel = {}) => getItineraryImage({
+    const getHotelItineraryImage = (hotel = {}) => getItineraryImage({
       ...hotel,
       _fallbackTone: 'hotel'
-    }));
+    });
 
-    const buildFallbackImageFields = TravelItinerary.buildFallbackImageFields || (() => ({
+    const buildFallbackImageFields = () => ({
       image_url: '',
       image_source: 'fallback',
       photo_attributions: '',
       image_updated_at: new Date().toISOString()
-    }));
+    });
 
-    const extractPlacePhotoInfo = TravelPlaces.extractPlacePhotoInfo
-      ? ((place) => TravelPlaces.extractPlacePhotoInfo(place, { buildFallbackImageFields }))
-      : ((place) => {
+    const extractPlacePhotoInfo = (place) => {
       const photos = Array.isArray(place?.photos) ? place.photos : [];
       const photo = photos[0] || null;
 
@@ -560,7 +544,7 @@ createApp({
         photo_attributions: photoAttributions,
         image_updated_at: new Date().toISOString()
       };
-    });
+    };
 
     const handleItineraryImageError = (event, item = {}) => {
       const img = event?.target;
@@ -568,16 +552,6 @@ createApp({
 
       if (item && typeof item === 'object' && String(item.image_url || '').trim()) {
         item.image_url = '';
-        item.image_source = '';
-        item.photo_attributions = '';
-        item.image_updated_at = '';
-        if (item.id && hydratedPhotoAttempts) {
-          hydratedPhotoAttempts.delete(String(item.id));
-        }
-        if (currentTrip.value) {
-          scheduleMissingPlacePhotoHydration(100);
-          refreshItineraryImageAfterError(item, img);
-        }
       }
 
       if (img.dataset.fallbackStage === 'category') {
@@ -599,7 +573,7 @@ createApp({
       handleItineraryImageError(event, { _fallbackTone: 'hotel' });
     };
 
-    const normalizeItineraryRecord = TravelItinerary.normalizeItineraryRecord || ((item) => ({
+    const normalizeItineraryRecord = (item) => ({
       ...item,
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       order: normalizeOrderValue(item?.order),
@@ -609,9 +583,9 @@ createApp({
       photo_attributions: String(item?.photo_attributions || '').trim(),
       image_updated_at: String(item?.image_updated_at || '').trim(),
       is_alternative: getAlternativeFlag(item)
-    }));
+    });
 
-    const normalizeHotelRecord = TravelHotels.normalizeHotelRecord || ((item) => ({
+    const normalizeHotelRecord = (item) => ({
       ...item,
       start_day: item?.start_day ? parseInt(item.start_day, 10) || 1 : 1,
       end_day: item?.end_day ? parseInt(item.end_day, 10) || 1 : 1,
@@ -620,9 +594,9 @@ createApp({
       name: String(item?.name || '').trim(),
       address: String(item?.address || '').trim(),
       place_id: String(item?.place_id || '').trim()
-    }));
+    });
 
-    const normalizeAlternativeRecord = TravelItinerary.normalizeAlternativeRecord || ((item) => ({
+    const normalizeAlternativeRecord = (item) => ({
       ...item,
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
@@ -636,24 +610,22 @@ createApp({
       photo_attributions: String(item?.photo_attributions || '').trim(),
       image_updated_at: String(item?.image_updated_at || '').trim(),
       message: String(item?.message || '')
-    }));
+    });
 
-    const isHotelActiveOnDay = TravelHotels.isHotelActiveOnDay || ((hotel, day) => {
+    const isHotelActiveOnDay = (hotel, day) => {
       const d = parseInt(day, 10) || 1;
       const start = parseInt(hotel?.start_day, 10) || 1;
       const end = parseInt(hotel?.end_day, 10) || start;
       return d >= Math.min(start, end) && d <= Math.max(start, end);
-    });
+    };
 
-    const hotelDayRangeLabel = TravelHotels.hotelDayRangeLabel || ((hotel) => {
+    const hotelDayRangeLabel = (hotel) => {
       const start = parseInt(hotel?.start_day, 10) || 1;
       const end = parseInt(hotel?.end_day, 10) || start;
       return start === end ? `Day ${start}` : `Day ${Math.min(start, end)} ~ Day ${Math.max(start, end)}`;
-    });
+    };
 
-    const hasHotelOverlap = TravelHotels.hasHotelOverlap
-      ? ((startDay, endDay, exceptId = '') => TravelHotels.hasHotelOverlap(hotels.value, startDay, endDay, exceptId))
-      : ((startDay, endDay, exceptId = '') => {
+    const hasHotelOverlap = (startDay, endDay, exceptId = '') => {
       const s = Math.min(parseInt(startDay, 10) || 1, parseInt(endDay, 10) || 1);
       const e = Math.max(parseInt(startDay, 10) || 1, parseInt(endDay, 10) || 1);
       return hotels.value.some(h => {
@@ -662,7 +634,7 @@ createApp({
         const he = Math.max(parseInt(h.start_day, 10) || 1, parseInt(h.end_day, 10) || 1);
         return s <= he && e >= hs;
       });
-    });
+    };
 
     const sortDayItemsByStoredOrder = (list) => {
       return list.slice().sort((a, b) => {
@@ -751,12 +723,10 @@ createApp({
       }
     };
 
-    const formatInvolved = TravelExpenses.formatInvolved
-      ? ((list) => TravelExpenses.formatInvolved(list, '全員'))
-      : ((list) => {
+    const formatInvolved = (list) => {
       const arr = normalizeInvolved(list);
       return arr.length === 0 ? '全員' : arr.join(', ');
-    });
+    };
 
     const formatTime = (timeStr) => {
       if (!timeStr) return '';
@@ -783,7 +753,7 @@ createApp({
       return hh * 60 + mm;
     };
 
-    const jsonp = TravelApi.jsonp || ((url, timeoutMs = 30000) => new Promise((resolve, reject) => {
+    const jsonp = (url, timeoutMs = 30000) => new Promise((resolve, reject) => {
       const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
       const sep = url.includes('?') ? '&' : '?';
       const full = `${url}${sep}callback=${cb}`;
@@ -812,14 +782,14 @@ createApp({
 
       s.src = full;
       document.head.appendChild(s);
-    }));
-
-    const apiGet = TravelApi.apiGet || (async (paramsObj) => {
-      const qs = new URLSearchParams(paramsObj).toString();
-      return await jsonp(`${API_URL}?${qs}`);
     });
 
-    const cacheKey = TravelCache.tripCacheKey || ((tripId) => `trip_cache_${tripId}`);
+    const apiGet = async (paramsObj) => {
+      const qs = new URLSearchParams(paramsObj).toString();
+      return await jsonp(`${API_URL}?${qs}`);
+    };
+
+    const cacheKey = (tripId) => `trip_cache_${tripId}`;
 
     const saveTripCache = (tripId) => {
       try {
@@ -861,13 +831,13 @@ createApp({
       }
     };
 
-    const rawPostJSON = TravelApi.rawPostJSON || (async (payload) => {
+    const rawPostJSON = async (payload) => {
       const p = { ...payload };
       if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
       return await apiGet(p);
-    });
+    };
 
-    const pendingQueueKey = TravelCache.pendingQueueKey || ((tripId) => `trip_pending_queue_${tripId}`);
+    const pendingQueueKey = (tripId) => `trip_pending_queue_${tripId}`;
 
     const savePendingQueue = () => {
       if (!currentTrip.value?.id) return;
@@ -1029,9 +999,7 @@ createApp({
       .replaceAll('"','&quot;')
       .replaceAll("'","&#39;");
 
-    const sanitizePhotoAttributions = TravelPlaces.sanitizePhotoAttributions
-      ? ((value) => TravelPlaces.sanitizePhotoAttributions(value, { document, escapeHtml }))
-      : ((value) => {
+    const sanitizePhotoAttributions = (value) => {
       const raw = Array.isArray(value) ? value.join(' ') : String(value || '');
       if (!raw.trim()) return '';
 
@@ -1052,7 +1020,7 @@ createApp({
         .replace(/\s+/g, ' ')
         .trim();
       return escapeHtml(plain);
-    });
+    };
 
     const linkifyMessage = (text) => {
       const raw = String(text || '');
@@ -1253,37 +1221,6 @@ createApp({
       }
 
       return buildFallbackImageFields();
-    };
-
-    const refreshItineraryImageAfterError = async (item = {}, img = null) => {
-      if (!item?.id || !currentTrip.value || img?.dataset.photoRepairing === '1') return;
-      if (img) img.dataset.photoRepairing = '1';
-
-      try {
-        const result = await resolveItineraryPhotoFields(item);
-        const { place, ...imageFields } = result;
-        if (!imageFields.image_url) return;
-
-        Object.assign(item, imageFields);
-        if (place?.place_id) item.place_id = place.place_id;
-        if (place?.formatted_address && !String(item.address || '').trim()) item.address = place.formatted_address;
-        if (place?.geometry?.location) {
-          item.lat = place.geometry.location.lat();
-          item.lng = place.geometry.location.lng();
-        }
-
-        scheduleTripCacheSave();
-        await persistItineraryImageFields(item);
-
-        if (img && document.body.contains(img)) {
-          img.dataset.fallbackStage = '';
-          img.src = imageFields.image_url;
-        }
-      } catch (err) {
-        console.warn('refreshItineraryImageAfterError failed:', err);
-      } finally {
-        if (img) img.dataset.photoRepairing = '';
-      }
     };
 
     const openMapWindow = (url) => {
@@ -1581,7 +1518,7 @@ createApp({
       mapSelectedPlaceData.value = null;
     };
 
-    const getExternalMapLink = TravelMaps.getExternalMapLink || (({ name = '', lat = null, lng = null, place_id = '' }) => {
+    const getExternalMapLink = ({ name = '', lat = null, lng = null, place_id = '' }) => {
       if (place_id) {
         return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${place_id}`;
       }
@@ -1589,14 +1526,9 @@ createApp({
         return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
       }
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
-    });
+    };
 
-    const getMapExportLinks = TravelMaps.getMapExportLinks
-      ? ((place = {}) => TravelMaps.getMapExportLinks(place, {
-        currentTrip: currentTrip.value,
-        isKoreaTrip: isKoreaTrip.value
-      }))
-      : ((place = {}) => {
+    const getMapExportLinks = (place = {}) => {
       // 匯出文字改用與行程/住宿卡片點擊相同的地圖 App 邏輯。
       // 韓國旅程只保留 Naver Map App，不再輸出 Google Maps 導航網址。
       const title = String(place.name || place.title || place.name_ko || currentTrip.value?.name || '行程').trim();
@@ -1626,7 +1558,7 @@ createApp({
         app: googleApp,
         appLabel: 'Google Maps App'
       };
-    });
+    };
 
     const appendMapLinksToExport = (place, indent = '    ') => {
       const links = getMapExportLinks(place);
