@@ -568,6 +568,15 @@ createApp({
 
       if (item && typeof item === 'object' && String(item.image_url || '').trim()) {
         item.image_url = '';
+        item.image_source = '';
+        item.photo_attributions = '';
+        item.image_updated_at = '';
+        if (item.id && hydratedPhotoAttempts) {
+          hydratedPhotoAttempts.delete(String(item.id));
+        }
+        if (currentTrip.value) {
+          scheduleMissingPlacePhotoHydration(100);
+        }
       }
 
       if (img.dataset.fallbackStage === 'category') {

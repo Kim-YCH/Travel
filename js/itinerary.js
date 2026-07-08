@@ -22,6 +22,15 @@
     return String(value || '').trim().toLowerCase() === 'v' ? 'v' : '';
   };
 
+  const getImageUrl = (item = {}) => String(
+    item?.image_url ||
+    item?.imageUrl ||
+    item?.photo_url ||
+    item?.photoUrl ||
+    item?.place_photo_url ||
+    ''
+  ).trim();
+
   const getAlternativeFlag = (item) => normalizeAlternativeFlag(
     item?.is_alternative ?? item?.['是否為備案']
   );
@@ -79,7 +88,7 @@
     };
 
     const getItineraryImage = (item = {}) => {
-      const url = String(item?.image_url || '').trim();
+      const url = getImageUrl(item);
       return url || getFallbackItineraryImage(item);
     };
 
@@ -100,7 +109,7 @@
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       order: normalizeOrderValue(item?.order),
       type: getItineraryType(item),
-      image_url: String(item?.image_url || '').trim(),
+      image_url: getImageUrl(item),
       image_source: String(item?.image_source || '').trim(),
       photo_attributions: String(item?.photo_attributions || '').trim(),
       image_updated_at: String(item?.image_updated_at || '').trim(),
@@ -116,7 +125,7 @@
       type: getItineraryType(item),
       address: String(item?.address || '').trim(),
       place_id: String(item?.place_id || '').trim(),
-      image_url: String(item?.image_url || '').trim(),
+      image_url: getImageUrl(item),
       image_source: String(item?.image_source || '').trim(),
       photo_attributions: String(item?.photo_attributions || '').trim(),
       image_updated_at: String(item?.image_updated_at || '').trim(),
@@ -129,6 +138,7 @@
       normalizeAlternativeFlag,
       getAlternativeFlag,
       isAlternativeItem,
+      getImageUrl,
       normalizeItineraryType,
       getItineraryType,
       getItineraryTypeTone,
@@ -148,6 +158,7 @@
     normalizeAlternativeFlag,
     getAlternativeFlag,
     isAlternativeItem,
+    getImageUrl,
     create
   });
 })(window);
