@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260708.05 -->
+<!-- version: 20260708.06 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.05" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.05" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.05" />
-  <link rel="manifest" href="./site.webmanifest?v=20260708.05" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.06" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.06" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.06" />
+  <link rel="manifest" href="./site.webmanifest?v=20260708.06" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260708.05" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.05" />
+  <link rel="stylesheet" href="./style.css?v=20260708.06" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.06" />
 </head>
 <body>
 
@@ -203,6 +203,14 @@
                   class="map-probe-clear-btn"
                   @click="clearProbeSearch"
                   aria-label="清除探點"
+                  title="清除探點"
+                >⌫</button>
+                <button
+                  type="button"
+                  class="map-probe-close-btn"
+                  @click="closeProbeSearchPanel"
+                  aria-label="關閉探點搜尋"
+                  title="關閉探點搜尋"
                 >×</button>
               </div>
 
@@ -216,7 +224,10 @@
                   class="map-probe-result-item"
                   @click="selectProbePlace(item)"
                 >
-                  <span class="font-bold">{{ item.structured_formatting?.main_text || item.name || item.description }}</span>
+                  <span class="font-bold">
+                    {{ item.probe_title || item.structured_formatting?.main_text || item.name || item.description }}
+                    <span v-if="item.zh_label" class="map-probe-zh-label">（{{ item.zh_label }}）</span>
+                  </span>
                   <span>{{ item.structured_formatting?.secondary_text || item.address || item.description }}</span>
                 </button>
               </div>
@@ -909,20 +920,20 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260708.05"></script>
-<script src="./cache-refresh.js?v=20260708.05"></script>
-<script src="./keyword-map.js?v=20260708.05"></script>
-<script src="./js/utils.js?v=20260708.05"></script>
-<script src="./js/api.js?v=20260708.05"></script>
-<script src="./js/cache.js?v=20260708.05"></script>
-<script src="./js/maps.js?v=20260708.05"></script>
-<script src="./js/places.js?v=20260708.05"></script>
-<script src="./js/itinerary.js?v=20260708.05"></script>
-<script src="./js/hotels.js?v=20260708.05"></script>
-<script src="./js/expenses.js?v=20260708.05"></script>
-<script src="./app.js?v=20260708.05"></script>
-<script src="./search-zh-label.js?v=20260708.05"></script>
-<script src="./prep-checklist.js?v=20260708.05"></script>
+<script src="./config.js?v=20260708.06"></script>
+<script src="./cache-refresh.js?v=20260708.06"></script>
+<script src="./keyword-map.js?v=20260708.06"></script>
+<script src="./js/utils.js?v=20260708.06"></script>
+<script src="./js/api.js?v=20260708.06"></script>
+<script src="./js/cache.js?v=20260708.06"></script>
+<script src="./js/maps.js?v=20260708.06"></script>
+<script src="./js/places.js?v=20260708.06"></script>
+<script src="./js/itinerary.js?v=20260708.06"></script>
+<script src="./js/hotels.js?v=20260708.06"></script>
+<script src="./js/expenses.js?v=20260708.06"></script>
+<script src="./app.js?v=20260708.06"></script>
+<script src="./search-zh-label.js?v=20260708.06"></script>
+<script src="./prep-checklist.js?v=20260708.06"></script>
 
 </body>
 </html>

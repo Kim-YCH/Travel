@@ -161,6 +161,9 @@ createApp({
     };
 
     const translateSearchCache = new Map();
+    const zhLabelCache = new Map();
+    const FOREIGN_TITLE_RE = /[\u3131-\u318e\uac00-\ud7a3\u3040-\u30ff\u0e00-\u0e7f]/;
+    const CJK_TITLE_RE = /[\u4e00-\u9fff]/;
 
     const translatePlaceKeyword = async (keyword) => {
       const target = getTripTranslateTarget();
@@ -190,6 +193,33 @@ createApp({
       } catch (err) {
         console.warn('translatePlaceKeyword failed:', err);
         return { keyword: sourceText, translated: '', target };
+      }
+    };
+
+    const cleanLabelText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    const hasForeignTitle = (value) => FOREIGN_TITLE_RE.test(String(value || ''));
+    const hasChineseTitle = (value) => CJK_TITLE_RE.test(String(value || ''));
+
+    const translateTitleToChinese = async (title) => {
+      const key = cleanLabelText(title);
+      if (!key || !hasForeignTitle(key)) return '';
+      if (zhLabelCache.has(key)) return zhLabelCache.get(key);
+
+      try {
+        const res = await apiGet({
+          action: 'translate_place_keyword',
+          text: key,
+          target: 'zh-TW'
+        });
+        const translated = cleanLabelText(res?.translatedText || res?.text || res?.translation || '');
+        const out = translated && translated !== key && (hasChineseTitle(translated) || !hasForeignTitle(translated))
+          ? translated
+          : '';
+        zhLabelCache.set(key, out);
+        return out;
+      } catch (err) {
+        console.warn('translateTitleToChinese failed:', err);
+        return '';
       }
     };
 
@@ -1485,6 +1515,41 @@ createApp({
       image_updated_at: String(data.image_updated_at || '')
     });
 
+    const getProbeResultTitle = (item = {}) => cleanLabelText(
+      item.probe_title
+      || item.structured_formatting?.main_text
+      || item.name
+      || item.description
+      || ''
+    );
+
+    const getProbeDisplayName = (name, zhLabel = '') => {
+      const title = cleanLabelText(name);
+      const translated = cleanLabelText(zhLabel);
+      if (!translated || translated === title) return title;
+      if (hasChineseTitle(title) && !hasForeignTitle(title)) return title;
+      return `${title}（${translated}）`;
+    };
+
+    const enrichProbeResultsWithChinese = async (results, keywordSnapshot) => {
+      const list = Array.isArray(results) ? results : [];
+      const targetItems = list
+        .slice(0, 5)
+        .filter(item => hasForeignTitle(getProbeResultTitle(item)));
+
+      await Promise.all(targetItems.map(async (item) => {
+        const title = getProbeResultTitle(item);
+        const translated = await translateTitleToChinese(title);
+        if (!translated || probeQuery.value.trim() !== keywordSnapshot) return;
+        item.probe_title = title;
+        item.zh_label = translated;
+      }));
+
+      if (probeQuery.value.trim() === keywordSnapshot) {
+        probeResults.value = list.slice();
+      }
+    };
+
     const renderProbeMarker = () => {
       if (!mapInstance || !window.google || !probePlace.value) return;
 
@@ -1542,6 +1607,16 @@ createApp({
       if (infoWindow) infoWindow.close();
     };
 
+    const closeProbeSearchPanel = () => {
+      if (probeSearchTimeout) {
+        clearTimeout(probeSearchTimeout);
+        probeSearchTimeout = null;
+      }
+      probeSearchOpen.value = false;
+      probeResults.value = [];
+      probeIsSearching.value = false;
+    };
+
     const toggleProbeSearch = async () => {
       probeSearchOpen.value = !probeSearchOpen.value;
       if (probeSearchOpen.value) {
@@ -1559,8 +1634,9 @@ createApp({
       if (item.place_id) {
         const place = await getPlaceDetails(item.place_id, 'zh-TW');
         if (place?.geometry?.location) {
+          const rawName = place.name || fallbackName || getProbeResultTitle(item);
           probePlace.value = normalizeProbePlace({
-            name: place.name || fallbackName || item.structured_formatting?.main_text || item.description,
+            name: getProbeDisplayName(rawName, item.zh_label),
             address: place.formatted_address || item.address || item.description || '',
             lat: place.geometry.location.lat(),
             lng: place.geometry.location.lng(),
@@ -1572,8 +1648,9 @@ createApp({
       }
 
       if (item.lat != null && item.lng != null) {
+        const rawName = getProbeResultTitle(item) || fallbackName;
         probePlace.value = normalizeProbePlace({
-          name: item.structured_formatting?.main_text || item.name || fallbackName || item.description,
+          name: getProbeDisplayName(rawName, item.zh_label),
           address: item.address || item.description || '',
           lat: item.lat,
           lng: item.lng,
@@ -1655,7 +1732,12 @@ createApp({
             if (bounds) opts.bounds = bounds;
           }
           const out = await searchPlacesWithTranslation(q, opts);
-          probeResults.value = out.predictions || [];
+          const results = (out.predictions || []).map(item => ({
+            ...item,
+            probe_title: getProbeResultTitle(item)
+          }));
+          probeResults.value = results;
+          enrichProbeResultsWithChinese(results, q).catch(err => console.warn('probe zh labels failed:', err));
         } catch (err) {
           console.error(err);
           probeResults.value = [];
@@ -1671,7 +1753,7 @@ createApp({
         clearTimeout(probeSearchTimeout);
         probeSearchTimeout = null;
       }
-      probeQuery.value = item.structured_formatting?.main_text || item.name || item.description || probeQuery.value;
+      probeQuery.value = getProbeDisplayName(getProbeResultTitle(item), item.zh_label) || probeQuery.value;
       probeResults.value = [];
       probeIsSearching.value = true;
 
@@ -1708,7 +1790,7 @@ createApp({
           probeResults.value = [];
           const ok = await setProbePlaceFromDetails(first, q);
           if (ok) {
-            probeQuery.value = first.structured_formatting?.main_text || first.name || first.description || q;
+            probeQuery.value = getProbeDisplayName(getProbeResultTitle(first), first.zh_label) || q;
             focusProbePlace();
             return;
           }
@@ -4523,7 +4605,7 @@ createApp({
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
-      toggleProbeSearch, clearProbeSearch, searchProbePlacesInput, selectProbePlace, searchProbeByQuery,
+      toggleProbeSearch, clearProbeSearch, closeProbeSearchPanel, searchProbePlacesInput, selectProbePlace, searchProbeByQuery,
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
       hotelDayRangeLabel, openHotelMap,
