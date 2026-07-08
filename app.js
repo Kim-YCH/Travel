@@ -16,6 +16,8 @@ createApp({
     const newTripCity = ref('');
 
     const currentTab = ref('itinerary');
+    const dayViewMode = ref('list');
+    const isDayMapView = () => currentTab.value === 'itinerary' && dayViewMode.value === 'map';
     const isLoading = ref(false);
     const syncStatus = ref('synced');
     const syncMessage = ref('');
@@ -1454,7 +1456,7 @@ createApp({
       clearMapSearchMarker();
       mapLatestResult.value = null;
       if (infoWindow) infoWindow.close();
-      if (currentTab.value === 'map') updateMapMarkers();
+      if (isDayMapView()) updateMapMarkers();
     };
 
     const clearMapRouteLine = () => {
@@ -1574,6 +1576,9 @@ createApp({
     };
 
     const getMapDisplayDay = () => {
+      if (isDayMapView()) {
+        return currentDay.value || 1;
+      }
       const raw = String(mapDisplayFilter.value || 'all');
       if (!raw.startsWith('day-')) return null;
       const day = parseInt(raw.replace('day-', ''), 10);
@@ -1856,6 +1861,26 @@ createApp({
 
     const fitBoundsToTrip = () => {
       updateMapMarkers();
+    };
+
+    const switchDayViewMode = async (mode) => {
+      dayViewMode.value = mode === 'map' ? 'map' : 'list';
+      await nextTick();
+
+      if (dayViewMode.value === 'map') {
+        mapDisplayFilter.value = `day-${currentDay.value || 1}`;
+        await loadGoogleMaps();
+        initGoogleMap();
+
+        setTimeout(() => {
+          if (mapInstance && window.google) {
+            google.maps.event.trigger(mapInstance, 'resize');
+            updateMapMarkers();
+          }
+        }, 100);
+      } else {
+        scheduleSortableInit();
+      }
     };
 
     const addMapSearchResultToItinerary = async () => {
@@ -2157,7 +2182,7 @@ createApp({
       await nextTick();
       scheduleSortableInit();
 
-      if (currentTab.value === 'map') {
+      if (isDayMapView()) {
         await loadGoogleMaps();
         initGoogleMap();
       } else {
@@ -2234,7 +2259,7 @@ createApp({
         await nextTick();
         scheduleSortableInit();
 
-        if (currentTab.value === 'map') {
+        if (isDayMapView()) {
           await loadGoogleMaps();
           initGoogleMap();
           setTimeout(() => {
@@ -2546,7 +2571,7 @@ createApp({
         destroySortable();
         return;
       }
-      if (currentTab.value !== 'itinerary' || !currentTrip.value) {
+      if (currentTab.value !== 'itinerary' || dayViewMode.value !== 'list' || !currentTrip.value) {
         destroySortable();
         return;
       }
@@ -2683,7 +2708,7 @@ createApp({
       const selectedPlaceSnapshot = selectedPlaceData.value ? { ...selectedPlaceData.value } : null;
       const selectedLatSnapshot = selectedLat.value;
       const selectedLngSnapshot = selectedLng.value;
-      const noteSnapshot = newNote.value || '';
+      const noteSnapshot = '';
       const timeSnapshot = newTime.value || '';
       const typeSnapshot = normalizeItineraryType(newPlaceType.value);
 
@@ -4096,19 +4121,10 @@ createApp({
 
     const switchTab = async (tab) => {
       currentTab.value = tab;
-      await nextTick();
-
-      if (tab === 'map') {
-        await loadGoogleMaps();
-        initGoogleMap();
-
-        setTimeout(() => {
-          if (mapInstance && window.google) {
-            google.maps.event.trigger(mapInstance, 'resize');
-            updateMapMarkers();
-          }
-        }, 100);
+      if (tab === 'itinerary') {
+        dayViewMode.value = 'list';
       }
+      await nextTick();
 
       scheduleSortableInit();
     };
@@ -4134,18 +4150,25 @@ createApp({
         mapDisplayFilter.value = `day-${currentDay.value || 1}`;
       }
       scheduleSortableInit();
-      if (currentTab.value === 'map') updateMapMarkers();
+      if (isDayMapView()) updateMapMarkers();
       if (currentTab.value === 'itinerary') scheduleMissingPlacePhotoHydration(250);
       scheduleTripWeatherLoad(250);
     });
 
     watch(currentTab, () => {
       scheduleSortableInit();
-      if (currentTab.value === 'map') {
+      if (isDayMapView()) {
         setTimeout(() => updateMapMarkers(), 80);
       } else if (currentTab.value === 'itinerary') {
         scheduleMissingPlacePhotoHydration(250);
         scheduleTripWeatherLoad(250);
+      }
+    });
+
+    watch(dayViewMode, () => {
+      scheduleSortableInit();
+      if (isDayMapView()) {
+        setTimeout(() => updateMapMarkers(), 80);
       }
     });
 
@@ -4195,7 +4218,7 @@ createApp({
     return {
       APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
+      currentTab, dayViewMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
       isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
       isAddingAlternative, isDeletingAlternative, isAddingAlternativeToItinerary,
       currentDay, totalDays,
@@ -4211,7 +4234,7 @@ createApp({
 
       createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
-      switchTab, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
+      switchTab, switchDayViewMode, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
       tripCountdownDays, tripCountdownLabel,
 
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,

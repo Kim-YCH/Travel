@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260708.02 -->
+<!-- version: 20260708.03 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.02" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.02" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.02" />
-  <link rel="manifest" href="./site.webmanifest?v=20260708.02" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.03" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.03" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.03" />
+  <link rel="manifest" href="./site.webmanifest?v=20260708.03" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260708.02" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.02" />
+  <link rel="stylesheet" href="./style.css?v=20260708.03" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.03" />
 </head>
 <body>
 
@@ -123,11 +123,15 @@
     </header>
 
     <main
-      :class="currentTab === 'map' ? 'content-fixed' : 'content-scroll'"
       class="bg-gray-50"
+      :class="currentTab === 'itinerary' && dayViewMode === 'map' ? 'content-fixed' : 'content-scroll'"
     >
       <!-- Itinerary -->
-      <div v-show="currentTab === 'itinerary'" class="p-4 space-y-4 pb-24 tab-panel">
+      <div
+        v-show="currentTab === 'itinerary'"
+        class="p-4 space-y-4 pb-24 tab-panel"
+        :class="dayViewMode === 'map' ? 'itinerary-map-mode' : ''"
+      >
         <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0 relative z-50">
           <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
             <button
@@ -151,7 +155,32 @@
           >+</button>
         </div>
 
-        <div class="card itinerary-search-card relative space-y-2 flex-shrink-0">
+        <div class="day-view-switch flex gap-2 flex-shrink-0">
+          <button
+            @click="switchDayViewMode('list')"
+            class="map-mode-btn flex-1 h-[42px]"
+            :class="dayViewMode === 'list' ? 'map-mode-btn-active' : ''"
+          >行程</button>
+          <button
+            @click="switchDayViewMode('map')"
+            class="map-mode-btn flex-1 h-[42px]"
+            :class="dayViewMode === 'map' ? 'map-mode-btn-active' : ''"
+          >地圖</button>
+        </div>
+
+        <div v-show="dayViewMode === 'map'" class="itinerary-map-panel w-full flex flex-col flex-1 min-h-0">
+          <div class="day-map-container w-full h-full min-h-0 relative">
+            <div id="map" class="shadow-inner"></div>
+            <div
+              v-if="!isMapReady"
+              class="text-center text-gray-400 text-sm absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none"
+            >
+              地圖載入中...
+            </div>
+          </div>
+        </div>
+
+        <div v-show="dayViewMode === 'list'" class="card itinerary-search-card relative space-y-2 flex-shrink-0">
           <div class="flex gap-2 relative">
             <input
               v-model="newPlace"
@@ -205,12 +234,9 @@
             </select>
           </div>
 
-          <div class="itinerary-note-row">
-            <textarea v-model="newNote" rows="2" placeholder="備註..." class="itinerary-note-input min-h-[54px] resize-none"></textarea>
-          </div>
         </div>
 
-        <div class="itinerary-day-stack pb-20" ref="itineraryListEl">
+        <div v-show="dayViewMode === 'list'" class="itinerary-day-stack pb-20" ref="itineraryListEl">
           <div
             v-for="place in filteredItinerary"
             :key="place.id"
@@ -329,7 +355,7 @@
         </div>
 
         <!-- Alternatives -->
-        <div class="card border border-amber-100 space-y-3 flex-shrink-0">
+        <div v-show="dayViewMode === 'list'" class="card border border-amber-100 space-y-3 flex-shrink-0">
           <div>
             <h3 class="font-bold text-gray-800">📌 Day {{ currentDay }} 備案</h3>
       
@@ -399,97 +425,6 @@
             <div v-if="filteredAlternatives.length===0" class="text-center text-gray-400 py-5 border border-dashed border-amber-200 rounded-xl bg-amber-50/40">
               行程拖曳到這裡，即可設為備案
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Map -->
-      <div v-show="currentTab === 'map'" class="content-fixed p-4 w-full flex flex-col min-h-0">
-        <div class="flex flex-col gap-2 flex-shrink-0 relative z-40">
-          <div class="relative">
-            <div class="flex shadow-lg rounded-xl overflow-hidden border border-gray-200 bg-white">
-              <input
-                v-model="mapSearchQuery"
-                @input="searchMapPlacesInput"
-                @focus="searchMapPlacesInput"
-                @keyup.enter="searchCityAndJump"
-                type="text"
-                :placeholder="'搜尋 ' + (currentTrip.city || '') + ' 地點...'"
-                class="flex-1 p-3 border-0 outline-none h-[54px] text-gray-900 bg-white"
-                style="border-radius: 0;"
-              >
-              <button @click="searchCityAndJump" class="bg-blue-600 text-white px-4 font-bold h-[54px] shrink-0">前往</button>
-            </div>
-
-            <div v-if="mapSearchQuery.length > 0 && (mapSearchResults.length > 0 || mapIsSearching || mapIsCoordinateMode)" class="suggestions-list">
-              <div v-if="mapIsSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
-              <div v-if="mapTranslatedSearchHint" class="px-3 py-2 text-xs text-blue-600 bg-blue-50 border-b border-blue-100">🌐 {{ mapTranslatedSearchHint }}</div>
-
-              <div
-                v-if="mapIsCoordinateMode"
-                @click="useMapCoordinateInput"
-                class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200"
-              >
-                <span class="text-xl">📍</span>
-                <div>
-                  <div class="font-bold text-green-700 text-sm">{{ mapResolvedCoordName || '座標模式' }}</div>
-                  <div class="text-xs text-green-600">點擊後直接標在地圖上</div>
-                </div>
-              </div>
-
-              <div
-                v-for="item in mapSearchResults"
-                :key="'map-' + item.place_id"
-                @click="selectMapPlace(item)"
-                class="suggestion-item hover:bg-blue-50"
-              >
-                <span class="text-xl">🗺️</span>
-                <div class="overflow-hidden">
-                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
-                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <div class="flex gap-2 items-center">
-            <select v-model="mapDisplayFilter" @change="applyMapDisplayFilter" class="flex-1 h-[46px] text-sm font-bold">
-              <option value="all">全部</option>
-              <option v-for="d in totalDays" :key="'map-filter-' + d" :value="'day-' + d">Day {{ d }}</option>
-            </select>
-            <button @click="fitBoundsToTrip" class="map-mode-btn px-4 shrink-0">顯示行程</button>
-          </div>
-
-          <div v-if="mapLatestResult && mapSearchQuery.trim().length > 0" class="card p-3 space-y-3">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="font-bold text-gray-800 break-words">{{ mapLatestResult.name || '搜尋結果' }}</div>
-                <div class="text-xs text-gray-500 mt-1 break-words">{{ mapLatestResult.address || '已標在地圖上' }}</div>
-              </div>
-              <span class="text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-100 shrink-0">搜尋結果</span>
-            </div>
-
-            <div class="flex gap-2">
-              <select v-model.number="mapAddDay" class="flex-1 h-[46px]">
-                <option v-for="d in totalDays" :key="'map-add-day-' + d" :value="d">加入 Day {{ d }}</option>
-              </select>
-              <button
-                @click="addMapSearchResultToItinerary"
-                class="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                :disabled="isAddingMapPlace"
-              >加入行程</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex-1 min-h-0 mt-2 relative">
-          <div id="map" class="shadow-inner"></div>
-          <div
-            v-if="!isMapReady"
-            class="text-center text-gray-400 text-sm absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none"
-          >
-            正在載入地圖...
           </div>
         </div>
       </div>
@@ -612,6 +547,11 @@
         </div>
       </div>
 
+      <!-- Prep -->
+      <div v-show="currentTab === 'prep'" class="p-3 space-y-3 pb-24 tab-panel prep-page">
+        <div id="prep-checklist-root"></div>
+      </div>
+
       <!-- Settings -->
       <div v-show="currentTab === 'settings'" class="p-3 space-y-3 pb-24 tab-panel settings-page">
         <button
@@ -726,11 +666,11 @@
       <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='itinerary'?'text-blue-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5">📍</span><span class="text-[10px] font-bold">行程</span>
       </button>
-      <button @click="switchTab('map')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='map'?'text-purple-600 scale-110':'text-gray-400'">
-        <span class="text-2xl mb-0.5">🗺️</span><span class="text-[10px] font-bold">地圖</span>
-      </button>
       <button @click="switchTab('money')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='money'?'text-green-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5">💰</span><span class="text-[10px] font-bold">分帳</span>
+      </button>
+      <button @click="switchTab('prep')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='prep'?'text-blue-600 scale-110':'text-gray-400'">
+        <span class="text-2xl mb-0.5">🎒</span><span class="text-[10px] font-bold">準備</span>
       </button>
       <button @click="switchTab('settings')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='settings'?'text-gray-800 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5">⚙️</span><span class="text-[10px] font-bold">設定</span>
@@ -920,20 +860,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260708.02"></script>
-<script src="./cache-refresh.js?v=20260708.02"></script>
-<script src="./keyword-map.js?v=20260708.02"></script>
-<script src="./js/utils.js?v=20260708.02"></script>
-<script src="./js/api.js?v=20260708.02"></script>
-<script src="./js/cache.js?v=20260708.02"></script>
-<script src="./js/maps.js?v=20260708.02"></script>
-<script src="./js/places.js?v=20260708.02"></script>
-<script src="./js/itinerary.js?v=20260708.02"></script>
-<script src="./js/hotels.js?v=20260708.02"></script>
-<script src="./js/expenses.js?v=20260708.02"></script>
-<script src="./app.js?v=20260708.02"></script>
-<script src="./search-zh-label.js?v=20260708.02"></script>
-<script src="./prep-checklist.js?v=20260708.02"></script>
+<script src="./config.js?v=20260708.03"></script>
+<script src="./cache-refresh.js?v=20260708.03"></script>
+<script src="./keyword-map.js?v=20260708.03"></script>
+<script src="./js/utils.js?v=20260708.03"></script>
+<script src="./js/api.js?v=20260708.03"></script>
+<script src="./js/cache.js?v=20260708.03"></script>
+<script src="./js/maps.js?v=20260708.03"></script>
+<script src="./js/places.js?v=20260708.03"></script>
+<script src="./js/itinerary.js?v=20260708.03"></script>
+<script src="./js/hotels.js?v=20260708.03"></script>
+<script src="./js/expenses.js?v=20260708.03"></script>
+<script src="./app.js?v=20260708.03"></script>
+<script src="./search-zh-label.js?v=20260708.03"></script>
+<script src="./prep-checklist.js?v=20260708.03"></script>
 
 </body>
 </html>
+
+
+

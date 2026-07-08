@@ -225,6 +225,38 @@ html, body {
       border-radius: 14px;
     }
 
+    .itinerary-map-mode {
+      flex: 1 1 auto;
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 1rem !important;
+    }
+
+    .itinerary-map-panel {
+      flex: 1 1 auto;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .itinerary-map-panel .day-map-container,
+    .itinerary-map-panel #map {
+      min-height: 0;
+      height: 100%;
+    }
+
+    .itinerary-map-panel #map {
+      border-radius: 0 !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .prep-page #prep-checklist-root {
+      display: block;
+    }
+
     .suggestions-list {
       position: absolute;
       top: 100%;
@@ -945,6 +977,27 @@ html, body {
     .bottom-nav button span:last-child {
       line-height: 1.1;
     }
+
+/* Itinerary map mode keeps the Day controls, then lets the map fill the rest. */
+.tab-panel.itinerary-map-mode {
+  padding-bottom: 8px !important;
+  box-sizing: border-box;
+}
+
+.content-fixed > .itinerary-map-mode {
+  height: 100%;
+  min-height: 0;
+}
+
+.itinerary-map-mode .itinerary-map-panel {
+  min-height: 0 !important;
+}
+
+.itinerary-map-mode .day-map-container,
+.itinerary-map-mode #map {
+  min-height: 0 !important;
+  height: 100% !important;
+}
 
 @media (max-width: 430px) {
   .itinerary-timeline-row {

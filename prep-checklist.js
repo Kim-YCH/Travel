@@ -12,6 +12,7 @@
   let selectedOwner = '';
   let state = null;
   let root = null;
+  let embeddedMode = false;
   let panelOpen = false;
   let isLoadingRemote = false;
   let pendingWrites = 0;
@@ -21,6 +22,7 @@
   let lastRemoteUpdatedAt = '';
   let lastAutoRefreshAt = 0;
   let lastMembersFingerprint = '';
+  const boundRoots = new WeakSet();
   const AUTO_REFRESH_MS = 60000;
   const AUTO_CHECK_MS = 30000;
 
@@ -569,6 +571,26 @@
     const ownerText = selectedOwner || '請選擇';
     const disabledClass = !isBrowserOnline() ? ' prep-disabled' : '';
 
+    if (embeddedMode) {
+      root.classList.toggle('prep-disabled', !isBrowserOnline());
+      root.innerHTML = `
+        <div class="prep-status-line">
+          <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `?湔 ${escapeHtml(formatTime(lastSyncedAt))}` : `? ${VERSION}`) : ''}</span>
+          <span class="prep-status-right">
+            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0) ? 'disabled' : ''}>???湔鞈?</button>
+            <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
+          </span>
+        </div>
+        <div class="prep-owner-box">
+          <div class="prep-owner-row">
+            <label for="prep-owner-select">?亦?撠情</label>
+            <select id="prep-owner-select" class="prep-owner-select">${renderOwnerOptions(selectedOwner, true)}</select>
+          </div>
+        </div>
+        <div class="prep-personal-area">${renderSelectedOwnerBody()}</div>`;
+      return;
+    }
+
     root.innerHTML = `
       <button class="prep-fab" type="button" aria-label="開啟準備清單">🎒 準備清單</button>
       <div class="prep-overlay" role="dialog" aria-modal="true">
@@ -601,6 +623,18 @@
           </div>
         </div>
       </div>`;
+
+    if (embeddedMode) {
+      const body = root.querySelector('.prep-body');
+      if (body) {
+        const fragment = document.createDocumentFragment();
+        while (body.firstChild) fragment.appendChild(body.firstChild);
+        root.classList.toggle('prep-disabled', !isBrowserOnline());
+        root.innerHTML = '';
+        root.appendChild(fragment);
+      }
+      return;
+    }
 
     const fab = root.querySelector('.prep-fab');
     const overlay = root.querySelector('.prep-overlay');
@@ -1000,6 +1034,9 @@
 
 
   function bindRootEvents() {
+    if (!root || boundRoots.has(root)) return;
+    boundRoots.add(root);
+
     root.addEventListener('click', event => {
       const target = event.target;
       if (target.closest('.prep-fab')) { panelOpen = true; render(); return; }
@@ -1100,6 +1137,14 @@
   }
 
   function ensureLoadedForCurrentTrip() {
+    const embeddedRoot = document.querySelector('.prep-page #prep-checklist-root');
+    if (embeddedRoot && embeddedRoot !== root) {
+      root = embeddedRoot;
+      embeddedMode = true;
+      bindRootEvents();
+      render();
+    }
+
     const storedOwner = getStoredOwner();
     const key = getStorageKey(selectedOwner);
     const memberFp = membersFingerprint();
@@ -1123,9 +1168,14 @@
 
   function init() {
     addStyle();
-    root = document.createElement('div');
-    root.id = 'prep-checklist-root';
-    document.body.appendChild(root);
+    root = document.getElementById('prep-checklist-root');
+    embeddedMode = true;
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'prep-checklist-pending-root';
+      root.style.display = 'none';
+      document.body.appendChild(root);
+    }
     bindRootEvents();
     selectedOwner = getStoredOwner();
     lastMembersFingerprint = membersFingerprint();
