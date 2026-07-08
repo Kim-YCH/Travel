@@ -70,6 +70,11 @@ createApp({
     const mapAddDay = ref(1);
     const mapDisplayFilter = ref('all');
     const isMapReady = ref(false);
+    const probeSearchOpen = ref(false);
+    const probeQuery = ref('');
+    const probeResults = ref([]);
+    const probeIsSearching = ref(false);
+    const probePlace = ref(null);
     const tripWeather = ref({ status: 'idle' });
     const weatherCache = new Map();
     const weatherLocationCache = new Map();
@@ -81,6 +86,8 @@ createApp({
     let infoWindow = null;
     let autocompleteService = null;
     let mapSearchTimeout = null;
+    let probeMarker = null;
+    let probeSearchTimeout = null;
     let weatherLoadTimer = null;
 
     const newHotel = ref({ start_day: 1, end_day: 1 });
@@ -1459,6 +1466,268 @@ createApp({
       if (isDayMapView()) updateMapMarkers();
     };
 
+    const clearProbeMarker = () => {
+      if (probeMarker) {
+        probeMarker.setMap(null);
+        probeMarker = null;
+      }
+    };
+
+    const normalizeProbePlace = (data = {}) => ({
+      name: String(data.name || data.description || data.address || '探點').trim(),
+      address: String(data.address || data.formatted_address || data.description || '').trim(),
+      lat: data.lat != null ? Number(data.lat) : null,
+      lng: data.lng != null ? Number(data.lng) : null,
+      place_id: String(data.place_id || ''),
+      image_url: String(data.image_url || ''),
+      image_source: String(data.image_source || ''),
+      photo_attributions: String(data.photo_attributions || ''),
+      image_updated_at: String(data.image_updated_at || '')
+    });
+
+    const renderProbeMarker = () => {
+      if (!mapInstance || !window.google || !probePlace.value) return;
+
+      const place = probePlace.value;
+      if (place.lat == null || place.lng == null) return;
+
+      clearProbeMarker();
+
+      probeMarker = new google.maps.Marker({
+        position: { lat: Number(place.lat), lng: Number(place.lng) },
+        map: mapInstance,
+        title: place.name || '探點',
+        label: { text: '🔎', fontSize: '15px' },
+        icon: makeMapPinIcon('#334155'),
+        zIndex: 1200
+      });
+
+      probeMarker.addListener('click', () => {
+        if (!infoWindow) return;
+        const link = getExternalMapLink(place);
+        infoWindow.setContent(
+          `<div style="padding:8px;color:#111;max-width:240px;">
+            <div style="font-weight:700;margin-bottom:4px;">🔎 ${escapeHtml(place.name || '探點')}</div>
+            <div style="font-size:12px;color:#555;margin-bottom:8px;">${escapeHtml(place.address || '')}</div>
+            <a href="${link}" target="_blank" rel="noopener" style="color:#2563eb;font-weight:700;">Google Maps</a>
+          </div>`
+        );
+        infoWindow.open(mapInstance, probeMarker);
+      });
+    };
+
+    const focusProbePlace = () => {
+      if (!mapInstance || !window.google || !probePlace.value) return;
+      const lat = Number(probePlace.value.lat);
+      const lng = Number(probePlace.value.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      renderProbeMarker();
+      mapInstance.panTo({ lat, lng });
+      if ((mapInstance.getZoom() || 0) < 15) {
+        mapInstance.setZoom(15);
+      }
+    };
+
+    const clearProbeSearch = () => {
+      if (probeSearchTimeout) {
+        clearTimeout(probeSearchTimeout);
+        probeSearchTimeout = null;
+      }
+      probeQuery.value = '';
+      probeResults.value = [];
+      probeIsSearching.value = false;
+      probePlace.value = null;
+      clearProbeMarker();
+      if (infoWindow) infoWindow.close();
+    };
+
+    const toggleProbeSearch = async () => {
+      probeSearchOpen.value = !probeSearchOpen.value;
+      if (probeSearchOpen.value) {
+        await nextTick();
+        if (!mapInstance && isDayMapView()) {
+          await loadGoogleMaps();
+          initGoogleMap();
+        }
+      }
+    };
+
+    const setProbePlaceFromDetails = async (item, fallbackName = '') => {
+      if (!item) return false;
+
+      if (item.place_id) {
+        const place = await getPlaceDetails(item.place_id, 'zh-TW');
+        if (place?.geometry?.location) {
+          probePlace.value = normalizeProbePlace({
+            name: place.name || fallbackName || item.structured_formatting?.main_text || item.description,
+            address: place.formatted_address || item.address || item.description || '',
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+            place_id: item.place_id,
+            ...extractPlacePhotoInfo(place)
+          });
+          return true;
+        }
+      }
+
+      if (item.lat != null && item.lng != null) {
+        probePlace.value = normalizeProbePlace({
+          name: item.structured_formatting?.main_text || item.name || fallbackName || item.description,
+          address: item.address || item.description || '',
+          lat: item.lat,
+          lng: item.lng,
+          place_id: item.place_id || ''
+        });
+        return true;
+      }
+
+      return false;
+    };
+
+    const geocodeProbeQuery = async (q) => {
+      if (!window.google || !window.google.maps) {
+        await loadGoogleMaps();
+      }
+      if (!mapInstance) initGoogleMap();
+      if (!window.google || !mapInstance) return false;
+
+      const city = String(currentTrip.value?.city || '').trim();
+      const query = city && !q.includes(city) ? `${q} ${city}` : q;
+      const geocoder = new google.maps.Geocoder();
+      const geocoded = await new Promise((resolve) => {
+        geocoder.geocode({ address: query }, (results, status) => {
+          resolve(status === 'OK' && results?.[0] ? results[0] : null);
+        });
+      });
+
+      if (!geocoded?.geometry?.location) return false;
+
+      let imageFields = buildFallbackImageFields();
+      if (geocoded.place_id) {
+        const place = await getPlaceDetails(geocoded.place_id, 'zh-TW');
+        imageFields = extractPlacePhotoInfo(place);
+      }
+
+      probePlace.value = normalizeProbePlace({
+        name: geocoded.address_components?.[0]?.long_name || q,
+        address: geocoded.formatted_address || query,
+        lat: geocoded.geometry.location.lat(),
+        lng: geocoded.geometry.location.lng(),
+        place_id: geocoded.place_id || '',
+        ...imageFields
+      });
+      return true;
+    };
+
+    const searchProbePlacesInput = async () => {
+      const q = probeQuery.value.trim();
+
+      if (probeSearchTimeout) clearTimeout(probeSearchTimeout);
+
+      if (!q) {
+        clearProbeSearch();
+        probeSearchOpen.value = true;
+        return;
+      }
+
+      const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
+      if (coordRegex.test(q)) {
+        const parts = q.split(',');
+        probeResults.value = [];
+        probeIsSearching.value = false;
+        probePlace.value = normalizeProbePlace({
+          name: '座標探點',
+          address: `${parts[0].trim()}, ${parts[1].trim()}`,
+          lat: parseFloat(parts[0]),
+          lng: parseFloat(parts[1])
+        });
+        focusProbePlace();
+        return;
+      }
+
+      probeIsSearching.value = true;
+      probeSearchTimeout = setTimeout(async () => {
+        try {
+          const opts = {};
+          if (mapInstance && typeof mapInstance.getBounds === 'function') {
+            const bounds = mapInstance.getBounds();
+            if (bounds) opts.bounds = bounds;
+          }
+          const out = await searchPlacesWithTranslation(q, opts);
+          probeResults.value = out.predictions || [];
+        } catch (err) {
+          console.error(err);
+          probeResults.value = [];
+        } finally {
+          probeIsSearching.value = false;
+        }
+      }, 350);
+    };
+
+    const selectProbePlace = async (item) => {
+      if (!item) return;
+      if (probeSearchTimeout) {
+        clearTimeout(probeSearchTimeout);
+        probeSearchTimeout = null;
+      }
+      probeQuery.value = item.structured_formatting?.main_text || item.name || item.description || probeQuery.value;
+      probeResults.value = [];
+      probeIsSearching.value = true;
+
+      try {
+        const ok = await setProbePlaceFromDetails(item, probeQuery.value);
+        if (ok) {
+          focusProbePlace();
+        } else {
+          await searchProbeByQuery();
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        probeIsSearching.value = false;
+      }
+    };
+
+    const searchProbeByQuery = async () => {
+      const q = probeQuery.value.trim();
+      if (probeSearchTimeout) {
+        clearTimeout(probeSearchTimeout);
+        probeSearchTimeout = null;
+      }
+      if (!q) {
+        clearProbeSearch();
+        probeSearchOpen.value = true;
+        return;
+      }
+
+      probeIsSearching.value = true;
+      try {
+        if (probeResults.value.length) {
+          const first = probeResults.value[0];
+          probeResults.value = [];
+          const ok = await setProbePlaceFromDetails(first, q);
+          if (ok) {
+            probeQuery.value = first.structured_formatting?.main_text || first.name || first.description || q;
+            focusProbePlace();
+            return;
+          }
+        }
+
+        const ok = await geocodeProbeQuery(q);
+        if (ok) {
+          probeResults.value = [];
+          focusProbePlace();
+        } else {
+          alert('找不到這個探點');
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        probeIsSearching.value = false;
+      }
+    };
+
     const clearMapRouteLine = () => {
       if (mapRouteLine) {
         mapRouteLine.setMap(null);
@@ -1857,6 +2126,8 @@ createApp({
           }
         });
       }
+
+      renderProbeMarker();
     };
 
     const fitBoundsToTrip = () => {
@@ -2172,6 +2443,8 @@ createApp({
       mapAddDay.value = 1;
       mapDisplayFilter.value = 'all';
       clearMapSearchResult();
+      clearProbeSearch();
+      probeSearchOpen.value = false;
 
       currentView.value = 'app';
 
@@ -2207,6 +2480,8 @@ createApp({
       mapSearchQuery.value = '';
       mapDisplayFilter.value = 'all';
       clearMapSearchResult();
+      clearProbeSearch();
+      probeSearchOpen.value = false;
       fetchTrips();
     };
 
@@ -4227,6 +4502,7 @@ createApp({
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
       mapSearchQuery, mapSearchResults, mapTranslatedSearchHint, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
       mapLatestResult, mapAddDay, mapDisplayFilter,
+      probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
       tripWeather,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
@@ -4247,6 +4523,7 @@ createApp({
 
       searchMapPlacesInput, useMapCoordinateInput, selectMapPlace,
       searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
+      toggleProbeSearch, clearProbeSearch, searchProbePlacesInput, selectProbePlace, searchProbeByQuery,
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
       hotelDayRangeLabel, openHotelMap,

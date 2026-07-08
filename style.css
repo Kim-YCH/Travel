@@ -253,6 +253,131 @@ html, body {
       box-shadow: none !important;
     }
 
+    .map-probe-toggle {
+      position: absolute;
+      right: 14px;
+      bottom: 18px;
+      z-index: 20;
+      width: 44px;
+      height: 44px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    }
+
+    .map-probe-toggle:active {
+      transform: scale(0.95);
+    }
+
+    .map-probe-toggle.is-active {
+      border-color: #2563eb;
+      box-shadow: 0 14px 30px rgba(37, 99, 235, 0.2);
+    }
+
+    .map-probe-panel {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 16px;
+      z-index: 21;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .map-probe-search,
+    .map-probe-results,
+    .map-probe-status,
+    .map-probe-card {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(203, 213, 225, 0.88);
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+      backdrop-filter: blur(10px);
+    }
+
+    .map-probe-search {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr) 34px;
+      align-items: center;
+      gap: 6px;
+      min-height: 48px;
+      border-radius: 16px;
+      padding: 6px 8px 6px 12px;
+    }
+
+    .map-probe-search input {
+      width: 100%;
+      min-width: 0;
+      height: 36px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .map-probe-clear-btn {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 22px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .map-probe-results {
+      max-height: 190px;
+      overflow-y: auto;
+      border-radius: 16px;
+      padding: 6px;
+    }
+
+    .map-probe-result-item {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      padding: 9px 10px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      color: #0f172a;
+    }
+
+    .map-probe-result-item:hover,
+    .map-probe-result-item:focus {
+      background: #eff6ff;
+    }
+
+    .map-probe-result-item span:last-child,
+    .map-probe-status,
+    .map-probe-card div:last-child {
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .map-probe-status,
+    .map-probe-card {
+      border-radius: 14px;
+      padding: 9px 12px;
+    }
+
     .prep-page #prep-checklist-root {
       display: block;
     }

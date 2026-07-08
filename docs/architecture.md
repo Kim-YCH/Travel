@@ -7,6 +7,7 @@ This project intentionally remains a static GitHub Pages app:
 - Apps Script handles CRUD, translation, weather, and Google Places-backed enrichment.
 - Google Sheets remains the lightweight database.
 - `app.js` is still the primary Vue application while low-risk helpers are extracted gradually.
+- `apps-script-backend.gs` is the Apps Script backend source kept in this repository for reference and redeploys.
 
 ## Current Split
 
