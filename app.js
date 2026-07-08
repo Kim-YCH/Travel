@@ -576,6 +576,7 @@ createApp({
         }
         if (currentTrip.value) {
           scheduleMissingPlacePhotoHydration(100);
+          refreshItineraryImageAfterError(item, img);
         }
       }
 
@@ -1252,6 +1253,37 @@ createApp({
       }
 
       return buildFallbackImageFields();
+    };
+
+    const refreshItineraryImageAfterError = async (item = {}, img = null) => {
+      if (!item?.id || !currentTrip.value || img?.dataset.photoRepairing === '1') return;
+      if (img) img.dataset.photoRepairing = '1';
+
+      try {
+        const result = await resolveItineraryPhotoFields(item);
+        const { place, ...imageFields } = result;
+        if (!imageFields.image_url) return;
+
+        Object.assign(item, imageFields);
+        if (place?.place_id) item.place_id = place.place_id;
+        if (place?.formatted_address && !String(item.address || '').trim()) item.address = place.formatted_address;
+        if (place?.geometry?.location) {
+          item.lat = place.geometry.location.lat();
+          item.lng = place.geometry.location.lng();
+        }
+
+        scheduleTripCacheSave();
+        await persistItineraryImageFields(item);
+
+        if (img && document.body.contains(img)) {
+          img.dataset.fallbackStage = '';
+          img.src = imageFields.image_url;
+        }
+      } catch (err) {
+        console.warn('refreshItineraryImageAfterError failed:', err);
+      } finally {
+        if (img) img.dataset.photoRepairing = '';
+      }
     };
 
     const openMapWindow = (url) => {
