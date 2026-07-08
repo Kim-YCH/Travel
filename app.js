@@ -47,13 +47,13 @@ createApp({
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
     const itineraryTypes = ['景點', '購物', '活動', '美食', '其他'];
-    const TravelItinerary = window.TravelItinerary?.create
-      ? window.TravelItinerary.create({ itineraryTypes })
-      : {};
-    const TravelHotels = window.TravelHotels || {};
-    const TravelExpenses = window.TravelExpenses || {};
-    const TravelMaps = window.TravelMaps || {};
-    const TravelPlaces = window.TravelPlaces || {};
+    // Keep feature modules loaded, but use the proven in-file logic until
+    // the extracted helpers reach parity with production image behavior.
+    const TravelItinerary = {};
+    const TravelHotels = {};
+    const TravelExpenses = {};
+    const TravelMaps = {};
+    const TravelPlaces = {};
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
