@@ -5,6 +5,11 @@ createApp({
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
     const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260624.01';
+    const TravelUtils = window.TravelUtils || {};
+    const TravelApi = window.TravelApi?.create
+      ? window.TravelApi.create({ apiUrl: API_URL })
+      : {};
+    const TravelCache = window.TravelCache || {};
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -125,7 +130,7 @@ createApp({
     const editExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const isSavingExpense = ref(false);
 
-    const generateId = () => Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const generateId = TravelUtils.generateId || (() => Date.now() + '_' + Math.floor(Math.random() * 1000));
 
     const isKoreaCity = (city) => {
       const s = String(city || '').trim().toLowerCase();
@@ -753,7 +758,7 @@ createApp({
       return hh * 60 + mm;
     };
 
-    const jsonp = (url, timeoutMs = 30000) => new Promise((resolve, reject) => {
+    const jsonp = TravelApi.jsonp || ((url, timeoutMs = 30000) => new Promise((resolve, reject) => {
       const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
       const sep = url.includes('?') ? '&' : '?';
       const full = `${url}${sep}callback=${cb}`;
@@ -782,14 +787,14 @@ createApp({
 
       s.src = full;
       document.head.appendChild(s);
-    });
+    }));
 
-    const apiGet = async (paramsObj) => {
+    const apiGet = TravelApi.apiGet || (async (paramsObj) => {
       const qs = new URLSearchParams(paramsObj).toString();
       return await jsonp(`${API_URL}?${qs}`);
-    };
+    });
 
-    const cacheKey = (tripId) => `trip_cache_${tripId}`;
+    const cacheKey = TravelCache.tripCacheKey || ((tripId) => `trip_cache_${tripId}`);
 
     const saveTripCache = (tripId) => {
       try {
@@ -831,13 +836,13 @@ createApp({
       }
     };
 
-    const rawPostJSON = async (payload) => {
+    const rawPostJSON = TravelApi.rawPostJSON || (async (payload) => {
       const p = { ...payload };
       if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
       return await apiGet(p);
-    };
+    });
 
-    const pendingQueueKey = (tripId) => `trip_pending_queue_${tripId}`;
+    const pendingQueueKey = TravelCache.pendingQueueKey || ((tripId) => `trip_pending_queue_${tripId}`);
 
     const savePendingQueue = () => {
       if (!currentTrip.value?.id) return;
