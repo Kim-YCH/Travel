@@ -1562,7 +1562,7 @@ createApp({
         position: { lat: Number(place.lat), lng: Number(place.lng) },
         map: mapInstance,
         title: place.name || '探點',
-        label: { text: '🔎', fontSize: '14px' },
+        label: { text: '🔎', fontSize: '10px' },
         icon: makeMapPinIcon('#334155'),
         zIndex: 1200
       });
@@ -2062,9 +2062,46 @@ createApp({
 
       return {
         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-        scaledSize: new google.maps.Size(32, 48),
-        anchor: new google.maps.Point(16, 48),
-        labelOrigin: new google.maps.Point(16, 18)
+        scaledSize: new google.maps.Size(16, 24),
+        anchor: new google.maps.Point(8, 24),
+        labelOrigin: new google.maps.Point(8, 9)
+      };
+    };
+
+    const makeHotelMapPinIcon = (fillColor = '#0d9488') => {
+      if (!window.google || !google.maps) return null;
+
+      const baseColor = normalizeHexColor(fillColor, '#0d9488');
+      const lightColor = shadeHexColor(baseColor, 26);
+      const darkColor = shadeHexColor(baseColor, -34);
+
+      // 住宿 marker 回復成接近原本的實心 pin，不使用圓孔，避免 🏠 圖示被孔洞干擾。
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="27" height="43" viewBox="0 0 27 43">
+          <defs>
+            <linearGradient id="hotelPinGrad" x1="6" y1="2" x2="21" y2="41" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="${lightColor}"/>
+              <stop offset="0.55" stop-color="${baseColor}"/>
+              <stop offset="1" stop-color="${darkColor}"/>
+            </linearGradient>
+            <filter id="hotelPinShadow" x="-25%" y="-10%" width="150%" height="130%">
+              <feDropShadow dx="0" dy="1.8" stdDeviation="1.4" flood-color="#111827" flood-opacity="0.22"/>
+            </filter>
+          </defs>
+          <ellipse cx="13.5" cy="40.5" rx="7" ry="2.2" fill="#111827" opacity="0.14"/>
+          <path
+            filter="url(#hotelPinShadow)"
+            d="M13.5 0C6.04 0 0 6.04 0 13.5C0 23.63 13.5 43 13.5 43C13.5 43 27 23.63 27 13.5C27 6.04 20.96 0 13.5 0Z"
+            fill="url(#hotelPinGrad)"
+          />
+        </svg>
+      `;
+
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new google.maps.Size(24, 38),
+        anchor: new google.maps.Point(12, 38),
+        labelOrigin: new google.maps.Point(12, 13)
       };
     };
 
@@ -2201,7 +2238,7 @@ createApp({
           position: { lat: Number(hotel.lat), lng: Number(hotel.lng) },
           map: mapInstance,
           label: { text: '🏠', fontSize: '15px' },
-          icon: makeMapPinIcon('#0d9488'),
+          icon: makeHotelMapPinIcon('#0d9488'),
           zIndex: 900,
           title: hotel.name || '住宿'
         });
