@@ -1,8 +1,8 @@
-// version: 20260705.12
+// version: 20260705.13
 // 只有使用者明確按「刷新版本 / 重新載入」時才整頁 reload。
 // 平常資料新增、修改、刪除都應交給各模組做局部更新。
 (function () {
-  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260705.12';
+  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260705.13';
 
   async function clearBrowserCaches() {
     try {

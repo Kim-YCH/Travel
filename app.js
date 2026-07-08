@@ -516,6 +516,40 @@ createApp({
       image_updated_at: new Date().toISOString()
     });
 
+    const GOOGLE_PLACES_PHOTO_URL_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+    const isGooglePlacesPhotoServiceUrl = (url) => {
+      return /maps\.googleapis\.com\/maps\/api\/place\/js\/PhotoService\.GetPhoto/i.test(String(url || ''));
+    };
+
+    const isStaleGooglePlacesPhotoUrl = (url, updatedAt) => {
+      if (!isGooglePlacesPhotoServiceUrl(url)) return false;
+      const updatedTime = Date.parse(updatedAt || '');
+      if (!Number.isFinite(updatedTime)) return true;
+      return Date.now() - updatedTime > GOOGLE_PLACES_PHOTO_URL_MAX_AGE_MS;
+    };
+
+    const normalizeItineraryImageFields = (item = {}) => {
+      const imageUrl = String(item?.image_url || '').trim();
+      const imageUpdatedAt = String(item?.image_updated_at || '').trim();
+
+      if (isStaleGooglePlacesPhotoUrl(imageUrl, imageUpdatedAt)) {
+        return {
+          image_url: '',
+          image_source: 'fallback',
+          photo_attributions: '',
+          image_updated_at: ''
+        };
+      }
+
+      return {
+        image_url: imageUrl,
+        image_source: String(item?.image_source || '').trim(),
+        photo_attributions: String(item?.photo_attributions || '').trim(),
+        image_updated_at: imageUpdatedAt
+      };
+    };
+
     const extractPlacePhotoInfo = (place) => {
       const photos = Array.isArray(place?.photos) ? place.photos : [];
       const photo = photos[0] || null;
@@ -578,10 +612,7 @@ createApp({
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       order: normalizeOrderValue(item?.order),
       type: getItineraryType(item),
-      image_url: String(item?.image_url || '').trim(),
-      image_source: String(item?.image_source || '').trim(),
-      photo_attributions: String(item?.photo_attributions || '').trim(),
-      image_updated_at: String(item?.image_updated_at || '').trim(),
+      ...normalizeItineraryImageFields(item),
       is_alternative: getAlternativeFlag(item)
     });
 
@@ -605,10 +636,7 @@ createApp({
       type: getItineraryType(item),
       address: String(item?.address || '').trim(),
       place_id: String(item?.place_id || '').trim(),
-      image_url: String(item?.image_url || '').trim(),
-      image_source: String(item?.image_source || '').trim(),
-      photo_attributions: String(item?.photo_attributions || '').trim(),
-      image_updated_at: String(item?.image_updated_at || '').trim(),
+      ...normalizeItineraryImageFields(item),
       message: String(item?.message || '')
     });
 
