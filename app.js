@@ -2044,7 +2044,6 @@ createApp({
         const marker = new google.maps.Marker({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
-          label: { text: d.toString(), color: "white" },
           title: item.name
         });
 
@@ -2100,7 +2099,6 @@ createApp({
         const marker = new google.maps.Marker({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
-          label: { text: d.toString(), color: 'white', fontWeight: 'bold' },
           icon: makeMapPinIcon('#f59e0b'),
           zIndex: 850,
           title: item.name ? `備案：${item.name}` : `Day ${d} 備案`
@@ -2158,39 +2156,8 @@ createApp({
         hasPoint = true;
       });
 
-      let routeItems = [];
-      if (displayDay) {
-        routeItems = sortDayItemsByStoredOrder(itemsToRender).concat(
-          hotelsToRender.map(hotel => ({
-            id: `hotel-${hotel.id}`,
-            name: hotel.name || '住宿',
-            lat: hotel.lat,
-            lng: hotel.lng,
-            isHotelRoutePoint: true
-          }))
-        );
-      } else {
-        routeItems = itemsToRender.slice().sort((a, b) => {
-          const dayDiff = (a.day ? parseInt(a.day,10) : 1) - (b.day ? parseInt(b.day,10) : 1);
-          if (dayDiff !== 0) return dayDiff;
-          const oa = normalizeOrderValue(a.order);
-          const ob = normalizeOrderValue(b.order);
-          if (oa != null && ob != null && oa !== ob) return oa - ob;
-          if (oa != null && ob == null) return -1;
-          if (oa == null && ob != null) return 1;
-          return timeToNum(a.time) - timeToNum(b.time);
-        });
-      }
-
-      if (routeItems.length >= 2) {
-        mapRouteLine = new google.maps.Polyline({
-          path: routeItems.map(item => ({ lat: Number(item.lat), lng: Number(item.lng) })),
-          map: mapInstance,
-          strokeColor: '#2563eb',
-          strokeOpacity: 0.65,
-          strokeWeight: 3
-        });
-      }
+      // 地圖改為純 marker 檢視：不再繪製路線，避免畫面過亂。
+      // 保留 clearMapRouteLine()，讓切換 Day 或更新 marker 時會清除舊線段。
 
       if (!hasPoint && mapLatestResult.value) {
         hasPoint = true;
