@@ -575,15 +575,15 @@
       root.classList.toggle('prep-disabled', !isBrowserOnline());
       root.innerHTML = `
         <div class="prep-status-line">
-          <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `?湔 ${escapeHtml(formatTime(lastSyncedAt))}` : `? ${VERSION}`) : ''}</span>
+          <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
           <span class="prep-status-right">
-            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0) ? 'disabled' : ''}>???湔鞈?</button>
+            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0) ? 'disabled' : ''}>↻ 更新資料</button>
             <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
           </span>
         </div>
         <div class="prep-owner-box">
           <div class="prep-owner-row">
-            <label for="prep-owner-select">?亦?撠情</label>
+            <label for="prep-owner-select">查看對象</label>
             <select id="prep-owner-select" class="prep-owner-select">${renderOwnerOptions(selectedOwner, true)}</select>
           </div>
         </div>
