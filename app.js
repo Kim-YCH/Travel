@@ -2039,11 +2039,11 @@ createApp({
       let hasPoint = false;
 
       itemsToRender.forEach(item => {
-        const d = item.day ? parseInt(item.day,10) : 1;
-
         const marker = new google.maps.Marker({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
+          icon: makeMapPinIcon('#ef4444'),
+          zIndex: 850,
           title: item.name
         });
 
@@ -2095,36 +2095,48 @@ createApp({
       }
 
       alternativeItemsToRender.forEach(item => {
-        const d = item.day ? parseInt(item.day,10) : 1;
         const marker = new google.maps.Marker({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
           icon: makeMapPinIcon('#f59e0b'),
           zIndex: 850,
-          title: item.name ? `備案：${item.name}` : `Day ${d} 備案`
+          title: item.name
         });
 
-        marker.addListener('click', () => {
-          const buttonId = `open-alt-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+        marker.addListener("click", () => {
+          if (isKoreaTrip.value) {
+            const buttonId = `open-alt-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+            infoWindow.setContent(
+              `<div style="padding:8px; color:#111; max-width:240px;">
+                <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '')}</div>
+                <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</div>
+                <button
+                  id="${buttonId}"
+                  style="background:#f59e0b;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
+                >開啟 Naver Map</button>
+              </div>`
+            );
+            infoWindow.open(mapInstance, marker);
+
+            google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+              const btn = document.getElementById(buttonId);
+              if (btn) btn.onclick = () => openExternalMap(item);
+            });
+            return;
+          }
+
+          const link = item.place_id
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
+            : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+
           infoWindow.setContent(
-            `<div style="padding:8px; color:#111; max-width:240px;">
-              <div style="margin-bottom:5px;">
-                <span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:999px;padding:2px 7px;font-size:11px;font-weight:bold;">📌 備案</span>
-              </div>
-              <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '備案')}</div>
-              <div style="font-size:12px; color:#555; margin-bottom:8px;">Day ${d}${formatTime(item.time) ? '｜' + escapeHtml(formatTime(item.time)) : ''}${item.message ? '｜' + escapeHtml(item.message) : ''}</div>
-              <button
-                id="${buttonId}"
-                style="background:#f59e0b;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
-              >開啟地圖 App</button>
+            `<div style="padding:6px; color:#111">
+              <b>${escapeHtml(item.name || '')}</b><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</span><br/>
+              <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
             </div>`
           );
           infoWindow.open(mapInstance, marker);
-
-          google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
-            const btn = document.getElementById(buttonId);
-            if (btn) btn.onclick = () => openExternalMap(item);
-          });
         });
 
         markers.push(marker);
