@@ -34,7 +34,10 @@ Legacy image columns may remain in Google Sheets for compatibility, but the fron
 
 ## Map Policy
 
-The itinerary map is a Day-level viewer. Its `行程定位` control only reads coordinates already stored on itinerary and hotel records. Selecting a point may pan, zoom, highlight a marker, and open its existing info window, but it must not call search, details, geocoding, nearby search, or image APIs.
+The itinerary map contains two separate tools:
+
+- `行程定位` is a Day-level viewer. It only reads coordinates already stored on itinerary and hotel records. Selecting a point may pan, zoom, highlight a marker, and open its existing info window without calling search APIs.
+- `探點搜尋` is a temporary map lookup. It may use Places Autocomplete, the limited Place Details fields above, and geocoding to place one probe marker. It does not create itinerary records, run nearby search, or request image data.
 
 ## Migration Rule
 

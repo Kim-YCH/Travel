@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260708.11 -->
+<!-- version: 20260708.12 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.11" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.11" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.11" />
-  <link rel="manifest" href="./site.webmanifest?v=20260708.11" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.12" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.12" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.12" />
+  <link rel="manifest" href="./site.webmanifest?v=20260708.12" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260708.11" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.11" />
+  <link rel="stylesheet" href="./style.css?v=20260708.12" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.12" />
 </head>
 <body>
 
@@ -179,6 +179,17 @@
             </div>
 
             <button
+              v-show="!mapLocatorOpen"
+              type="button"
+              class="map-probe-toggle"
+              :class="{ 'is-active': probeSearchOpen || probePlace }"
+              @click="toggleProbeSearch"
+              title="探點搜尋"
+              aria-label="探點搜尋"
+            >🔎</button>
+
+            <button
+              v-show="!probeSearchOpen"
               type="button"
               class="map-locator-toggle"
               :class="{ 'is-active': mapLocatorOpen }"
@@ -191,7 +202,7 @@
               <span class="map-locator-count">{{ currentDayMapPoints.length }}</span>
             </button>
 
-            <div v-if="selectedMapPoint && !mapLocatorOpen" class="map-locator-current">
+            <div v-if="selectedMapPoint && !mapLocatorOpen && !probeSearchOpen" class="map-locator-current">
               <span aria-hidden="true">{{ selectedMapPoint.icon }}</span>
               <div>
                 <span>目前定位</span>
@@ -248,6 +259,57 @@
               </div>
 
               <div v-else class="map-locator-empty">目前 Day 沒有已定位行程</div>
+            </section>
+
+            <section v-show="probeSearchOpen" class="map-probe-panel" aria-label="探點搜尋">
+              <div class="map-probe-search">
+                <span aria-hidden="true">🔎</span>
+                <input
+                  v-model="probeQuery"
+                  @input="searchProbePlacesInput"
+                  @keyup.enter="searchProbeByQuery"
+                  type="text"
+                  placeholder="搜尋想探的地點"
+                >
+                <button
+                  v-if="probeQuery || probePlace"
+                  type="button"
+                  class="map-probe-clear-btn"
+                  @click="clearProbeSearch"
+                  aria-label="清除探點"
+                  title="清除探點"
+                >⌫</button>
+                <button
+                  type="button"
+                  class="map-probe-close-btn"
+                  @click="closeProbeSearchPanel"
+                  aria-label="關閉探點搜尋"
+                  title="關閉探點搜尋"
+                >×</button>
+              </div>
+
+              <div v-if="probeIsSearching" class="map-probe-status">搜尋中...</div>
+
+              <div v-if="probeResults.length" class="map-probe-results">
+                <button
+                  v-for="item in probeResults"
+                  :key="'probe-' + (item.place_id || item.description || item.name)"
+                  type="button"
+                  class="map-probe-result-item"
+                  @click="selectProbePlace(item)"
+                >
+                  <span class="font-bold">
+                    {{ item.probe_title || item.structured_formatting?.main_text || item.name || item.description }}
+                    <span v-if="item.zh_label" class="map-probe-zh-label">（{{ item.zh_label }}）</span>
+                  </span>
+                  <span>{{ item.structured_formatting?.secondary_text || item.address || item.description }}</span>
+                </button>
+              </div>
+
+              <div v-if="probePlace" class="map-probe-card">
+                <div class="font-bold">🔎 {{ probePlace.name }}</div>
+                <div v-if="probePlace.address">{{ probePlace.address }}</div>
+              </div>
             </section>
           </div>
         </div>
@@ -323,12 +385,6 @@
             <div class="card itinerary-card itinerary-card-v2 active:scale-[0.99] transition">
               <div class="drag-handle itinerary-drag-handle select-none">≡</div>
 
-              <div
-                class="itinerary-icon-circle"
-                :class="'itinerary-icon-' + getItineraryTypeTone(place)"
-                @click="handleItineraryContentClick($event, place)"
-              >{{ getItineraryIcon(place) }}</div>
-
               <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
                 <div class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">
                   {{ getItineraryCategoryLabel(place) }}
@@ -377,7 +433,6 @@
 
             <div class="card hotel-itinerary-card itinerary-card-v2 active:scale-[0.99] transition" @click="openHotelMap(hotel)">
               <div class="itinerary-drag-handle hotel-static-icon select-none">•</div>
-              <div class="itinerary-icon-circle itinerary-icon-hotel">🏠</div>
               <div class="itinerary-content">
                 <div class="itinerary-category itinerary-category-hotel">住宿</div>
                 <div class="itinerary-title">{{ hotel.name || '住宿' }}</div>
@@ -427,15 +482,9 @@
             >
               <div class="drag-handle itinerary-drag-handle alternative-drag-handle select-none">≡</div>
 
-              <div
-                class="itinerary-icon-circle"
-                :class="'itinerary-icon-' + getItineraryTypeTone(place)"
-                @click="handleItineraryContentClick($event, place)"
-              >{{ getItineraryIcon(place) }}</div>
-
               <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
                 <div class="itinerary-category-row">
-                  <span class="itinerary-type-pill itinerary-type-alternative">📌 備案</span>
+                  <span class="itinerary-type-pill itinerary-type-alternative">備案</span>
                   <span class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">
                     {{ getItineraryCategoryLabel(place) }}
                   </span>
@@ -910,20 +959,20 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260708.11"></script>
-<script src="./cache-refresh.js?v=20260708.11"></script>
-<script src="./keyword-map.js?v=20260708.11"></script>
-<script src="./js/utils.js?v=20260708.11"></script>
-<script src="./js/api.js?v=20260708.11"></script>
-<script src="./js/cache.js?v=20260708.11"></script>
-<script src="./js/maps.js?v=20260708.11"></script>
-<script src="./js/places.js?v=20260708.11"></script>
-<script src="./js/itinerary.js?v=20260708.11"></script>
-<script src="./js/hotels.js?v=20260708.11"></script>
-<script src="./js/expenses.js?v=20260708.11"></script>
-<script src="./app.js?v=20260708.11"></script>
-<script src="./search-zh-label.js?v=20260708.11"></script>
-<script src="./prep-checklist.js?v=20260708.11"></script>
+<script src="./config.js?v=20260708.12"></script>
+<script src="./cache-refresh.js?v=20260708.12"></script>
+<script src="./keyword-map.js?v=20260708.12"></script>
+<script src="./js/utils.js?v=20260708.12"></script>
+<script src="./js/api.js?v=20260708.12"></script>
+<script src="./js/cache.js?v=20260708.12"></script>
+<script src="./js/maps.js?v=20260708.12"></script>
+<script src="./js/places.js?v=20260708.12"></script>
+<script src="./js/itinerary.js?v=20260708.12"></script>
+<script src="./js/hotels.js?v=20260708.12"></script>
+<script src="./js/expenses.js?v=20260708.12"></script>
+<script src="./app.js?v=20260708.12"></script>
+<script src="./search-zh-label.js?v=20260708.12"></script>
+<script src="./prep-checklist.js?v=20260708.12"></script>
 
 </body>
 </html>

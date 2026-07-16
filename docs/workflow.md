@@ -58,6 +58,8 @@
 - `行程定位` 只能使用資料庫中已保存的 `lat/lng`。
 - 無座標資料不列入定位清單。
 - 定位可執行 `panTo`、必要 zoom、marker 高亮與 info window。
+- `探點搜尋` 可使用 Autocomplete、限定欄位的 Place Details 與 Geocoding，但只顯示暫時 marker，不新增行程。
+- 探點與行程定位面板必須互斥開啟，且探點不得要求 Places Photo 或其他圖片欄位。
 
 ## 版本與快取
 

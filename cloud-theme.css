@@ -1,4 +1,4 @@
-/* version: 20260708.11 Cloud Blue theme
+/* version: 20260708.12 Cloud Blue theme
    CSS-only cloud / sky / glass app style. No image assets required. */
 :root {
   --cloud-primary: #2563EB;
@@ -482,11 +482,6 @@ button.bg-gray-700,
   box-shadow: 0 14px 30px rgba(15,23,42,.08), 0 7px 18px rgba(37,99,235,.08) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-}
-
-.itinerary-icon-circle {
-  border: 1px solid rgba(255,255,255,.86);
-  box-shadow: 0 7px 16px rgba(15,23,42,.08), inset 0 0 0 1px rgba(255,255,255,.42);
 }
 
 .itinerary-address {
