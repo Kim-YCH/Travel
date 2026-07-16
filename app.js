@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260716.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260716.2';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};
@@ -1382,6 +1382,10 @@ createApp({
       return Number.isFinite(lat) && Number.isFinite(lng);
     };
 
+    const shouldShowItineraryOnMap = (item) => {
+      return getItineraryType(item) !== '交通' && hasMapCoordinates(item);
+    };
+
     const getMapPointKey = (kind, item) => `${kind}:${String(item?.id || '')}`;
 
     const getCurrentDayMapPoints = () => {
@@ -1390,7 +1394,7 @@ createApp({
         itinerary.value.filter(item =>
           !isAlternativeItem(item)
           && (item.day ? parseInt(item.day, 10) || 1 : 1) === day
-          && hasMapCoordinates(item)
+          && shouldShowItineraryOnMap(item)
         )
       ).map(item => ({
         key: getMapPointKey('itinerary', item),
@@ -2028,7 +2032,7 @@ createApp({
       clearMapRouteLine();
 
       const displayDay = getMapDisplayDay();
-      let itemsToRender = itinerary.value.filter(item => hasMapCoordinates(item) && !isAlternativeItem(item));
+      let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
 
       if (displayDay) {
         itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
@@ -2094,7 +2098,7 @@ createApp({
       });
 
 
-      let alternativeItemsToRender = itinerary.value.filter(item => hasMapCoordinates(item) && isAlternativeItem(item));
+      let alternativeItemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && isAlternativeItem(item));
       if (displayDay) {
         alternativeItemsToRender = alternativeItemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
       }
