@@ -1,11 +1,11 @@
-// version: 20260708.11 complete backend; itinerary image columns are auto-added by header name.
+// version: 20260708.11 complete backend; legacy itinerary image columns are left untouched.
 /************ CONFIG ************/
 const BACKEND_VERSION = '20260708.11';
 const SPREADSHEET_ID = '11H-wsAJRRBbiGxCIbovY_o4bvEB7m6eayT27Wafmtkw';
 const ALLOWED_TYPES = ['trips', 'itinerary', 'expenses', 'people', 'hotels', 'prep_checklist', 'tripData'];
 const TRIPDATA_CACHE_TTL_SEC = 300; // 5 分鐘
 const REQUIRED_TYPE_HEADERS = {
-  itinerary: ['type', 'image_url', 'image_source', 'photo_attributions', 'image_updated_at']
+  itinerary: ['type']
 };
 const TRANSLATION_DICTIONARY_SHEET_NAME = 'TranslationDictionary';
 const TRANSLATION_DICTIONARY_HEADERS = [
@@ -86,6 +86,9 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
   try {
     if (!e || !e.postData || !e.postData.contents) {
       return createJSONPOutput({ status: 'error', message: 'No data' }, '');
@@ -99,14 +102,6 @@ function doPost(e) {
       return createJSONPOutput({ status: 'error', message: 'missing action' }, '');
     }
 
-    if (action === 'ocr_receipt') {
-      return createJSONPOutput(handleOcrReceipt_(contents), '');
-    }
-
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-
-    try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     ensureBackendSupportSheets_(ss);
 
@@ -132,12 +127,11 @@ function doPost(e) {
 
     const out = handleActionPOST(ss, action, type, contents);
     return createJSONPOutput(out, '');
-    } finally {
-      lock.releaseLock();
-    }
 
   } catch (err) {
     return createJSONPOutput({ status: 'error', message: String(err) }, '');
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -787,113 +781,6 @@ function createJSONPOutput(data, callback) {
 
   return ContentService.createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-/************ RECEIPT OCR ************/
-function handleOcrReceipt_(payload) {
-  try {
-    const imageBase64 = cleanOcrImageBase64_(payload.imageBase64);
-    if (!imageBase64) {
-      return { status: 'error', message: 'missing imageBase64' };
-    }
-
-    if (!/^[A-Za-z0-9+/=]+$/.test(imageBase64)) {
-      return { status: 'error', message: 'invalid imageBase64' };
-    }
-
-    const text = callGoogleVisionOcr_(imageBase64, payload.mimeType || 'image/jpeg');
-    const lines = splitOcrLines_(text);
-
-    return {
-      status: 'ok',
-      text: text,
-      lines: lines,
-      meta: {
-        engine: 'google_vision',
-        type: 'DOCUMENT_TEXT_DETECTION'
-      }
-    };
-  } catch (err) {
-    return {
-      status: 'error',
-      message: String(err && err.message || err || 'OCR failed')
-    };
-  }
-}
-
-function cleanOcrImageBase64_(value) {
-  let s = String(value || '').trim();
-  const comma = s.indexOf(',');
-  if (comma > -1 && s.slice(0, comma).toLowerCase().indexOf('base64') > -1) {
-    s = s.slice(comma + 1);
-  }
-  return s.replace(/\s/g, '');
-}
-
-function callGoogleVisionOcr_(imageBase64, mimeType) {
-  const apiKey = PropertiesService
-    .getScriptProperties()
-    .getProperty('GOOGLE_VISION_API_KEY');
-
-  if (!apiKey) {
-    throw new Error('missing GOOGLE_VISION_API_KEY in Script properties');
-  }
-
-  const url = 'https://vision.googleapis.com/v1/images:annotate?key=' + encodeURIComponent(apiKey);
-  const requestBody = {
-    requests: [
-      {
-        image: {
-          content: imageBase64
-        },
-        features: [
-          {
-            type: 'DOCUMENT_TEXT_DETECTION'
-          }
-        ],
-        imageContext: {
-          languageHints: ['ko', 'ja', 'en', 'zh-Hant']
-        }
-      }
-    ]
-  };
-
-  const res = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(requestBody),
-    muteHttpExceptions: true
-  });
-
-  const code = res.getResponseCode();
-  const body = res.getContentText();
-
-  if (code < 200 || code >= 300) {
-    throw new Error('Google Vision OCR error ' + code + ': ' + body);
-  }
-
-  const data = JSON.parse(body);
-  const first = data && data.responses && data.responses[0] ? data.responses[0] : {};
-  if (first.error) {
-    throw new Error(first.error.message || 'Google Vision OCR failed');
-  }
-
-  if (first.fullTextAnnotation && first.fullTextAnnotation.text) {
-    return String(first.fullTextAnnotation.text || '');
-  }
-
-  if (first.textAnnotations && first.textAnnotations[0] && first.textAnnotations[0].description) {
-    return String(first.textAnnotations[0].description || '');
-  }
-
-  return '';
-}
-
-function splitOcrLines_(text) {
-  return String(text || '')
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean);
 }
 
 /************ NAVER ************/

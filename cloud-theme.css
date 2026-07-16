@@ -1,4 +1,4 @@
-/* version: 20260704.6 Cloud Blue theme
+/* version: 20260708.11 Cloud Blue theme
    CSS-only cloud / sky / glass app style. No image assets required. */
 :root {
   --cloud-primary: #2563EB;
@@ -335,7 +335,6 @@ button.bg-gray-700,
   background-color: rgba(239,246,255,.86) !important;
 }
 
-.hotel-itinerary-badge,
 .text-green-600.bg-green-100,
 .text-\[10px\].text-green-600 {
   color: #15803D !important;
@@ -476,7 +475,7 @@ button.bg-gray-700,
   border: 1px solid rgba(255,255,255,.78);
 }
 
-#app .itinerary-card-with-media {
+#app .itinerary-card-v2 {
   background:
     linear-gradient(135deg, rgba(255,255,255,.96), rgba(248,251,255,.86)) !important;
   border: 1px solid rgba(216,232,248,.96) !important;
@@ -485,9 +484,9 @@ button.bg-gray-700,
   -webkit-backdrop-filter: blur(16px);
 }
 
-.itinerary-image {
+.itinerary-icon-circle {
   border: 1px solid rgba(255,255,255,.86);
-  box-shadow: 0 8px 18px rgba(15,23,42,.08);
+  box-shadow: 0 7px 16px rgba(15,23,42,.08), inset 0 0 0 1px rgba(255,255,255,.42);
 }
 
 .itinerary-address {
@@ -496,9 +495,4 @@ button.bg-gray-700,
 
 .itinerary-type-pill {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.38);
-}
-
-.itinerary-photo-attribution,
-.itinerary-photo-attribution a {
-  color: #94A3B8 !important;
 }

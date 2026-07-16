@@ -253,148 +253,247 @@ html, body {
       box-shadow: none !important;
     }
 
-    .map-probe-toggle {
+    .map-locator-toggle {
       position: absolute;
       right: 14px;
-      bottom: 18px;
+      bottom: 16px;
       z-index: 20;
-      width: 44px;
-      height: 44px;
-      border: 1px solid rgba(148, 163, 184, 0.5);
+      min-width: 132px;
+      height: 46px;
+      padding: 0 10px 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.84);
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.92);
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-      font-size: 18px;
-      display: flex;
+      background: #2563eb;
+      color: #ffffff;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
-    }
-
-    .map-probe-toggle:active {
-      transform: scale(0.95);
-    }
-
-    .map-probe-toggle.is-active {
-      border-color: #2563eb;
-      box-shadow: 0 14px 30px rgba(37, 99, 235, 0.2);
-    }
-
-    .map-probe-panel {
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: 16px;
-      z-index: 21;
-      display: flex;
-      flex-direction: column;
       gap: 8px;
-      pointer-events: none;
+      font-size: 14px;
+      font-weight: 900;
+      transition: transform 0.16s ease, background-color 0.16s ease;
     }
 
-    .map-probe-search,
-    .map-probe-results,
-    .map-probe-status,
-    .map-probe-card {
-      pointer-events: auto;
-      background: rgba(255, 255, 255, 0.96);
-      border: 1px solid rgba(203, 213, 225, 0.88);
-      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
-      backdrop-filter: blur(10px);
+    .map-locator-toggle:active {
+      transform: scale(0.97);
     }
 
-    .map-probe-search {
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr) 34px 34px;
+    .map-locator-toggle.is-active {
+      background: #1e40af;
+    }
+
+    .map-locator-toggle-icon {
+      font-size: 21px;
+      line-height: 1;
+    }
+
+    .map-locator-count {
+      min-width: 22px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+      display: inline-flex;
       align-items: center;
-      gap: 6px;
-      min-height: 48px;
-      border-radius: 16px;
-      padding: 6px 8px 6px 12px;
+      justify-content: center;
+      font-size: 11px;
     }
 
-    .map-probe-search input {
-      width: 100%;
-      min-width: 0;
-      height: 36px;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      font-size: 15px;
-      font-weight: 700;
+    .map-locator-current {
+      position: absolute;
+      right: 14px;
+      bottom: 70px;
+      z-index: 19;
+      max-width: min(300px, calc(100% - 28px));
+      min-height: 46px;
+      padding: 8px 12px;
+      border: 1px solid rgba(203, 213, 225, 0.9);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
       color: #0f172a;
     }
 
-    .map-probe-clear-btn {
-      width: 32px;
-      height: 32px;
-      border: 0;
-      border-radius: 999px;
-      background: #f1f5f9;
-      color: #475569;
-      font-size: 22px;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .map-probe-close-btn {
-      width: 32px;
-      height: 32px;
-      border: 0;
-      border-radius: 999px;
-      background: #0f172a;
-      color: #fff;
+    .map-locator-current > span {
       font-size: 20px;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      text-align: center;
     }
 
-    .map-probe-zh-label {
-      color: #2563eb;
+    .map-locator-current div {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .map-locator-current div span {
+      color: #64748b;
+      font-size: 10px;
       font-weight: 800;
     }
 
-    .map-probe-results {
-      max-height: 190px;
-      overflow-y: auto;
-      border-radius: 16px;
-      padding: 6px;
+    .map-locator-current strong {
+      overflow: hidden;
+      color: #0f172a;
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .map-probe-result-item {
-      width: 100%;
-      border: 0;
-      border-radius: 12px;
-      background: transparent;
-      padding: 9px 10px;
-      text-align: left;
+    .map-locator-sheet {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 21;
+      max-height: min(58%, 390px);
+      border: 1px solid rgba(203, 213, 225, 0.92);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 18px 38px rgba(15, 23, 42, 0.22);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .map-locator-header {
+      min-height: 58px;
+      padding: 10px 10px 10px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .map-locator-header > div:first-child {
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 2px;
-      color: #0f172a;
     }
 
-    .map-probe-result-item:hover,
-    .map-probe-result-item:focus {
+    .map-locator-header strong {
+      color: #0f172a;
+      font-size: 14px;
+    }
+
+    .map-locator-header span {
+      color: #64748b;
+      font-size: 11px;
+    }
+
+    .map-locator-header-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .map-locator-all-btn,
+    .map-locator-close-btn {
+      height: 34px;
+      border: 0;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+    }
+
+    .map-locator-all-btn {
+      padding: 0 11px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 12px;
+    }
+
+    .map-locator-close-btn {
+      width: 34px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 21px;
+    }
+
+    .map-locator-list {
+      overflow-y: auto;
+      padding: 4px 8px 8px;
+    }
+
+    .map-locator-item {
+      width: 100%;
+      min-height: 58px;
+      padding: 8px 6px;
+      border: 0;
+      border-bottom: 1px solid #eef2f7;
+      background: transparent;
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+    }
+
+    .map-locator-item:last-child {
+      border-bottom: 0;
+    }
+
+    .map-locator-item:active,
+    .map-locator-item.is-selected {
       background: #eff6ff;
     }
 
-    .map-probe-result-item span:last-child,
-    .map-probe-status,
-    .map-probe-card div:last-child {
-      color: #64748b;
-      font-size: 12px;
-      line-height: 1.35;
+    .map-locator-item-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
     }
 
-    .map-probe-status,
-    .map-probe-card {
-      border-radius: 14px;
-      padding: 9px 12px;
+    .map-locator-item-main,
+    .map-locator-item-title {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .map-locator-item-title time {
+      color: #2563eb;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .map-locator-item-title strong {
+      overflow: hidden;
+      color: #0f172a;
+      font-size: 14px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .map-locator-item-address {
+      overflow: hidden;
+      color: #64748b;
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .map-locator-empty {
+      padding: 26px 16px;
+      color: #64748b;
+      font-size: 13px;
+      text-align: center;
     }
 
     .prep-page #prep-checklist-root {
@@ -640,9 +739,9 @@ html, body {
       overflow: hidden;
     }
 
-    .itinerary-card-with-media {
+    .itinerary-card-v2 {
       display: grid;
-      grid-template-columns: 18px clamp(82px, 24vw, 108px) minmax(0, 1fr) 42px;
+      grid-template-columns: 18px 50px minmax(0, 1fr) 42px;
       gap: 10px;
       align-items: start;
       width: 100%;
@@ -671,15 +770,18 @@ html, body {
       color: #f59e0b;
     }
 
-    .itinerary-image {
+    .itinerary-icon-circle {
       grid-column: 2;
       grid-row: 1;
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      border-radius: 14px;
-      object-fit: cover;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
       background: #dbeafe;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.68);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
       cursor: pointer;
     }
 
@@ -695,13 +797,35 @@ html, body {
       cursor: pointer;
     }
 
-    .itinerary-title-row {
+    .itinerary-category-row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
       min-width: 0;
       margin-bottom: 4px;
+    }
+
+    .itinerary-category {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-bottom: 3px;
+      color: #1d4ed8;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .itinerary-category-row .itinerary-category {
+      margin-bottom: 0;
+    }
+
+    .itinerary-alternative-time {
+      color: #2563eb;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 900;
     }
 
     .itinerary-title {
@@ -750,46 +874,68 @@ html, body {
       white-space: nowrap;
     }
 
-    .itinerary-type-sightseeing {
-      color: #1d4ed8;
+    .itinerary-icon-sightseeing {
       background: #dbeafe;
-      border-color: #bfdbfe;
     }
 
-    .itinerary-type-food {
-      color: #c2410c;
+    .itinerary-category-sightseeing {
+      color: #1d4ed8;
+    }
+
+    .itinerary-icon-food {
       background: #ffedd5;
-      border-color: #fed7aa;
     }
 
-    .itinerary-type-shopping {
-      color: #15803d;
-      background: #dcfce7;
-      border-color: #bbf7d0;
+    .itinerary-category-food {
+      color: #c2410c;
     }
 
-    .itinerary-type-hotel {
-      color: #0f766e;
+    .itinerary-icon-shopping {
+      background: #f3e8ff;
+    }
+
+    .itinerary-category-shopping {
+      color: #7e22ce;
+    }
+
+    .itinerary-icon-hotel {
       background: #ccfbf1;
-      border-color: #99f6e4;
     }
 
-    .itinerary-type-transport {
-      color: #4338ca;
-      background: #e0e7ff;
-      border-color: #c7d2fe;
+    .itinerary-category-hotel {
+      color: #0f766e;
     }
 
-    .itinerary-type-activity {
-      color: #be123c;
+    .itinerary-icon-transport {
+      background: #cffafe;
+    }
+
+    .itinerary-category-transport {
+      color: #0e7490;
+    }
+
+    .itinerary-icon-cafe {
+      background: #fef3c7;
+    }
+
+    .itinerary-category-cafe {
+      color: #a16207;
+    }
+
+    .itinerary-icon-activity {
       background: #ffe4e6;
-      border-color: #fecdd3;
     }
 
-    .itinerary-type-other {
+    .itinerary-category-activity {
+      color: #be123c;
+    }
+
+    .itinerary-icon-other {
+      background: #e2e8f0;
+    }
+
+    .itinerary-category-other {
       color: #475569;
-      background: #f1f5f9;
-      border-color: #e2e8f0;
     }
 
     .itinerary-type-alternative {
@@ -804,6 +950,31 @@ html, body {
       align-items: flex-start;
       flex-wrap: wrap;
       min-width: 0;
+    }
+
+    .itinerary-status-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 7px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .itinerary-status-chip.is-located {
+      border-color: #a7f3d0;
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .itinerary-status-chip.is-unlocated {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #b91c1c;
     }
 
     .itinerary-message {
@@ -833,14 +1004,6 @@ html, body {
       opacity: 0.8;
     }
 
-    .itinerary-photo-attribution {
-      width: 100%;
-      color: #94a3b8;
-      font-size: 10px;
-      line-height: 1.35;
-      overflow-wrap: anywhere;
-    }
-
     .itinerary-card-footer {
       grid-column: 2 / 4;
       grid-row: 2;
@@ -849,12 +1012,6 @@ html, body {
       min-width: 0;
       margin-top: -2px;
       cursor: pointer;
-    }
-
-    .itinerary-photo-attribution a {
-      color: #64748b;
-      text-decoration: underline;
-      text-underline-offset: 2px;
     }
 
     .itinerary-actions {
@@ -904,17 +1061,6 @@ html, body {
     .hotel-itinerary-card {
       border-left: 4px solid #0d9488;
       background: #ffffff;
-    }
-
-    .hotel-itinerary-badge {
-      font-size: 10px;
-      color: #0f766e;
-      background: #ccfbf1;
-      padding: 2px 6px;
-      border-radius: 999px;
-      font-weight: 800;
-      border: 1px solid #99f6e4;
-      flex-shrink: 0;
     }
 
     .sortable-chosen {
@@ -1149,10 +1295,16 @@ html, body {
     gap: 8px;
   }
 
-  .itinerary-card-with-media {
-    grid-template-columns: 14px minmax(78px, 92px) minmax(0, 1fr) 38px;
+  .itinerary-card-v2 {
+    grid-template-columns: 14px 44px minmax(0, 1fr) 38px;
     gap: 8px;
     padding: 10px;
+  }
+
+  .itinerary-icon-circle {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
   }
 
   .itinerary-drag-handle {
@@ -1162,11 +1314,6 @@ html, body {
   .itinerary-actions {
     gap: 7px;
     padding-left: 6px;
-  }
-
-  .itinerary-title-row {
-    gap: 6px;
-    margin-bottom: 3px;
   }
 
   .itinerary-title {
@@ -1207,10 +1354,16 @@ html, body {
     gap: 8px;
   }
 
-  .itinerary-card-with-media {
-    grid-template-columns: 12px minmax(68px, 78px) minmax(0, 1fr) 36px;
+  .itinerary-card-v2 {
+    grid-template-columns: 10px 40px minmax(0, 1fr) 36px;
     gap: 7px;
     padding: 9px;
+  }
+
+  .itinerary-icon-circle {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
   }
 
   .itinerary-actions {

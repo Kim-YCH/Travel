@@ -1,26 +1,41 @@
 # Travel Static Site Architecture
 
-This project intentionally remains a static GitHub Pages app:
+Travel intentionally remains a static GitHub Pages application:
 
 - `index.html` is the only page entry.
-- Vue 3 is loaded from CDN.
-- Apps Script handles CRUD, translation, weather, and Google Places-backed enrichment.
+- Vue 3, Tailwind utilities, Sortable, and Google Maps are loaded without a build step.
+- `style.css` owns layout and feature styles; `cloud-theme.css` owns theme overrides.
+- Apps Script handles CRUD, translation, weather support, and Google Sheets access.
 - Google Sheets remains the lightweight database.
-- `app.js` is still the primary Vue application while low-risk helpers are extracted gradually.
-- `apps-script-backend.gs` is the Apps Script backend source kept in this repository for reference and redeploys.
+- `app.js` is still the primary Vue application while helpers move out gradually.
+- `apps-script-backend.gs` is the deployable Apps Script source kept in this repository.
+
+See [workflow.md](./workflow.md) for the change, verification, versioning, and release process.
 
 ## Current Split
 
-- `js/utils.js`: ID and date helpers used by `app.js`.
+- `js/utils.js`: ID and date helpers.
 - `js/api.js`: JSONP transport and Apps Script request wrappers.
-- `js/cache.js`: localStorage key helpers and safe JSON read/write helpers.
-- `js/places.js`: itinerary image helpers, Google Places photo extraction, stale photo URL detection, and fallback image handling.
-- `js/maps.js`, `js/itinerary.js`, `js/hotels.js`, `js/expenses.js`: reserved module entry points.
+- `js/cache.js`: localStorage key helpers and safe JSON helpers.
+- `js/places.js`: the allowed Google Place Details field list. It deliberately excludes image fields.
+- `js/maps.js`, `js/itinerary.js`, `js/hotels.js`, `js/expenses.js`: reserved module entry points for gradual extraction.
 
-## Important Image Note
+## Places Cost Policy
 
-Google Maps JavaScript Places photo URLs such as `PhotoService.GetPhoto?...token=...` are temporary. When they expire, Google may return a 403 PNG error image, which does not trigger an `<img>` error event. The stale-photo detection now lives in `js/places.js` and is called by `app.js` during itinerary normalization so expired URLs are cleared and the existing photo hydration flow can request a fresh URL.
+The frontend must not request or render Google Places images. Place Details requests are limited to:
+
+- `place_id`
+- `name`
+- `formatted_address`
+- `geometry`
+- `types`
+
+Legacy image columns may remain in Google Sheets for compatibility, but the frontend does not read, render, refresh, or write them. New itinerary and hotel records use icons and category colors instead of images.
+
+## Map Policy
+
+The itinerary map is a Day-level viewer. Its `行程定位` control only reads coordinates already stored on itinerary and hotel records. Selecting a point may pan, zoom, highlight a marker, and open its existing info window, but it must not call search, details, geocoding, nearby search, or image APIs.
 
 ## Migration Rule
 
-Move one small, pure helper group at a time. After each extraction, keep a fallback in `app.js`, bump the static asset version, run syntax checks, and verify images before moving more feature logic.
+Move one cohesive helper group at a time. Keep public behavior stable, bump the static asset version, run syntax and keyword checks, and verify the mobile UI before extracting another feature.

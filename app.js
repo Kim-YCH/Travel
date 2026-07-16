@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260624.01';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260708.11';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};
@@ -24,7 +24,6 @@ createApp({
     const pendingSyncQueue = ref([]);
     const isFlushingQueue = ref(false);
     const isAddingPlace = ref(false);
-    const isAddingMapPlace = ref(false);
     const isAddingExpense = ref(false);
 
     const currentDay = ref(1);
@@ -57,37 +56,21 @@ createApp({
     const selectedLng = ref(null);
     const selectedPlaceData = ref(null);
 
-    const mapSearchQuery = ref('');
-    const mapSearchResults = ref([]);
-    const mapTranslatedSearchHint = ref('');
-    const mapIsSearching = ref(false);
-    const mapIsCoordinateMode = ref(false);
-    const mapResolvedCoordName = ref('');
-    const mapSelectedLat = ref(null);
-    const mapSelectedLng = ref(null);
-    const mapSelectedPlaceData = ref(null);
-    const mapLatestResult = ref(null);
-    const mapAddDay = ref(1);
     const mapDisplayFilter = ref('all');
     const isMapReady = ref(false);
-    const probeSearchOpen = ref(false);
-    const probeQuery = ref('');
-    const probeResults = ref([]);
-    const probeIsSearching = ref(false);
-    const probePlace = ref(null);
+    const mapLocatorOpen = ref(false);
+    const selectedMapPoint = ref(null);
     const tripWeather = ref({ status: 'idle' });
     const weatherCache = new Map();
     const weatherLocationCache = new Map();
     let mapInstance = null;
     let mapElementRef = null;
     let markers = [];
-    let mapSearchMarker = null;
+    let mapMarkerByPointKey = new Map();
+    let mapBounceTimer = null;
     let mapRouteLine = null;
     let infoWindow = null;
     let autocompleteService = null;
-    let mapSearchTimeout = null;
-    let probeMarker = null;
-    let probeSearchTimeout = null;
     let weatherLoadTimer = null;
 
     const newHotel = ref({ start_day: 1, end_day: 1 });
@@ -161,9 +144,6 @@ createApp({
     };
 
     const translateSearchCache = new Map();
-    const zhLabelCache = new Map();
-    const FOREIGN_TITLE_RE = /[\u3131-\u318e\uac00-\ud7a3\u3040-\u30ff\u0e00-\u0e7f]/;
-    const CJK_TITLE_RE = /[\u4e00-\u9fff]/;
 
     const translatePlaceKeyword = async (keyword) => {
       const target = getTripTranslateTarget();
@@ -193,33 +173,6 @@ createApp({
       } catch (err) {
         console.warn('translatePlaceKeyword failed:', err);
         return { keyword: sourceText, translated: '', target };
-      }
-    };
-
-    const cleanLabelText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
-    const hasForeignTitle = (value) => FOREIGN_TITLE_RE.test(String(value || ''));
-    const hasChineseTitle = (value) => CJK_TITLE_RE.test(String(value || ''));
-
-    const translateTitleToChinese = async (title) => {
-      const key = cleanLabelText(title);
-      if (!key || !hasForeignTitle(key)) return '';
-      if (zhLabelCache.has(key)) return zhLabelCache.get(key);
-
-      try {
-        const res = await apiGet({
-          action: 'translate_place_keyword',
-          text: key,
-          target: 'zh-TW'
-        });
-        const translated = cleanLabelText(res?.translatedText || res?.text || res?.translation || '');
-        const out = translated && translated !== key && (hasChineseTitle(translated) || !hasForeignTitle(translated))
-          ? translated
-          : '';
-        zhLabelCache.set(key, out);
-        return out;
-      } catch (err) {
-        console.warn('translateTitleToChinese failed:', err);
-        return '';
       }
     };
 
@@ -387,7 +340,6 @@ createApp({
     const applyEntryDayByToday = () => {
       const day = getTripDayForToday(currentTrip.value, totalDays.value);
       currentDay.value = day;
-      mapAddDay.value = day;
       newExpense.value.day = day;
     };
 
@@ -507,80 +459,59 @@ createApp({
 
     const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
 
+    const includesAnyKeyword = (text, keywords) => keywords.some(keyword => text.includes(keyword));
+
     const getItineraryTypeTone = (item) => {
       const type = getItineraryType(item);
-      if (type === '美食') return 'food';
-      if (type === '購物') return 'shopping';
-      if (type === '活動') return 'activity';
+      const source = [item?.type, item?.category, item?.place_type, item?.name, item?.title]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      if (includesAnyKeyword(source, ['住宿', '飯店', '酒店', '民宿', 'hotel', 'hostel', 'guesthouse', '호텔'])) return 'hotel';
+      if (includesAnyKeyword(source, ['咖啡', 'coffee', 'cafe', 'café', '카페', 'コーヒー', '喫茶'])) return 'cafe';
+      if (type === '美食' || includesAnyKeyword(source, ['美食', '餐廳', '食堂', '早餐', '午餐', '晚餐', '拉麵', '烤肉', 'restaurant', 'ramen', '맛집', '식당'])) return 'food';
+      if (type === '購物' || includesAnyKeyword(source, ['購物', '商場', '百貨', '超市', '市場', '藥妝', 'mall', 'outlet', 'shopping', '마트', '쇼핑'])) return 'shopping';
+      if (includesAnyKeyword(source, ['交通', '車站', '地鐵', '捷運', '機場', '巴士', '公車', 'station', 'airport', 'metro', 'subway', '버스', '공항', '駅'])) return 'transport';
+      if (type === '活動' || includesAnyKeyword(source, ['活動', '門票', '展覽', '表演', '演唱會', 'festival', 'ticket'])) return 'activity';
       if (type === '其他') return 'other';
       return 'sightseeing';
     };
 
-    const getItineraryIcon = (item) => {
+    const getItineraryCategoryLabel = (item) => {
       const tone = getItineraryTypeTone(item);
-      if (tone === 'food') return '🍽️';
-      if (tone === 'shopping') return '🛍️';
-      if (tone === 'activity') return '🎟️';
-      if (tone === 'other') return '✨';
-      return '📷';
+      const labels = {
+        sightseeing: '景點',
+        food: '美食',
+        shopping: '購物',
+        hotel: '住宿',
+        transport: '交通',
+        cafe: '咖啡',
+        activity: '活動',
+        other: '其他'
+      };
+      return labels[tone] || getItineraryType(item);
     };
 
-    const itineraryImageHelpers = window.TravelPlaces?.createImageHelpers
-      ? window.TravelPlaces.createImageHelpers({ getItineraryTypeTone })
-      : {};
-
-    const ITINERARY_FALLBACK_IMAGES = itineraryImageHelpers.ITINERARY_FALLBACK_IMAGES || Object.freeze({
-      sightseeing: './assets/default-sightseeing.svg',
-      food: './assets/default-food.svg',
-      shopping: './assets/default-shopping.svg',
-      hotel: './assets/default-hotel.svg',
-      transport: './assets/default-transport.svg',
-      activity: './assets/default-travel.svg',
-      other: './assets/default-travel.svg',
-      default: './assets/default-travel.svg'
-    });
-
-    const getFallbackItineraryImage = itineraryImageHelpers.getFallbackItineraryImage || ((item = {}) => {
-      const tone = item?._fallbackTone || getItineraryTypeTone(item);
-      return ITINERARY_FALLBACK_IMAGES[tone] || ITINERARY_FALLBACK_IMAGES.default;
-    });
-    const getItineraryImage = itineraryImageHelpers.getItineraryImage || ((item = {}) => {
-      const url = String(item?.image_url || '').trim();
-      return url || getFallbackItineraryImage(item);
-    });
-    const getHotelItineraryImage = itineraryImageHelpers.getHotelItineraryImage || ((hotel = {}) => getItineraryImage({
-      ...hotel,
-      _fallbackTone: 'hotel'
-    }));
-    const buildFallbackImageFields = itineraryImageHelpers.buildFallbackImageFields || (() => ({
-      image_url: '',
-      image_source: 'fallback',
-      photo_attributions: '',
-      image_updated_at: new Date().toISOString()
-    }));
-    const normalizeItineraryImageFields = itineraryImageHelpers.normalizeItineraryImageFields || ((item = {}) => ({
-      image_url: String(item?.image_url || '').trim(),
-      image_source: String(item?.image_source || '').trim(),
-      photo_attributions: String(item?.photo_attributions || '').trim(),
-      image_updated_at: String(item?.image_updated_at || '').trim()
-    }));
-    const extractPlacePhotoInfo = itineraryImageHelpers.extractPlacePhotoInfo || (() => buildFallbackImageFields());
-    const handleItineraryImageError = itineraryImageHelpers.handleItineraryImageError || ((event, item = {}) => {
-      const img = event?.target;
-      if (!img) return;
-      if (item && typeof item === 'object' && String(item.image_url || '').trim()) item.image_url = '';
-      img.src = getFallbackItineraryImage(item);
-    });
-    const handleHotelItineraryImageError = itineraryImageHelpers.handleHotelItineraryImageError || ((event) => {
-      handleItineraryImageError(event, { _fallbackTone: 'hotel' });
-    });
+    const getItineraryIcon = (item) => {
+      const tone = getItineraryTypeTone(item);
+      if (tone === 'food') return '🍜';
+      if (tone === 'shopping') return '🛍️';
+      if (tone === 'hotel') return '🏠';
+      if (tone === 'transport') return '🚇';
+      if (tone === 'cafe') return '☕';
+      if (tone === 'activity') return '🎟️';
+      if (tone === 'other') return '📍';
+      return '🗼';
+    };
 
     const normalizeItineraryRecord = (item) => ({
       ...item,
       day: item?.day ? parseInt(item.day, 10) || 1 : 1,
       order: normalizeOrderValue(item?.order),
       type: getItineraryType(item),
-      ...normalizeItineraryImageFields(item),
+      lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
+      lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
       is_alternative: getAlternativeFlag(item)
     });
 
@@ -604,7 +535,6 @@ createApp({
       type: getItineraryType(item),
       address: String(item?.address || '').trim(),
       place_id: String(item?.place_id || '').trim(),
-      ...normalizeItineraryImageFields(item),
       message: String(item?.message || '')
     });
 
@@ -995,29 +925,6 @@ createApp({
       .replaceAll('"','&quot;')
       .replaceAll("'","&#39;");
 
-    const sanitizePhotoAttributions = (value) => {
-      const raw = Array.isArray(value) ? value.join(' ') : String(value || '');
-      if (!raw.trim()) return '';
-
-      const template = document.createElement('template');
-      template.innerHTML = raw;
-      const links = Array.from(template.content.querySelectorAll('a'))
-        .map((a) => {
-          const href = String(a.getAttribute('href') || '').trim();
-          const text = String(a.textContent || '').trim();
-          if (!text || !/^https?:\/\//i.test(href)) return '';
-          return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;
-        })
-        .filter(Boolean);
-
-      if (links.length) return links.join(' ');
-
-      const plain = String(template.content.textContent || raw)
-        .replace(/\s+/g, ' ')
-        .trim();
-      return escapeHtml(plain);
-    };
-
     const linkifyMessage = (text) => {
       const raw = String(text || '');
       if (!raw) return '';
@@ -1092,7 +999,7 @@ createApp({
         service.getDetails(
           {
             placeId,
-            fields: ['place_id', 'name', 'formatted_address', 'geometry', 'photos'],
+            fields: window.TravelPlaces?.getPlaceDetailFields?.() || ['place_id', 'name', 'formatted_address', 'geometry', 'types'],
             language
           },
           (place, status) => {
@@ -1104,119 +1011,6 @@ createApp({
           }
         );
       });
-    };
-
-    const getPlaceFromQuery = async (query, options = {}) => {
-      const q = String(query || '').replace(/\s+/g, ' ').trim();
-      if (!q) return null;
-
-      if (!window.google || !window.google.maps) await loadGoogleMaps();
-      if (!window.google || !google.maps?.places?.PlacesService) return null;
-
-      const dummyMap = new google.maps.Map(document.createElement('div'));
-      const service = new google.maps.places.PlacesService(dummyMap);
-      const fields = ['place_id', 'name', 'formatted_address', 'geometry', 'photos'];
-
-      const found = await new Promise((resolve) => {
-        if (typeof service.findPlaceFromQuery !== 'function') {
-          resolve(null);
-          return;
-        }
-
-        service.findPlaceFromQuery(
-          {
-            query: q,
-            fields,
-            language: 'zh-TW',
-            ...(options.locationBias ? { locationBias: options.locationBias } : {})
-          },
-          (results, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(results) && results.length) {
-              resolve(results.find(item => Array.isArray(item.photos) && item.photos.length) || results[0]);
-            } else {
-              resolve(null);
-            }
-          }
-        );
-      });
-
-      if (found) return found;
-
-      return await new Promise((resolve) => {
-        if (typeof service.textSearch !== 'function') {
-          resolve(null);
-          return;
-        }
-
-        service.textSearch(
-          {
-            query: q,
-            language: 'zh-TW',
-            ...(options.location ? { location: options.location } : {}),
-            ...(options.radius ? { radius: options.radius } : {})
-          },
-          (results, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && Array.isArray(results) && results.length) {
-              resolve(results.find(item => Array.isArray(item.photos) && item.photos.length) || results[0]);
-            } else {
-              resolve(null);
-            }
-          }
-        );
-      });
-    };
-
-    const buildImageRepairQueries = (item = {}) => {
-      const city = String(currentTrip.value?.city || '').trim();
-      const name = String(item.name || '').trim();
-      const nameKo = String(item.name_ko || '').trim();
-      const address = String(item.address || '').trim();
-      const message = String(item.message || '').replace(/https?:\/\/\S+/g, '').trim();
-      const bits = [
-        [name, address, city],
-        [name, city],
-        [name, address],
-        [nameKo, address, city],
-        [nameKo, city],
-        [name, message, city]
-      ];
-
-      const seen = new Set();
-      return bits
-        .map(parts => parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim())
-        .filter((q) => {
-          if (!q || seen.has(q)) return false;
-          seen.add(q);
-          return true;
-        });
-    };
-
-    const resolveItineraryPhotoFields = async (item = {}) => {
-      if (!item) return buildFallbackImageFields();
-
-      if (item.place_id) {
-        const place = await getPlaceDetails(item.place_id, 'zh-TW');
-        const fields = extractPlacePhotoInfo(place);
-        if (fields.image_url) return { ...fields, place };
-      }
-
-      const lat = item.lat !== '' && item.lat != null ? Number(item.lat) : null;
-      const lng = item.lng !== '' && item.lng != null ? Number(item.lng) : null;
-      const location = lat != null && lng != null && window.google && google.maps?.LatLng
-        ? new google.maps.LatLng(lat, lng)
-        : null;
-
-      for (const query of buildImageRepairQueries(item)) {
-        const place = await getPlaceFromQuery(query, {
-          location,
-          locationBias: location,
-          radius: location ? 1500 : undefined
-        });
-        const fields = extractPlacePhotoInfo(place);
-        if (fields.image_url) return { ...fields, place };
-      }
-
-      return buildFallbackImageFields();
     };
 
     const openMapWindow = (url) => {
@@ -1234,76 +1028,6 @@ createApp({
       }
 
       window.location.href = `nmap://search?query=${encodedTitle}&appname=tripplanner`;
-    };
-
-    const hydratedPhotoAttempts = new Map();
-    let hydratePhotoTimer = null;
-
-    const persistItineraryImageFields = async (item) => {
-      if (!item?.id || !currentTrip.value?.id) return;
-
-      try {
-        await postJSON({
-          action: 'edit',
-          type: 'itinerary',
-          data: {
-            id: item.id,
-            trip_id: item.trip_id || currentTrip.value.id,
-            place_id: item.place_id || '',
-            address: item.address || '',
-            lat: item.lat ?? '',
-            lng: item.lng ?? '',
-            image_url: item.image_url || '',
-            image_source: item.image_source || '',
-            photo_attributions: item.photo_attributions || '',
-            image_updated_at: item.image_updated_at || ''
-          }
-        }, { queueOnFail: false });
-      } catch (err) {
-        console.warn('persistItineraryImageFields failed:', err);
-      }
-    };
-
-    const hydrateMissingPlacePhotos = async () => {
-      if (!currentTrip.value || !GOOGLE_MAPS_API_KEY) return;
-
-      const visibleItems = getDayOrderedItems(currentDay.value, false)
-        .concat(getDayOrderedItems(currentDay.value, true))
-        .filter(item =>
-          item?.name &&
-          !String(item.image_url || '').trim() &&
-          (hydratedPhotoAttempts.get(String(item.id)) || 0) < 2
-        )
-        .slice(0, 8);
-
-      if (!visibleItems.length) return;
-
-      for (const item of visibleItems) {
-        const itemKey = String(item.id);
-        hydratedPhotoAttempts.set(itemKey, (hydratedPhotoAttempts.get(itemKey) || 0) + 1);
-
-        const result = await resolveItineraryPhotoFields(item);
-        const { place, ...imageFields } = result;
-        Object.assign(item, imageFields);
-
-        if (imageFields.image_url) {
-          if (place?.place_id) item.place_id = place.place_id;
-          if (place?.formatted_address && !String(item.address || '').trim()) item.address = place.formatted_address;
-          if (place?.geometry?.location) {
-            item.lat = place.geometry.location.lat();
-            item.lng = place.geometry.location.lng();
-          }
-          scheduleTripCacheSave();
-          await persistItineraryImageFields(item);
-        }
-      }
-    };
-
-    const scheduleMissingPlacePhotoHydration = (delay = 250) => {
-      clearTimeout(hydratePhotoTimer);
-      hydratePhotoTimer = setTimeout(() => {
-        hydrateMissingPlacePhotos().catch(err => console.warn('hydrateMissingPlacePhotos failed:', err));
-      }, delay);
     };
 
     const resolveWeatherLocation = async (day = currentDay.value) => {
@@ -1481,335 +1205,6 @@ createApp({
       updateMapMarkers();
     };
 
-    const clearMapSearchMarker = () => {
-      if (mapSearchMarker) {
-        mapSearchMarker.setMap(null);
-        mapSearchMarker = null;
-      }
-    };
-
-    const clearMapSearchResult = () => {
-      clearMapSearchDropdown();
-      clearMapSearchMarker();
-      mapLatestResult.value = null;
-      if (infoWindow) infoWindow.close();
-      if (isDayMapView()) updateMapMarkers();
-    };
-
-    const clearProbeMarker = () => {
-      if (probeMarker) {
-        probeMarker.setMap(null);
-        probeMarker = null;
-      }
-    };
-
-    const normalizeProbePlace = (data = {}) => ({
-      name: String(data.name || data.description || data.address || '探點').trim(),
-      address: String(data.address || data.formatted_address || data.description || '').trim(),
-      lat: data.lat != null ? Number(data.lat) : null,
-      lng: data.lng != null ? Number(data.lng) : null,
-      place_id: String(data.place_id || ''),
-      image_url: String(data.image_url || ''),
-      image_source: String(data.image_source || ''),
-      photo_attributions: String(data.photo_attributions || ''),
-      image_updated_at: String(data.image_updated_at || '')
-    });
-
-    const getProbeResultTitle = (item = {}) => cleanLabelText(
-      item.probe_title
-      || item.structured_formatting?.main_text
-      || item.name
-      || item.description
-      || ''
-    );
-
-    const getProbeDisplayName = (name, zhLabel = '') => {
-      const title = cleanLabelText(name);
-      const translated = cleanLabelText(zhLabel);
-      if (!translated || translated === title) return title;
-      if (hasChineseTitle(title) && !hasForeignTitle(title)) return title;
-      return `${title}（${translated}）`;
-    };
-
-    const enrichProbeResultsWithChinese = async (results, keywordSnapshot) => {
-      const list = Array.isArray(results) ? results : [];
-      const targetItems = list
-        .slice(0, 5)
-        .filter(item => hasForeignTitle(getProbeResultTitle(item)));
-
-      await Promise.all(targetItems.map(async (item) => {
-        const title = getProbeResultTitle(item);
-        const translated = await translateTitleToChinese(title);
-        if (!translated || probeQuery.value.trim() !== keywordSnapshot) return;
-        item.probe_title = title;
-        item.zh_label = translated;
-      }));
-
-      if (probeQuery.value.trim() === keywordSnapshot) {
-        probeResults.value = list.slice();
-      }
-    };
-
-    const renderProbeMarker = () => {
-      if (!mapInstance || !window.google || !probePlace.value) return;
-
-      const place = probePlace.value;
-      if (place.lat == null || place.lng == null) return;
-
-      clearProbeMarker();
-
-      probeMarker = new google.maps.Marker({
-        position: { lat: Number(place.lat), lng: Number(place.lng) },
-        map: mapInstance,
-        title: place.name || '探點',
-        label: { text: '🔎', fontSize: '10px' },
-        icon: makeMapPinIcon('#334155'),
-        zIndex: 1200
-      });
-
-      probeMarker.addListener('click', () => {
-        if (!infoWindow) return;
-        const link = getExternalMapLink(place);
-        infoWindow.setContent(
-          `<div style="padding:8px;color:#111;max-width:240px;">
-            <div style="font-weight:700;margin-bottom:4px;">🔎 ${escapeHtml(place.name || '探點')}</div>
-            <div style="font-size:12px;color:#555;margin-bottom:8px;">${escapeHtml(place.address || '')}</div>
-            <a href="${link}" target="_blank" rel="noopener" style="color:#2563eb;font-weight:700;">Google Maps</a>
-          </div>`
-        );
-        infoWindow.open(mapInstance, probeMarker);
-      });
-    };
-
-    const focusProbePlace = () => {
-      if (!mapInstance || !window.google || !probePlace.value) return;
-      const lat = Number(probePlace.value.lat);
-      const lng = Number(probePlace.value.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-      renderProbeMarker();
-      mapInstance.panTo({ lat, lng });
-      if ((mapInstance.getZoom() || 0) < 15) {
-        mapInstance.setZoom(15);
-      }
-    };
-
-    const clearProbeSearch = () => {
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      probeQuery.value = '';
-      probeResults.value = [];
-      probeIsSearching.value = false;
-      probePlace.value = null;
-      clearProbeMarker();
-      if (infoWindow) infoWindow.close();
-    };
-
-    const closeProbeSearchPanel = () => {
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      probeSearchOpen.value = false;
-      probeResults.value = [];
-      probeIsSearching.value = false;
-    };
-
-    const toggleProbeSearch = async () => {
-      probeSearchOpen.value = !probeSearchOpen.value;
-      if (probeSearchOpen.value) {
-        await nextTick();
-        if (!mapInstance && isDayMapView()) {
-          await loadGoogleMaps();
-          initGoogleMap();
-        }
-      }
-    };
-
-    const setProbePlaceFromDetails = async (item, fallbackName = '') => {
-      if (!item) return false;
-
-      if (item.place_id) {
-        const place = await getPlaceDetails(item.place_id, 'zh-TW');
-        if (place?.geometry?.location) {
-          const rawName = place.name || fallbackName || getProbeResultTitle(item);
-          probePlace.value = normalizeProbePlace({
-            name: getProbeDisplayName(rawName, item.zh_label),
-            address: place.formatted_address || item.address || item.description || '',
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-            place_id: item.place_id,
-            ...extractPlacePhotoInfo(place)
-          });
-          return true;
-        }
-      }
-
-      if (item.lat != null && item.lng != null) {
-        const rawName = getProbeResultTitle(item) || fallbackName;
-        probePlace.value = normalizeProbePlace({
-          name: getProbeDisplayName(rawName, item.zh_label),
-          address: item.address || item.description || '',
-          lat: item.lat,
-          lng: item.lng,
-          place_id: item.place_id || ''
-        });
-        return true;
-      }
-
-      return false;
-    };
-
-    const geocodeProbeQuery = async (q) => {
-      if (!window.google || !window.google.maps) {
-        await loadGoogleMaps();
-      }
-      if (!mapInstance) initGoogleMap();
-      if (!window.google || !mapInstance) return false;
-
-      const city = String(currentTrip.value?.city || '').trim();
-      const query = city && !q.includes(city) ? `${q} ${city}` : q;
-      const geocoder = new google.maps.Geocoder();
-      const geocoded = await new Promise((resolve) => {
-        geocoder.geocode({ address: query }, (results, status) => {
-          resolve(status === 'OK' && results?.[0] ? results[0] : null);
-        });
-      });
-
-      if (!geocoded?.geometry?.location) return false;
-
-      let imageFields = buildFallbackImageFields();
-      if (geocoded.place_id) {
-        const place = await getPlaceDetails(geocoded.place_id, 'zh-TW');
-        imageFields = extractPlacePhotoInfo(place);
-      }
-
-      probePlace.value = normalizeProbePlace({
-        name: geocoded.address_components?.[0]?.long_name || q,
-        address: geocoded.formatted_address || query,
-        lat: geocoded.geometry.location.lat(),
-        lng: geocoded.geometry.location.lng(),
-        place_id: geocoded.place_id || '',
-        ...imageFields
-      });
-      return true;
-    };
-
-    const searchProbePlacesInput = async () => {
-      const q = probeQuery.value.trim();
-
-      if (probeSearchTimeout) clearTimeout(probeSearchTimeout);
-
-      if (!q) {
-        clearProbeSearch();
-        probeSearchOpen.value = true;
-        return;
-      }
-
-      const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
-      if (coordRegex.test(q)) {
-        const parts = q.split(',');
-        probeResults.value = [];
-        probeIsSearching.value = false;
-        probePlace.value = normalizeProbePlace({
-          name: '座標探點',
-          address: `${parts[0].trim()}, ${parts[1].trim()}`,
-          lat: parseFloat(parts[0]),
-          lng: parseFloat(parts[1])
-        });
-        focusProbePlace();
-        return;
-      }
-
-      probeIsSearching.value = true;
-      probeSearchTimeout = setTimeout(async () => {
-        try {
-          const opts = {};
-          if (mapInstance && typeof mapInstance.getBounds === 'function') {
-            const bounds = mapInstance.getBounds();
-            if (bounds) opts.bounds = bounds;
-          }
-          const out = await searchPlacesWithTranslation(q, opts);
-          const results = (out.predictions || []).map(item => ({
-            ...item,
-            probe_title: getProbeResultTitle(item)
-          }));
-          probeResults.value = results;
-          enrichProbeResultsWithChinese(results, q).catch(err => console.warn('probe zh labels failed:', err));
-        } catch (err) {
-          console.error(err);
-          probeResults.value = [];
-        } finally {
-          probeIsSearching.value = false;
-        }
-      }, 350);
-    };
-
-    const selectProbePlace = async (item) => {
-      if (!item) return;
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      probeQuery.value = getProbeDisplayName(getProbeResultTitle(item), item.zh_label) || probeQuery.value;
-      probeResults.value = [];
-      probeIsSearching.value = true;
-
-      try {
-        const ok = await setProbePlaceFromDetails(item, probeQuery.value);
-        if (ok) {
-          focusProbePlace();
-        } else {
-          await searchProbeByQuery();
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        probeIsSearching.value = false;
-      }
-    };
-
-    const searchProbeByQuery = async () => {
-      const q = probeQuery.value.trim();
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      if (!q) {
-        clearProbeSearch();
-        probeSearchOpen.value = true;
-        return;
-      }
-
-      probeIsSearching.value = true;
-      try {
-        if (probeResults.value.length) {
-          const first = probeResults.value[0];
-          probeResults.value = [];
-          const ok = await setProbePlaceFromDetails(first, q);
-          if (ok) {
-            probeQuery.value = getProbeDisplayName(getProbeResultTitle(first), first.zh_label) || q;
-            focusProbePlace();
-            return;
-          }
-        }
-
-        const ok = await geocodeProbeQuery(q);
-        if (ok) {
-          probeResults.value = [];
-          focusProbePlace();
-        } else {
-          alert('找不到這個探點');
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        probeIsSearching.value = false;
-      }
-    };
-
     const clearMapRouteLine = () => {
       if (mapRouteLine) {
         mapRouteLine.setMap(null);
@@ -1817,25 +1212,114 @@ createApp({
       }
     };
 
-    const clearMapSearchDropdown = () => {
-      mapSearchResults.value = [];
-      mapTranslatedSearchHint.value = '';
-      mapIsSearching.value = false;
-      mapIsCoordinateMode.value = false;
-      mapResolvedCoordName.value = '';
-      mapSelectedLat.value = null;
-      mapSelectedLng.value = null;
-      mapSelectedPlaceData.value = null;
+    const hasMapCoordinates = (item) => {
+      const lat = Number(item?.lat);
+      const lng = Number(item?.lng);
+      return Number.isFinite(lat) && Number.isFinite(lng);
     };
 
-    const getExternalMapLink = ({ name = '', lat = null, lng = null, place_id = '' }) => {
-      if (place_id) {
-        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${place_id}`;
+    const getMapPointKey = (kind, item) => `${kind}:${String(item?.id || '')}`;
+
+    const getCurrentDayMapPoints = () => {
+      const day = parseInt(currentDay.value, 10) || 1;
+      const dayItems = sortDayItemsByStoredOrder(
+        itinerary.value.filter(item =>
+          !isAlternativeItem(item)
+          && (item.day ? parseInt(item.day, 10) || 1 : 1) === day
+          && hasMapCoordinates(item)
+        )
+      ).map(item => ({
+        key: getMapPointKey('itinerary', item),
+        kind: 'itinerary',
+        id: item.id,
+        name: item.name || '未命名行程',
+        address: item.address || '',
+        timeLabel: item.time ? formatTime(item.time) : '未定',
+        category: getItineraryCategoryLabel(item),
+        tone: getItineraryTypeTone(item),
+        icon: getItineraryIcon(item),
+        lat: Number(item.lat),
+        lng: Number(item.lng),
+        source: item
+      }));
+
+      const dayHotels = hotels.value
+        .filter(hotel => isHotelActiveOnDay(hotel, day) && hasMapCoordinates(hotel))
+        .slice()
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+        .map(hotel => ({
+          key: getMapPointKey('hotel', hotel),
+          kind: 'hotel',
+          id: hotel.id,
+          name: hotel.name || '住宿',
+          address: hotel.address || '',
+          timeLabel: '住宿',
+          category: '住宿',
+          tone: 'hotel',
+          icon: '🏠',
+          lat: Number(hotel.lat),
+          lng: Number(hotel.lng),
+          source: hotel
+        }));
+
+      return dayItems.concat(dayHotels);
+    };
+
+    const currentDayMapPoints = computed(getCurrentDayMapPoints);
+
+    const closeMapLocator = () => {
+      mapLocatorOpen.value = false;
+    };
+
+    const toggleMapLocator = () => {
+      mapLocatorOpen.value = !mapLocatorOpen.value;
+    };
+
+    const applyMapMarkerSelection = () => {
+      const selectedKey = selectedMapPoint.value?.key || '';
+      mapMarkerByPointKey.forEach((entry, key) => {
+        const active = key === selectedKey;
+        const color = active ? '#2563eb' : entry.baseColor;
+        entry.marker.setIcon(entry.kind === 'hotel' ? makeHotelMapPinIcon(color) : makeMapPinIcon(color));
+        entry.marker.setZIndex(active ? 1200 : entry.zIndex);
+      });
+    };
+
+    const markMapPointSelected = (point) => {
+      selectedMapPoint.value = point ? { ...point } : null;
+      applyMapMarkerSelection();
+    };
+
+    const focusItineraryMapPoint = (point) => {
+      if (!point || !mapInstance || !hasMapCoordinates(point)) return;
+
+      const entry = mapMarkerByPointKey.get(point.key);
+      markMapPointSelected(point);
+      closeMapLocator();
+
+      mapInstance.panTo({ lat: Number(point.lat), lng: Number(point.lng) });
+      if ((mapInstance.getZoom() || 0) < 15) mapInstance.setZoom(16);
+
+      if (entry?.marker && window.google?.maps) {
+        if (mapBounceTimer) clearTimeout(mapBounceTimer);
+        entry.marker.setAnimation(google.maps.Animation.BOUNCE);
+        mapBounceTimer = setTimeout(() => entry.marker.setAnimation(null), 650);
+        google.maps.event.trigger(entry.marker, 'click');
       }
-      if (lat != null && lng != null) {
-        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-      }
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
+    };
+
+    const showAllCurrentDayMapPoints = () => {
+      if (!mapInstance || !window.google) return;
+      const points = getCurrentDayMapPoints();
+      if (!points.length) return;
+
+      markMapPointSelected(null);
+      closeMapLocator();
+
+      const bounds = new google.maps.LatLngBounds();
+      points.forEach(point => bounds.extend({ lat: point.lat, lng: point.lng }));
+      mapInstance.fitBounds(bounds);
+      if (points.length === 1) mapInstance.setZoom(16);
     };
 
     const getMapExportLinks = (place = {}) => {
@@ -1940,64 +1424,9 @@ createApp({
       const day = getMapDisplayDay();
       if (day) {
         currentDay.value = day;
-        mapAddDay.value = day;
       }
       updateMapMarkers();
     };
-
-    const showSearchResultOnMap = ({
-      name = '',
-      address = '',
-      lat = null,
-      lng = null,
-      place_id = '',
-      image_url = '',
-      image_source = '',
-      photo_attributions = '',
-      image_updated_at = ''
-    }) => {
-      if (!mapInstance || !window.google || lat == null || lng == null) return;
-
-      clearMapSearchMarker();
-
-      mapLatestResult.value = {
-        name: name || '搜尋結果',
-        address: address || '',
-        lat: Number(lat),
-        lng: Number(lng),
-        place_id: place_id || '',
-        image_url: String(image_url || ''),
-        image_source: String(image_source || ''),
-        photo_attributions: String(photo_attributions || ''),
-        image_updated_at: String(image_updated_at || '')
-      };
-
-      mapSearchMarker = new google.maps.Marker({
-        position: { lat: Number(lat), lng: Number(lng) },
-        map: mapInstance,
-        title: name || '搜尋結果',
-        label: { text: '搜', color: 'white' },
-        zIndex: 999
-      });
-
-      const openInfo = () => {
-        const link = getExternalMapLink({ name, lat, lng, place_id });
-        infoWindow.setContent(
-          `<div style="padding:6px; color:#111; max-width:220px;">
-            <b>${escapeHtml(name || '搜尋結果')}</b><br/>
-            <span style="font-size:12px; color:#555">${escapeHtml(address || '')}</span><br/>
-            <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
-          </div>`
-        );
-        infoWindow.open(mapInstance, mapSearchMarker);
-      };
-
-      mapSearchMarker.addListener('click', openInfo);
-      mapInstance.setCenter({ lat: Number(lat), lng: Number(lng) });
-      mapInstance.setZoom(15);
-      openInfo();
-    };
-
 
     const normalizeHexColor = (color, fallback = '#ef4444') => {
       const s = String(color || '').trim();
@@ -2110,10 +1539,15 @@ createApp({
 
       markers.forEach(m => m.setMap(null));
       markers = [];
+      mapMarkerByPointKey.clear();
+      if (mapBounceTimer) {
+        clearTimeout(mapBounceTimer);
+        mapBounceTimer = null;
+      }
       clearMapRouteLine();
 
       const displayDay = getMapDisplayDay();
-      let itemsToRender = itinerary.value.filter(item => item.lat && item.lng && !isAlternativeItem(item));
+      let itemsToRender = itinerary.value.filter(item => hasMapCoordinates(item) && !isAlternativeItem(item));
 
       if (displayDay) {
         itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
@@ -2122,16 +1556,21 @@ createApp({
       const bounds = new google.maps.LatLngBounds();
       let hasPoint = false;
 
-      itemsToRender.forEach(item => {
+      itemsToRender.forEach((item, index) => {
+        const pointKey = getMapPointKey('itinerary', item);
         const marker = new google.maps.Marker({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
           icon: makeMapPinIcon('#ef4444'),
+          label: { text: String(index + 1), color: '#1f2937', fontSize: '7px', fontWeight: '800' },
           zIndex: 850,
           title: item.name
         });
 
         marker.addListener("click", () => {
+          const point = getCurrentDayMapPoints().find(candidate => candidate.key === pointKey);
+          if (point) markMapPointSelected(point);
+
           if (isKoreaTrip.value) {
             const buttonId = `open-itinerary-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
             infoWindow.setContent(
@@ -2167,13 +1606,14 @@ createApp({
           infoWindow.open(mapInstance, marker);
         });
 
+        mapMarkerByPointKey.set(pointKey, { marker, kind: 'itinerary', baseColor: '#ef4444', zIndex: 850 });
         markers.push(marker);
         bounds.extend(marker.getPosition());
         hasPoint = true;
       });
 
 
-      let alternativeItemsToRender = itinerary.value.filter(item => item.lat && item.lng && isAlternativeItem(item));
+      let alternativeItemsToRender = itinerary.value.filter(item => hasMapCoordinates(item) && isAlternativeItem(item));
       if (displayDay) {
         alternativeItemsToRender = alternativeItemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
       }
@@ -2228,12 +1668,13 @@ createApp({
         hasPoint = true;
       });
 
-      let hotelsToRender = hotels.value.filter(hotel => hotel.lat != null && hotel.lng != null);
+      let hotelsToRender = hotels.value.filter(hasMapCoordinates);
       if (displayDay) {
         hotelsToRender = hotelsToRender.filter(hotel => isHotelActiveOnDay(hotel, displayDay));
       }
 
       hotelsToRender.forEach(hotel => {
+        const pointKey = getMapPointKey('hotel', hotel);
         const marker = new google.maps.Marker({
           position: { lat: Number(hotel.lat), lng: Number(hotel.lng) },
           map: mapInstance,
@@ -2244,9 +1685,12 @@ createApp({
         });
 
         marker.addListener('click', () => {
+          const point = getCurrentDayMapPoints().find(candidate => candidate.key === pointKey);
+          if (point) markMapPointSelected(point);
           showHotelInfoWindow(hotel, marker);
         });
 
+        mapMarkerByPointKey.set(pointKey, { marker, kind: 'hotel', baseColor: '#0d9488', zIndex: 900 });
         markers.push(marker);
         bounds.extend(marker.getPosition());
         hasPoint = true;
@@ -2255,24 +1699,14 @@ createApp({
       // 地圖改為純 marker 檢視：不再繪製路線，避免畫面過亂。
       // 保留 clearMapRouteLine()，讓切換 Day 或更新 marker 時會清除舊線段。
 
-      if (!hasPoint && mapLatestResult.value) {
-        hasPoint = true;
-        bounds.extend({ lat: Number(mapLatestResult.value.lat), lng: Number(mapLatestResult.value.lng) });
-      }
-
       if (hasPoint) {
         mapInstance.fitBounds(bounds);
-      } else if (currentTrip.value?.city && window.google) {
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ address: currentTrip.value.city }, (results, status) => {
-          if (status === 'OK' && results[0]) {
-            mapInstance.setCenter(results[0].geometry.location);
-            mapInstance.setZoom(12);
-          }
-        });
+      } else {
+        mapInstance.setCenter({ lat: 23.6, lng: 121 });
+        mapInstance.setZoom(8);
       }
 
-      renderProbeMarker();
+      applyMapMarkerSelection();
     };
 
     const fitBoundsToTrip = () => {
@@ -2297,234 +1731,6 @@ createApp({
       } else {
         scheduleSortableInit();
       }
-    };
-
-    const addMapSearchResultToItinerary = async () => {
-      if (isAddingMapPlace.value) return;
-      if (!currentTrip.value || !mapLatestResult.value) return;
-
-      isAddingMapPlace.value = true;
-      setTimeout(() => {
-        isAddingMapPlace.value = false;
-      }, 500);
-
-      const id = generateId();
-      const d = mapAddDay.value || currentDay.value || 1;
-      const item = {
-        id,
-        name: mapLatestResult.value.name || mapSearchQuery.value || '搜尋結果',
-        name_ko: '',
-        type: '景點',
-        address: mapLatestResult.value.address || '',
-        day: d,
-        lat: Number(mapLatestResult.value.lat),
-        lng: Number(mapLatestResult.value.lng),
-        place_id: mapLatestResult.value.place_id || '',
-        image_url: mapLatestResult.value.image_url || '',
-        image_source: mapLatestResult.value.image_source || (mapLatestResult.value.image_url ? 'google_places' : 'fallback'),
-        photo_attributions: mapLatestResult.value.photo_attributions || '',
-        image_updated_at: mapLatestResult.value.image_updated_at || new Date().toISOString(),
-        message: '',
-        time: '',
-        trip_id: currentTrip.value.id,
-        is_alternative: ''
-      };
-
-      const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
-      const ids = oldIds.slice();
-      ids.push(String(id));
-
-      itinerary.value.push(item);
-      setOrderIds(currentTrip.value.id, d, ids);
-      currentDay.value = d;
-      mapDisplayFilter.value = `day-${d}`;
-      clearMapSearchResult();
-
-      await nextTick();
-      scheduleSortableInit();
-      updateMapMarkers();
-      scheduleTripCacheSave();
-
-      try {
-        const res = await postJSON({ action:'add', type:'itinerary', data: item });
-        if (res && res.status === 'error') {
-          throw new Error(res.message || 'add itinerary failed');
-        }
-        await saveOrderToDB(currentTrip.value.id, d, ids);
-      } catch (err) {
-        console.error('add map itinerary sync failed:', err);
-
-        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
-        if (idx !== -1) itinerary.value.splice(idx, 1);
-
-        const rollbackIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
-        setOrderIds(currentTrip.value.id, d, rollbackIds);
-        try { await saveOrderToDB(currentTrip.value.id, d, rollbackIds); } catch(e) {}
-
-        await nextTick();
-        scheduleSortableInit();
-        updateMapMarkers();
-        scheduleTripCacheSave();
-
-        alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
-      }
-    };
-
-    const searchMapPlacesInput = async () => {
-      const q = mapSearchQuery.value.trim();
-
-      if (!q) {
-        mapTranslatedSearchHint.value = '';
-        clearMapSearchResult();
-        return;
-      }
-
-      const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
-      if (coordRegex.test(q)) {
-        mapIsCoordinateMode.value = true;
-        mapIsSearching.value = false;
-        const parts = q.split(',');
-        mapSelectedLat.value = parseFloat(parts[0]);
-        mapSelectedLng.value = parseFloat(parts[1]);
-        mapResolvedCoordName.value = `座標 ${parts[0].trim()}, ${parts[1].trim()}`;
-        mapSearchResults.value = [];
-        mapTranslatedSearchHint.value = '';
-        mapSelectedPlaceData.value = null;
-        return;
-      }
-
-      mapIsCoordinateMode.value = false;
-      mapSelectedLat.value = null;
-      mapSelectedLng.value = null;
-      mapResolvedCoordName.value = '';
-      mapSelectedPlaceData.value = null;
-      mapIsSearching.value = true;
-
-      if (mapSearchTimeout) clearTimeout(mapSearchTimeout);
-
-      mapSearchTimeout = setTimeout(async () => {
-        try {
-          const opts = {};
-          if (mapInstance && typeof mapInstance.getBounds === 'function') {
-            const bounds = mapInstance.getBounds();
-            if (bounds) opts.bounds = bounds;
-          }
-          const out = await searchPlacesWithTranslation(q, opts);
-          mapSearchResults.value = out.predictions || [];
-          mapTranslatedSearchHint.value = out.hint || '';
-          mapIsSearching.value = false;
-        } catch (err) {
-          console.error(err);
-          mapSearchResults.value = [];
-          mapIsSearching.value = false;
-        }
-      }, 250);
-    };
-
-    const useMapCoordinateInput = async () => {
-      await searchCityAndJump();
-    };
-
-    const selectMapPlace = async (item) => {
-      mapSearchQuery.value = item.description || item.structured_formatting?.main_text || '';
-      mapSelectedPlaceData.value = item;
-      mapSearchResults.value = [];
-      mapIsSearching.value = false;
-      mapIsCoordinateMode.value = false;
-      await searchCityAndJump();
-    };
-
-
-    const searchCityAndJump = async () => {
-      const q = mapSearchQuery.value.trim();
-      if (!q) {
-        clearMapSearchResult();
-        return;
-      }
-
-      if (!window.google || !window.google.maps) {
-        await loadGoogleMaps();
-      }
-      if (!mapInstance) {
-        initGoogleMap();
-      }
-      if (!window.google || !mapInstance) return;
-
-      if (mapIsCoordinateMode.value && mapSelectedLat.value != null && mapSelectedLng.value != null) {
-        showSearchResultOnMap({
-          name: mapResolvedCoordName.value || q,
-          address: '座標搜尋',
-          lat: mapSelectedLat.value,
-          lng: mapSelectedLng.value,
-          place_id: ''
-        });
-        mapSearchResults.value = [];
-        return;
-      }
-
-      if (mapSelectedPlaceData.value?.place_id) {
-        const place = await getPlaceDetails(mapSelectedPlaceData.value.place_id, 'zh-TW');
-        if (place?.geometry?.location) {
-          showSearchResultOnMap({
-            name: place.name || q,
-            address: place.formatted_address || '',
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-            place_id: mapSelectedPlaceData.value.place_id,
-            ...extractPlacePhotoInfo(place)
-          });
-          mapSearchResults.value = [];
-          return;
-        }
-
-        if (mapSelectedPlaceData.value.lat != null && mapSelectedPlaceData.value.lng != null) {
-          showSearchResultOnMap({
-            name: mapSelectedPlaceData.value.structured_formatting?.main_text || q,
-            address: mapSelectedPlaceData.value.address || mapSelectedPlaceData.value.description || '',
-            lat: Number(mapSelectedPlaceData.value.lat),
-            lng: Number(mapSelectedPlaceData.value.lng),
-            place_id: mapSelectedPlaceData.value.place_id || '',
-            image_source: 'fallback',
-            image_updated_at: new Date().toISOString()
-          });
-          mapSearchResults.value = [];
-          return;
-        }
-      }
-
-      const geocoder = new google.maps.Geocoder();
-      const city = String(currentTrip.value?.city || '').trim();
-      const fallbackQuery = city && !q.includes(city) ? `${q} ${city}` : q;
-      const translatedInfo = await translatePlaceKeyword(q);
-      const geocodeQuery = translatedInfo?.keyword || fallbackQuery;
-      if (translatedInfo?.translated) mapTranslatedSearchHint.value = `翻譯搜尋：${translatedInfo.translated}`;
-
-      const geocoded = await new Promise((resolve) => {
-        geocoder.geocode({ address: geocodeQuery }, (results, status) => {
-          resolve(status === 'OK' && results?.[0] ? results[0] : null);
-        });
-      });
-
-      if (geocoded) {
-        let imageFields = buildFallbackImageFields();
-        if (geocoded.place_id) {
-          const place = await getPlaceDetails(geocoded.place_id, 'zh-TW');
-          imageFields = extractPlacePhotoInfo(place);
-        }
-
-        showSearchResultOnMap({
-          name: geocoded.address_components?.[0]?.long_name || q,
-          address: geocoded.formatted_address || geocodeQuery,
-          lat: geocoded.geometry.location.lat(),
-          lng: geocoded.geometry.location.lng(),
-          place_id: geocoded.place_id || '',
-          ...imageFields
-        });
-        mapSearchResults.value = [];
-        return;
-      }
-
-      alert('找不到這個地點');
     };
 
     const fetchTrips = async () => {
@@ -2584,12 +1790,9 @@ createApp({
       newHotel.value = { start_day: 1, end_day: 1 };
       currentDay.value = 1;
       totalDays.value = 1;
-      mapSearchQuery.value = '';
-      mapAddDay.value = 1;
       mapDisplayFilter.value = 'all';
-      clearMapSearchResult();
-      clearProbeSearch();
-      probeSearchOpen.value = false;
+      mapLocatorOpen.value = false;
+      selectedMapPoint.value = null;
 
       currentView.value = 'app';
 
@@ -2622,11 +1825,9 @@ createApp({
       syncStatus.value = 'synced';
       syncMessage.value = '';
       tripWeather.value = { status: 'idle' };
-      mapSearchQuery.value = '';
       mapDisplayFilter.value = 'all';
-      clearMapSearchResult();
-      clearProbeSearch();
-      probeSearchOpen.value = false;
+      mapLocatorOpen.value = false;
+      selectedMapPoint.value = null;
       fetchTrips();
     };
 
@@ -2693,7 +1894,6 @@ createApp({
         }
 
         saveTripCache(tripId);
-        scheduleMissingPlacePhotoHydration(500);
         scheduleTripWeatherLoad(500);
       } finally {
         console.log("fetchData total ms =", Math.round(performance.now() - t_start));
@@ -2703,9 +1903,10 @@ createApp({
 
     const onDayClick = async (d) => {
       currentDay.value = d;
+      mapLocatorOpen.value = false;
+      selectedMapPoint.value = null;
       await nextTick();
       scheduleSortableInit();
-      scheduleMissingPlacePhotoHydration(250);
       scheduleTripWeatherLoad(250);
     };
 
@@ -3142,7 +2343,6 @@ createApp({
         lat: selectedLatSnapshot != null ? selectedLatSnapshot : (selectedPlaceSnapshot?.lat != null ? Number(selectedPlaceSnapshot.lat) : null),
         lng: selectedLngSnapshot != null ? selectedLngSnapshot : (selectedPlaceSnapshot?.lng != null ? Number(selectedPlaceSnapshot.lng) : null),
         place_id: selectedPlaceSnapshot?.place_id || '',
-        ...buildFallbackImageFields(),
         message: noteSnapshot,
         time: timeSnapshot,
         trip_id: currentTrip.value.id,
@@ -3179,7 +2379,6 @@ createApp({
         let displayName = selectedPlaceSnapshot?.structured_formatting?.main_text || placeName;
         let nameKo = '';
         let address = selectedPlaceSnapshot?.address || selectedPlaceSnapshot?.description || '';
-        let imageFields = buildFallbackImageFields();
 
         if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
@@ -3192,7 +2391,6 @@ createApp({
               lat = normalPlace.geometry.location.lat();
               lng = normalPlace.geometry.location.lng();
             }
-            imageFields = extractPlacePhotoInfo(normalPlace);
           } else if (selectedPlaceSnapshot?.lat != null && selectedPlaceSnapshot?.lng != null) {
             lat = Number(selectedPlaceSnapshot.lat);
             lng = Number(selectedPlaceSnapshot.lng);
@@ -3229,35 +2427,6 @@ createApp({
               }
             );
           });
-
-          if (placeId) {
-            const detailPlace = await getPlaceDetails(placeId, 'zh-TW');
-            if (detailPlace) {
-              imageFields = extractPlacePhotoInfo(detailPlace);
-            }
-          }
-        }
-
-        if (!imageFields.image_url) {
-          const repairResult = await resolveItineraryPhotoFields({
-            ...item,
-            name: displayName || placeName,
-            address,
-            lat,
-            lng,
-            place_id: placeId,
-            message: noteSnapshot
-          });
-          const { place: repairedPlace, ...repairedImageFields } = repairResult;
-          imageFields = repairedImageFields;
-          if (imageFields.image_url && repairedPlace) {
-            placeId = repairedPlace.place_id || placeId;
-            address = address || repairedPlace.formatted_address || '';
-            if ((lat == null || lng == null) && repairedPlace.geometry?.location) {
-              lat = repairedPlace.geometry.location.lat();
-              lng = repairedPlace.geometry.location.lng();
-            }
-          }
         }
 
         const updatedItem = {
@@ -3270,7 +2439,6 @@ createApp({
           lat,
           lng,
           place_id: placeId,
-          ...imageFields,
           message: noteSnapshot,
           time: timeSnapshot,
           trip_id: currentTrip.value.id,
@@ -3408,7 +2576,6 @@ createApp({
         lat: null,
         lng: null,
         place_id: selectedPlaceSnapshot?.place_id || '',
-        ...buildFallbackImageFields(),
         address: '',
         message: messageSnapshot,
         created_at: new Date().toISOString()
@@ -3430,7 +2597,6 @@ createApp({
         let placeId = alt.place_id || '';
         let displayName = name;
         let address = '';
-        let imageFields = buildFallbackImageFields();
 
         if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
@@ -3443,7 +2609,6 @@ createApp({
               lat = place.geometry.location.lat();
               lng = place.geometry.location.lng();
             }
-            imageFields = extractPlacePhotoInfo(place);
           }
         } else if (window.google) {
           const geocoder = new google.maps.Geocoder();
@@ -3461,11 +2626,6 @@ createApp({
               }
             );
           });
-
-          if (placeId) {
-            const detailPlace = await getPlaceDetails(placeId, 'zh-TW');
-            if (detailPlace) imageFields = extractPlacePhotoInfo(detailPlace);
-          }
         }
 
         const updatedAlt = normalizeAlternativeRecord({
@@ -3474,8 +2634,7 @@ createApp({
           lat,
           lng,
           place_id: placeId,
-          address,
-          ...imageFields
+          address
         });
 
         const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
@@ -3548,10 +2707,6 @@ createApp({
         lat: alt.lat != null ? Number(alt.lat) : null,
         lng: alt.lng != null ? Number(alt.lng) : null,
         place_id: alt.place_id || '',
-        image_url: alt.image_url || '',
-        image_source: alt.image_source || (alt.image_url ? 'google_places' : 'fallback'),
-        photo_attributions: alt.photo_attributions || '',
-        image_updated_at: alt.image_updated_at || '',
         message: alt.message || '',
         time: '',
         trip_id: currentTrip.value.id
@@ -3686,20 +2841,6 @@ createApp({
         const editedItem = itinerary.value.find(x => String(x.id) === String(id));
         if (!editedItem) throw new Error('edited itinerary item missing');
 
-        if (!String(editedItem.image_url || '').trim()) {
-          const result = await resolveItineraryPhotoFields(editedItem);
-          const { place, ...imageFields } = result;
-          Object.assign(editedItem, imageFields);
-          if (imageFields.image_url && place) {
-            if (place.place_id) editedItem.place_id = place.place_id;
-            if (place.formatted_address && !String(editedItem.address || '').trim()) editedItem.address = place.formatted_address;
-            if (place.geometry?.location) {
-              editedItem.lat = place.geometry.location.lat();
-              editedItem.lng = place.geometry.location.lng();
-            }
-          }
-        }
-
         const res = await postJSON({
           action: 'edit',
           type: 'itinerary',
@@ -3715,10 +2856,6 @@ createApp({
             time: editedItem.time || '',
             message: editedItem.message || '',
             day: newDay,
-            image_url: editedItem.image_url || '',
-            image_source: editedItem.image_source || '',
-            photo_attributions: editedItem.photo_attributions || '',
-            image_updated_at: editedItem.image_updated_at || '',
             is_alternative: currentIsAlt ? 'v' : ''
           }
         });
@@ -4564,14 +3701,14 @@ createApp({
     });
 
     watch(currentDay, () => {
-      mapAddDay.value = currentDay.value || 1;
       newExpense.value.day = currentDay.value || 1;
+      mapLocatorOpen.value = false;
+      selectedMapPoint.value = null;
       if (getMapDisplayDay()) {
         mapDisplayFilter.value = `day-${currentDay.value || 1}`;
       }
       scheduleSortableInit();
       if (isDayMapView()) updateMapMarkers();
-      if (currentTab.value === 'itinerary') scheduleMissingPlacePhotoHydration(250);
       scheduleTripWeatherLoad(250);
     });
 
@@ -4580,7 +3717,6 @@ createApp({
       if (isDayMapView()) {
         setTimeout(() => updateMapMarkers(), 80);
       } else if (currentTab.value === 'itinerary') {
-        scheduleMissingPlacePhotoHydration(250);
         scheduleTripWeatherLoad(250);
       }
     });
@@ -4589,16 +3725,12 @@ createApp({
       scheduleSortableInit();
       if (isDayMapView()) {
         setTimeout(() => updateMapMarkers(), 80);
+      } else {
+        mapLocatorOpen.value = false;
       }
     });
 
     watch(currentView, () => scheduleSortableInit());
-    watch(mapSearchQuery, (val) => {
-      if (!String(val || '').trim()) {
-        mapTranslatedSearchHint.value = '';
-        clearMapSearchResult();
-      }
-    });
     watch([itinerary, expenses, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
@@ -4633,21 +3765,20 @@ createApp({
       window.removeEventListener('pageshow', handleAppResume);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (todayRefreshTimer) clearInterval(todayRefreshTimer);
+      if (mapBounceTimer) clearTimeout(mapBounceTimer);
     });
 
     return {
       APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, dayViewMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
-      isAddingPlace, isAddingMapPlace, isAddingExpense, isSavingExpense,
+      isAddingPlace, isAddingExpense, isSavingExpense,
       isAddingAlternative, isDeletingAlternative, isAddingAlternativeToItinerary,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense, expenseFilter, categories, itineraryTypes,
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
-      mapSearchQuery, mapSearchResults, mapTranslatedSearchHint, mapIsSearching, mapIsCoordinateMode, mapResolvedCoordName, isMapReady,
-      mapLatestResult, mapAddDay, mapDisplayFilter,
-      probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
+      isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       tripWeather,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
@@ -4662,13 +3793,11 @@ createApp({
 
       searchPlacesInput, useCoordinateInput, selectPlace,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
-      getItineraryImage, getHotelItineraryImage, handleItineraryImageError, handleHotelItineraryImageError,
-      getItineraryType, getItineraryTypeTone, getItineraryIcon, sanitizePhotoAttributions,
-      itineraryListEl, alternativeListEl, formatTime,
+      getItineraryType, getItineraryTypeTone, getItineraryCategoryLabel, getItineraryIcon,
+      hasMapCoordinates, itineraryListEl, alternativeListEl, formatTime,
 
-      searchMapPlacesInput, useMapCoordinateInput, selectMapPlace,
-      searchCityAndJump, fitBoundsToTrip, applyMapDisplayFilter, addMapSearchResultToItinerary,
-      toggleProbeSearch, clearProbeSearch, closeProbeSearchPanel, searchProbePlacesInput, selectProbePlace, searchProbeByQuery,
+      fitBoundsToTrip, applyMapDisplayFilter,
+      toggleMapLocator, closeMapLocator, focusItineraryMapPoint, showAllCurrentDayMapPoints,
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
       hotelDayRangeLabel, openHotelMap,

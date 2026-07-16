@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260708.10 -->
+<!-- version: 20260708.11 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.10" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.10" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.10" />
-  <link rel="manifest" href="./site.webmanifest?v=20260708.10" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.11" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.11" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.11" />
+  <link rel="manifest" href="./site.webmanifest?v=20260708.11" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260708.10" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.10" />
+  <link rel="stylesheet" href="./style.css?v=20260708.11" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.11" />
 </head>
 <body>
 
@@ -180,63 +180,75 @@
 
             <button
               type="button"
-              class="map-probe-toggle"
-              :class="{ 'is-active': probeSearchOpen || probePlace }"
-              @click="toggleProbeSearch"
-              title="探點搜尋"
-              aria-label="探點搜尋"
-            >🔎</button>
+              class="map-locator-toggle"
+              :class="{ 'is-active': mapLocatorOpen }"
+              @click="toggleMapLocator"
+              :aria-expanded="mapLocatorOpen ? 'true' : 'false'"
+              aria-controls="map-locator-sheet"
+            >
+              <span class="map-locator-toggle-icon" aria-hidden="true">⌖</span>
+              <span>行程定位</span>
+              <span class="map-locator-count">{{ currentDayMapPoints.length }}</span>
+            </button>
 
-            <div v-show="probeSearchOpen" class="map-probe-panel">
-              <div class="map-probe-search">
-                <span aria-hidden="true">🔎</span>
-                <input
-                  v-model="probeQuery"
-                  @input="searchProbePlacesInput"
-                  @keyup.enter="searchProbeByQuery"
-                  type="text"
-                  placeholder="搜尋想探的地點"
-                >
-                <button
-                  v-if="probeQuery || probePlace"
-                  type="button"
-                  class="map-probe-clear-btn"
-                  @click="clearProbeSearch"
-                  aria-label="清除探點"
-                  title="清除探點"
-                >⌫</button>
-                <button
-                  type="button"
-                  class="map-probe-close-btn"
-                  @click="closeProbeSearchPanel"
-                  aria-label="關閉探點搜尋"
-                  title="關閉探點搜尋"
-                >×</button>
+            <div v-if="selectedMapPoint && !mapLocatorOpen" class="map-locator-current">
+              <span aria-hidden="true">{{ selectedMapPoint.icon }}</span>
+              <div>
+                <span>目前定位</span>
+                <strong>{{ selectedMapPoint.name }}</strong>
+              </div>
+            </div>
+
+            <section
+              v-show="mapLocatorOpen"
+              id="map-locator-sheet"
+              class="map-locator-sheet"
+              aria-label="行程定位"
+            >
+              <div class="map-locator-header">
+                <div>
+                  <strong>Day {{ currentDay }} 行程定位</strong>
+                  <span>{{ currentDayMapPoints.length }} 個已定位點位</span>
+                </div>
+                <div class="map-locator-header-actions">
+                  <button
+                    v-if="currentDayMapPoints.length"
+                    type="button"
+                    class="map-locator-all-btn"
+                    @click="showAllCurrentDayMapPoints"
+                  >全部</button>
+                  <button
+                    type="button"
+                    class="map-locator-close-btn"
+                    @click="closeMapLocator"
+                    title="關閉"
+                    aria-label="關閉行程定位"
+                  >×</button>
+                </div>
               </div>
 
-              <div v-if="probeIsSearching" class="map-probe-status">搜尋中...</div>
-
-              <div v-if="probeResults.length" class="map-probe-results">
+              <div v-if="currentDayMapPoints.length" class="map-locator-list">
                 <button
-                  v-for="item in probeResults"
-                  :key="'probe-' + (item.place_id || item.description || item.name)"
+                  v-for="point in currentDayMapPoints"
+                  :key="point.key"
                   type="button"
-                  class="map-probe-result-item"
-                  @click="selectProbePlace(item)"
+                  class="map-locator-item"
+                  :class="{ 'is-selected': selectedMapPoint && selectedMapPoint.key === point.key }"
+                  @click="focusItineraryMapPoint(point)"
                 >
-                  <span class="font-bold">
-                    {{ item.probe_title || item.structured_formatting?.main_text || item.name || item.description }}
-                    <span v-if="item.zh_label" class="map-probe-zh-label">（{{ item.zh_label }}）</span>
+                  <span class="map-locator-item-icon" :class="'itinerary-icon-' + point.tone">{{ point.icon }}</span>
+                  <span class="map-locator-item-main">
+                    <span class="map-locator-item-title">
+                      <time>{{ point.timeLabel }}</time>
+                      <strong>{{ point.name }}</strong>
+                    </span>
+                    <span v-if="point.address" class="map-locator-item-address">{{ point.address }}</span>
                   </span>
-                  <span>{{ item.structured_formatting?.secondary_text || item.address || item.description }}</span>
                 </button>
               </div>
 
-              <div v-if="probePlace" class="map-probe-card">
-                <div class="font-bold">🔎 {{ probePlace.name }}</div>
-                <div v-if="probePlace.address">{{ probePlace.address }}</div>
-              </div>
-            </div>
+              <div v-else class="map-locator-empty">目前 Day 沒有已定位行程</div>
+            </section>
           </div>
         </div>
 
@@ -308,39 +320,33 @@
               <div class="itinerary-rail-node">{{ getItineraryIcon(place) }}</div>
             </div>
 
-            <div class="card itinerary-card itinerary-card-with-media active:scale-[0.99] transition">
+            <div class="card itinerary-card itinerary-card-v2 active:scale-[0.99] transition">
               <div class="drag-handle itinerary-drag-handle select-none">≡</div>
 
-              <img
-                class="itinerary-image"
-                :src="getItineraryImage(place)"
-                :alt="place.name || '行程圖片'"
-                loading="lazy"
-                @error="handleItineraryImageError($event, place)"
+              <div
+                class="itinerary-icon-circle"
+                :class="'itinerary-icon-' + getItineraryTypeTone(place)"
                 @click="handleItineraryContentClick($event, place)"
-              >
+              >{{ getItineraryIcon(place) }}</div>
 
               <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
-                <div class="itinerary-title-row">
-                  <span class="itinerary-type-pill" :class="'itinerary-type-' + getItineraryTypeTone(place)">
-                    {{ getItineraryIcon(place) }} {{ getItineraryType(place) }}
-                  </span>
-                  <span class="itinerary-title">{{ place.name }}</span>
+                <div class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">
+                  {{ getItineraryCategoryLabel(place) }}
                 </div>
+                <div class="itinerary-title">{{ place.name }}</div>
 
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
-                <div v-if="place.address" class="itinerary-address">📍 {{ place.address }}</div>
+                <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
 
                 <div class="itinerary-tags">
                   <span
-                    v-if="place.lat && place.lng"
-                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
+                    v-if="hasMapCoordinates(place)"
+                    class="itinerary-status-chip is-located"
                   >已定位</span>
                   <span
                     v-else
-                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
+                    class="itinerary-status-chip is-unlocated"
                   >無座標</span>
-
                 </div>
               </div>
 
@@ -369,34 +375,25 @@
               <div class="itinerary-rail-node hotel-node">🏠</div>
             </div>
 
-            <div class="card hotel-itinerary-card itinerary-card-with-media active:scale-[0.99] transition" @click="openHotelMap(hotel)">
+            <div class="card hotel-itinerary-card itinerary-card-v2 active:scale-[0.99] transition" @click="openHotelMap(hotel)">
               <div class="itinerary-drag-handle hotel-static-icon select-none">•</div>
-              <img
-                class="itinerary-image"
-                :src="getHotelItineraryImage(hotel)"
-                :alt="hotel.name || '住宿圖片'"
-                loading="lazy"
-                @error="handleHotelItineraryImageError($event)"
-              >
+              <div class="itinerary-icon-circle itinerary-icon-hotel">🏠</div>
               <div class="itinerary-content">
-                <div class="itinerary-title-row">
-                  <span class="hotel-itinerary-badge">住宿</span>
-                  <span class="itinerary-title">{{ hotel.name || '住宿' }}</span>
-                </div>
+                <div class="itinerary-category itinerary-category-hotel">住宿</div>
+                <div class="itinerary-title">{{ hotel.name || '住宿' }}</div>
 
                 <div class="itinerary-subtitle">{{ hotelDayRangeLabel(hotel) }}</div>
-                <div v-if="hotel.address" class="itinerary-address">📍 {{ hotel.address }}</div>
+                <div v-if="hotel.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ hotel.address }}</div>
 
                 <div class="itinerary-tags">
                   <span
-                    v-if="hotel.lat != null && hotel.lng != null"
-                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
+                    v-if="hasMapCoordinates(hotel)"
+                    class="itinerary-status-chip is-located"
                   >已定位</span>
                   <span
                     v-else
-                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
+                    class="itinerary-status-chip is-unlocated"
                   >無座標</span>
-
                 </div>
               </div>
 
@@ -426,45 +423,38 @@
               v-for="place in filteredAlternatives"
               :key="place.id"
               :data-id="place.id"
-              class="card alternative-card itinerary-card-with-media active:scale-[0.99] transition py-3 mb-2"
+              class="card alternative-card itinerary-card-v2 active:scale-[0.99] transition py-3 mb-2"
             >
               <div class="drag-handle itinerary-drag-handle alternative-drag-handle select-none">≡</div>
 
-              <img
-                class="itinerary-image"
-                :src="getItineraryImage(place)"
-                :alt="place.name || '備案圖片'"
-                loading="lazy"
-                @error="handleItineraryImageError($event, place)"
+              <div
+                class="itinerary-icon-circle"
+                :class="'itinerary-icon-' + getItineraryTypeTone(place)"
                 @click="handleItineraryContentClick($event, place)"
-              >
+              >{{ getItineraryIcon(place) }}</div>
 
               <div class="itinerary-content" @click="handleItineraryContentClick($event, place)">
-                <div class="itinerary-title-row">
+                <div class="itinerary-category-row">
                   <span class="itinerary-type-pill itinerary-type-alternative">📌 備案</span>
-                  <span
-                    v-if="place.time"
-                    class="text-blue-600 font-mono font-bold text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shrink-0"
-                  >{{ formatTime(place.time) }}</span>
-                  <span class="itinerary-type-pill" :class="'itinerary-type-' + getItineraryTypeTone(place)">
-                    {{ getItineraryIcon(place) }} {{ getItineraryType(place) }}
+                  <span class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">
+                    {{ getItineraryCategoryLabel(place) }}
                   </span>
-                  <span class="itinerary-title">{{ place.name }}</span>
+                  <time v-if="place.time" class="itinerary-alternative-time">{{ formatTime(place.time) }}</time>
                 </div>
+                <div class="itinerary-title">{{ place.name }}</div>
 
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
-                <div v-if="place.address" class="itinerary-address">📍 {{ place.address }}</div>
+                <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
 
                 <div class="itinerary-tags">
                   <span
-                    v-if="place.lat && place.lng"
-                    class="text-[10px] text-green-600 bg-green-100 px-1.5 rounded font-bold border border-green-200 shrink-0"
+                    v-if="hasMapCoordinates(place)"
+                    class="itinerary-status-chip is-located"
                   >已定位</span>
                   <span
                     v-else
-                    class="text-[10px] text-red-400 bg-red-50 px-1.5 rounded font-bold border border-red-200 shrink-0"
+                    class="itinerary-status-chip is-unlocated"
                   >無座標</span>
-
                 </div>
               </div>
 
@@ -920,20 +910,20 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260708.10"></script>
-<script src="./cache-refresh.js?v=20260708.10"></script>
-<script src="./keyword-map.js?v=20260708.10"></script>
-<script src="./js/utils.js?v=20260708.10"></script>
-<script src="./js/api.js?v=20260708.10"></script>
-<script src="./js/cache.js?v=20260708.10"></script>
-<script src="./js/maps.js?v=20260708.10"></script>
-<script src="./js/places.js?v=20260708.10"></script>
-<script src="./js/itinerary.js?v=20260708.10"></script>
-<script src="./js/hotels.js?v=20260708.10"></script>
-<script src="./js/expenses.js?v=20260708.10"></script>
-<script src="./app.js?v=20260708.10"></script>
-<script src="./search-zh-label.js?v=20260708.10"></script>
-<script src="./prep-checklist.js?v=20260708.10"></script>
+<script src="./config.js?v=20260708.11"></script>
+<script src="./cache-refresh.js?v=20260708.11"></script>
+<script src="./keyword-map.js?v=20260708.11"></script>
+<script src="./js/utils.js?v=20260708.11"></script>
+<script src="./js/api.js?v=20260708.11"></script>
+<script src="./js/cache.js?v=20260708.11"></script>
+<script src="./js/maps.js?v=20260708.11"></script>
+<script src="./js/places.js?v=20260708.11"></script>
+<script src="./js/itinerary.js?v=20260708.11"></script>
+<script src="./js/hotels.js?v=20260708.11"></script>
+<script src="./js/expenses.js?v=20260708.11"></script>
+<script src="./app.js?v=20260708.11"></script>
+<script src="./search-zh-label.js?v=20260708.11"></script>
+<script src="./prep-checklist.js?v=20260708.11"></script>
 
 </body>
 </html>
