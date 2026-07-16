@@ -41,9 +41,10 @@ The itinerary map contains two separate tools:
 
 ## Feature Data Conventions
 
-- Transport details stay in the existing itinerary `message` field. The first line uses the versioned `[[TRAVEL_TRANSPORT_V1:...]]` envelope with URI-encoded JSON; user notes follow on later lines. Read and write this value only through the transport message helpers.
-- Public-wallet contributions stay in `expenses` with `involved` containing `公帳`. Spending from the wallet uses `payer: 公帳`. Contributions are excluded from spending totals; wallet spending remains a normal expense.
-- Promoting an alternative updates the same itinerary record from `is_alternative: v` to an empty flag. It must not create a duplicate itinerary ID.
+- Transport details stay in the existing itinerary `message` field. The first line uses the versioned `[[TRAVEL_TRANSPORT_V1:...]]` envelope with URI-encoded JSON; user notes follow on later lines. The current UI exposes only `number`, `terminal`, and the itinerary `time`, while hidden legacy transport keys remain readable.
+- Shared-wallet enablement is stored on `trips.shared_wallet_enabled`. Deposits and payments are stored only in `SharedWalletTransactions`; they never use `people` or `expenses`.
+- Legacy `expenses` records that reference `公帳` are retained but excluded from normal expense totals, analysis, and settlement calculations.
+- Moving between formal and alternative plans updates the same itinerary record through `is_alternative` (`v` for alternative, empty for formal). It must not create a duplicate itinerary ID.
 
 ## Migration Rule
 

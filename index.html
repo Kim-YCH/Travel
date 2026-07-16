@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260708.14 -->
+<!-- version: 20260716.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.14" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.14" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.14" />
-  <link rel="manifest" href="./site.webmanifest?v=20260708.14" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260716.1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260716.1" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260716.1" />
+  <link rel="manifest" href="./site.webmanifest?v=20260716.1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260708.14" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.14" />
+  <link rel="stylesheet" href="./style.css?v=20260716.1" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260716.1" />
 </head>
 <body>
 
@@ -394,7 +394,7 @@
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
                 <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
 
-                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通班次資料">
+                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通資訊">
                   <span v-for="detail in getTransportSummary(place)" :key="place.id + '-' + detail">{{ detail }}</span>
                 </div>
 
@@ -419,6 +419,13 @@
               </div>
 
               <div class="itinerary-actions">
+                <button
+                  class="icon-btn icon-btn-demote"
+                  title="正式轉備案"
+                  aria-label="正式轉備案"
+                  @click.stop="moveItineraryToAlternative(place)"
+                  :disabled="isPromotingAlternative || isLoading"
+                >↓</button>
                 <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
                 <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading">✕</button>
               </div>
@@ -499,7 +506,7 @@
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
                 <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
 
-                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通班次資料">
+                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通資訊">
                   <span v-for="detail in getTransportSummary(place)" :key="'alternative-' + place.id + '-' + detail">{{ detail }}</span>
                 </div>
 
@@ -546,9 +553,13 @@
       <!-- Money -->
       <div v-show="currentTab === 'money'" class="p-3 space-y-3 pb-24 tab-panel money-page">
         <div class="card money-summary bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg">
-          <div class="flex justify-between items-end mb-4">
-            <span class="text-gray-400 text-sm">總支出</span>
-            <span class="text-3xl font-bold tracking-wider">${{ totalExpense }}</span>
+          <div class="money-summary-total">
+            <span>旅程實際支出</span>
+            <strong>${{ Math.round(actualTripExpense) }}</strong>
+          </div>
+          <div class="money-summary-breakdown">
+            <span>個人分帳支出 <strong>${{ Math.round(totalExpense) }}</strong></span>
+            <span v-if="sharedWalletEnabled">共同錢包支出 <strong>${{ Math.round(sharedWalletPaymentTotal) }}</strong></span>
           </div>
 
           <div class="space-y-1 border-t border-gray-600 pt-3 text-sm">
@@ -561,50 +572,79 @@
           </div>
         </div>
 
-        <div class="card public-account-card">
-          <div class="public-account-header">
+        
+        <div v-if="sharedWalletEnabled" class="card shared-wallet-card">
+          <div class="shared-wallet-header">
             <div>
               <span>共同旅費錢包</span>
-              <strong :class="publicAccountBalance < 0 ? 'is-negative' : ''">
-                ${{ Math.round(publicAccountBalance) }}
-              </strong>
+              <strong>${{ Math.round(sharedWalletBalance) }}</strong>
             </div>
-            <div class="public-account-totals">
-              <span>存入 ${{ Math.round(publicAccountContributionTotal) }}</span>
-              <span>使用 ${{ Math.round(publicAccountSpentTotal) }}</span>
+            <div class="shared-wallet-totals">
+              <span>總存入 ${{ Math.round(sharedWalletDepositTotal) }}</span>
+              <span>錢包支出 ${{ Math.round(sharedWalletPaymentTotal) }}</span>
             </div>
           </div>
 
-          <div class="public-account-form">
-            <select v-model="newPublicFund.payer" aria-label="存入公費的成員">
-              <option disabled value="">選擇成員</option>
-              <option v-for="(p, index) in people" :key="'fund-payer-' + p.id" :value="p.name">
-                {{ p.name || '成員 ' + (index+1) }}
-              </option>
-            </select>
-            <input v-model.number="newPublicFund.amount" type="number" min="1" inputmode="decimal" placeholder="存入金額" aria-label="存入公費金額">
+          <div class="shared-wallet-mode" role="tablist" aria-label="共同錢包操作">
             <button
               type="button"
-              class="public-account-add-btn"
-              @click="addPublicFund"
-              :disabled="isAddingPublicFund || !newPublicFund.payer || Number(newPublicFund.amount) <= 0"
-            >{{ isAddingPublicFund ? '寫入中' : '存入' }}</button>
+              role="tab"
+              :aria-selected="walletEntryMode === 'deposit'"
+              :class="{ active: walletEntryMode === 'deposit' }"
+              @click="walletEntryMode = 'deposit'"
+            >新增存入</button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="walletEntryMode === 'payment'"
+              :class="{ active: walletEntryMode === 'payment' }"
+              @click="walletEntryMode = 'payment'"
+            >新增公費支出</button>
           </div>
 
-          <div v-if="publicAccountContributions.length" class="public-account-ledger">
-            <div v-for="fund in publicAccountContributions" :key="'fund-' + fund.id" class="public-account-entry">
+          <div v-if="walletEntryMode === 'deposit'" class="shared-wallet-form">
+            <input v-model="newSharedWalletDeposit.date" type="date" aria-label="存入日期">
+            <select v-model="newSharedWalletDeposit.person" aria-label="存入人">
+              <option disabled value="">選擇存入人</option>
+              <option v-for="(p, index) in people" :key="'wallet-person-' + p.id" :value="p.name">
+                {{ p.name || '成員 ' + (index + 1) }}
+              </option>
+            </select>
+            <input v-model.number="newSharedWalletDeposit.amount" type="number" min="1" inputmode="decimal" placeholder="金額" aria-label="存入金額">
+            <input v-model="newSharedWalletDeposit.note" type="text" placeholder="備註（選填）" aria-label="存入備註">
+            <button
+              type="button"
+              class="shared-wallet-submit"
+              @click="addSharedWalletDeposit"
+              :disabled="isSavingSharedWallet || !newSharedWalletDeposit.date || !newSharedWalletDeposit.person || Number(newSharedWalletDeposit.amount) <= 0"
+            >{{ isSavingSharedWallet ? '寫入中' : '存入' }}</button>
+          </div>
+
+          <div v-else class="shared-wallet-form">
+            <input v-model="newSharedWalletPayment.date" type="date" aria-label="公費支出日期">
+            <input v-model="newSharedWalletPayment.title" type="text" placeholder="支出項目" aria-label="公費支出項目">
+            <input v-model.number="newSharedWalletPayment.amount" type="number" min="1" inputmode="decimal" placeholder="金額" aria-label="公費支出金額">
+            <input v-model="newSharedWalletPayment.note" type="text" placeholder="備註（選填）" aria-label="公費支出備註">
+            <button
+              type="button"
+              class="shared-wallet-submit is-payment"
+              @click="addSharedWalletPayment"
+              :disabled="isSavingSharedWallet || !newSharedWalletPayment.date || !newSharedWalletPayment.title || Number(newSharedWalletPayment.amount) <= 0"
+            >{{ isSavingSharedWallet ? '寫入中' : '新增支出' }}</button>
+          </div>
+
+          <div v-if="sharedWalletRecords.length" class="shared-wallet-ledger">
+            <div v-for="item in sharedWalletRecords" :key="'wallet-' + item.id" class="shared-wallet-entry" :class="'is-' + item.type">
               <div>
-                <strong>{{ fund.payer }}</strong>
-                <span>Day {{ fund.day || 1 }} 存入</span>
+                <strong>{{ item.type === 'deposit' ? (item.person || '存入') : item.title }}</strong>
+                <span>{{ item.date }}<template v-if="item.note">｜{{ item.note }}</template></span>
               </div>
               <div>
-                <strong>+${{ Math.round(fund.amount) }}</strong>
-                <button type="button" @click="removeExpense(fund.id)" title="刪除存入紀錄" aria-label="刪除存入紀錄">×</button>
+                <strong>{{ item.type === 'deposit' ? '+' : '-' }}${{ Math.round(item.amount) }}</strong>
+                <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
               </div>
             </div>
           </div>
-
-          <p class="public-account-hint">一般記帳的付款人選「公帳」，就會從這個餘額扣除。</p>
         </div>
 
         <div v-if="categoryAnalysis.length > 0" class="card">
@@ -650,9 +690,6 @@
               <option v-for="(p, index) in people" :key="'new-exp-payer-' + p.id" :value="p.name">
                 {{ p.name || '成員 ' + (index+1) }}
               </option>
-              <option :value="PUBLIC_ACCOUNT_NAME" :disabled="publicAccountBalance <= 0">
-                公帳（餘額 ${{ Math.round(publicAccountBalance) }}）
-              </option>
             </select>
           </div>
 
@@ -687,7 +724,7 @@
                 <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span>
               </div>
               <div class="text-xs text-gray-500 mt-1 break-words">
-                {{ exp.payer === PUBLIC_ACCOUNT_NAME ? '公帳支付' : exp.payer + ' 先付' }}
+                {{ exp.payer }} 先付
                 <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤
               </div>
             </div>
@@ -726,6 +763,22 @@
         >🔙 切換旅程</button>
 
         <h3 class="font-bold text-gray-700 ml-1">📋 資料管理</h3>
+        <div class="wallet-setting-row">
+          <div>
+            <strong>共同旅費錢包</strong>
+            <span>開啟後可在分帳頁管理公費；公費不會作為成員參與一般分帳。</span>
+          </div>
+          <label class="toggle-control">
+            <input
+              type="checkbox"
+              :checked="sharedWalletEnabled"
+              :disabled="isUpdatingSharedWalletSetting"
+              @change="updateSharedWalletSetting"
+            >
+            <span aria-hidden="true"></span>
+            <span class="sr-only">啟用共同旅費錢包</span>
+          </label>
+        </div>
         <button
           @click="exportItinerary"
           class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
@@ -892,31 +945,16 @@
         <div class="text-xs font-bold text-gray-500 ml-1">{{ editPlace.type === '交通' ? '出發時間' : '時間' }}</div>
         <input v-model="editPlace.time" type="time">
 
-        <section v-if="editPlace.type === '交通'" class="transport-editor" aria-label="交通班次資料">
-          <div class="transport-editor-title">交通班次</div>
+        <section v-if="editPlace.type === '交通'" class="transport-editor" aria-label="交通資訊">
+          <div class="transport-editor-title">交通資訊</div>
           <div class="transport-editor-grid">
             <label>
-              <span>方式</span>
-              <select v-model="editPlace.transport.mode">
-                <option disabled value="">請選擇</option>
-                <option v-for="mode in transportModes" :key="'transport-mode-' + mode" :value="mode">{{ mode }}</option>
-              </select>
-            </label>
-            <label>
               <span>班次</span>
-              <input v-model="editPlace.transport.number" placeholder="例如 CI100">
+              <input v-model="editPlace.transport.number">
             </label>
             <label>
               <span>航廈／月台</span>
-              <input v-model="editPlace.transport.terminal" placeholder="例如 T2、3 號月台">
-            </label>
-            <label>
-              <span>座位</span>
-              <input v-model="editPlace.transport.seat" placeholder="例如 12A">
-            </label>
-            <label class="transport-editor-wide">
-              <span>報到時間</span>
-              <input v-model="editPlace.transport.checkin" type="time">
+              <input v-model="editPlace.transport.terminal" placeholder="航廈 / 月台">
             </label>
           </div>
         </section>
@@ -1030,7 +1068,6 @@
           <option v-for="(p, index) in people" :key="'edit-exp-payer-' + p.id" :value="p.name">
             {{ p.name || '成員 ' + (index+1) }}
           </option>
-          <option :value="PUBLIC_ACCOUNT_NAME">公帳</option>
         </select>
 
         <div>
@@ -1056,20 +1093,20 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260708.14"></script>
-<script src="./cache-refresh.js?v=20260708.14"></script>
-<script src="./keyword-map.js?v=20260708.14"></script>
-<script src="./js/utils.js?v=20260708.14"></script>
-<script src="./js/api.js?v=20260708.14"></script>
-<script src="./js/cache.js?v=20260708.14"></script>
-<script src="./js/maps.js?v=20260708.14"></script>
-<script src="./js/places.js?v=20260708.14"></script>
-<script src="./js/itinerary.js?v=20260708.14"></script>
-<script src="./js/hotels.js?v=20260708.14"></script>
-<script src="./js/expenses.js?v=20260708.14"></script>
-<script src="./app.js?v=20260708.14"></script>
-<script src="./search-zh-label.js?v=20260708.14"></script>
-<script src="./prep-checklist.js?v=20260708.14"></script>
+<script src="./config.js?v=20260716.1"></script>
+<script src="./cache-refresh.js?v=20260716.1"></script>
+<script src="./keyword-map.js?v=20260716.1"></script>
+<script src="./js/utils.js?v=20260716.1"></script>
+<script src="./js/api.js?v=20260716.1"></script>
+<script src="./js/cache.js?v=20260716.1"></script>
+<script src="./js/maps.js?v=20260716.1"></script>
+<script src="./js/places.js?v=20260716.1"></script>
+<script src="./js/itinerary.js?v=20260716.1"></script>
+<script src="./js/hotels.js?v=20260716.1"></script>
+<script src="./js/expenses.js?v=20260716.1"></script>
+<script src="./app.js?v=20260716.1"></script>
+<script src="./search-zh-label.js?v=20260716.1"></script>
+<script src="./prep-checklist.js?v=20260716.1"></script>
 
 </body>
 </html>

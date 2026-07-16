@@ -63,10 +63,11 @@
 
 ## 功能資料規則
 
-- 交通班次沿用 itinerary `message`，首行為版本化 JSON envelope；顯示、編輯、匯出都必須透過解析 helper，不得把 metadata 直接顯示給使用者。
-- 公費存入使用 expense 的 `involved: 公帳`；公費支出使用 `payer: 公帳`，不得新增另一張資料表。
-- 公費存入不列入總支出；公費實際支出必須列入總支出與分類分析。
-- 備案轉正式行程必須更新原 ID 與排序，不得複製成另一筆資料。
+- 交通資訊沿用 itinerary `message`，首行為版本化 JSON envelope；目前只顯示班次、航廈／月台與 itinerary `time` 出發時間，舊交通欄位資料不得被清除。
+- 共同旅費錢包開關使用 `trips.shared_wallet_enabled`；存入與支出只寫入 `SharedWalletTransactions`，不得寫入 `people` 或 `expenses`。
+- 一般分帳只處理真實旅伴。舊資料若包含 `公帳`，只在前端排除並提示，不得自動刪除或轉換。
+- 錢包存入不是支出；旅程實際支出為個人分帳支出加上錢包 payment。
+- 正式與備案互轉必須更新原 ID、`is_alternative` 與兩側排序，不得複製成另一筆資料。
 
 ## 版本與快取
 

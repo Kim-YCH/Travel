@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260708.14';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260716.1';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};
@@ -25,7 +25,8 @@ createApp({
     const isFlushingQueue = ref(false);
     const isAddingPlace = ref(false);
     const isAddingExpense = ref(false);
-    const isAddingPublicFund = ref(false);
+    const isSavingSharedWallet = ref(false);
+    const isUpdatingSharedWalletSetting = ref(false);
 
     const currentDay = ref(1);
     const totalDays = ref(1);
@@ -35,6 +36,7 @@ createApp({
     const people = ref([]);
     const itinerary = ref([]);
     const expenses = ref([]);
+    const sharedWalletTransactions = ref([]);
     const hotels = ref([]);
     const alternatives = ref([]); // 舊版備案表保留但不再使用；新版備案改存在 itinerary.is_alternative
 
@@ -44,11 +46,17 @@ createApp({
     const newNote = ref('');
     const newPerson = ref('');
     const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
-    const newPublicFund = ref({ payer: '', amount: '' });
+    const walletEntryMode = ref('deposit');
+    const defaultWalletDate = () => {
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+    };
+    const newSharedWalletDeposit = ref({ date: defaultWalletDate(), person: '', amount: '', note: '' });
+    const newSharedWalletPayment = ref({ date: defaultWalletDate(), title: '', amount: '', note: '' });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
     const itineraryTypes = ['景點', '交通', '購物', '活動', '美食', '其他'];
-    const transportModes = ['航班', '火車', '巴士', '渡輪', '其他'];
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
@@ -453,13 +461,45 @@ createApp({
       payer: item?.payer || ''
     });
 
-    // 公帳規則：只要「分攤給」包含公帳，就視為放入公帳。
-    // 這類紀錄仍保留在分帳計算中，但不顯示於前端支出列表，也不納入總支出/消費分析。
+    // 舊公帳資料保留在後端，但新版前端不再把公帳視為旅伴或一般分帳資料。
     const PUBLIC_ACCOUNT_NAME = '公帳';
     const normalizePersonName = (name) => String(name || '').trim();
-    const isPublicAccountFund = (expense) => {
+    const isSystemWalletPerson = (person) => {
+      const name = normalizePersonName(typeof person === 'string' ? person : person?.name);
+      const role = String(person?.role || '').trim().toLowerCase();
+      const type = String(person?.type || '').trim().toLowerCase();
+      return name === PUBLIC_ACCOUNT_NAME || role === 'public_wallet' || type === 'wallet';
+    };
+    const filterActualPeople = (items) => (Array.isArray(items) ? items : []).filter(person => !isSystemWalletPerson(person));
+    const isLegacyPublicAccountExpense = (expense) => {
+      const payer = normalizePersonName(expense?.payer);
       const involved = normalizeInvolved(expense?.involved).map(normalizePersonName);
-      return involved.includes(PUBLIC_ACCOUNT_NAME);
+      const category = String(expense?.category || '').trim();
+      const title = String(expense?.title || '').trim();
+      return payer === PUBLIC_ACCOUNT_NAME
+        || involved.includes(PUBLIC_ACCOUNT_NAME)
+        || category.includes('公帳')
+        || category.includes('公費')
+        || title === '存入公費';
+    };
+    const parseBooleanFlag = (value) => value === true || value === 1 || ['1', 'true', 'yes', 'on', 'v'].includes(String(value || '').trim().toLowerCase());
+    const normalizeSharedWalletTransaction = (item) => ({
+      ...item,
+      id: String(item?.id || ''),
+      trip_id: String(item?.trip_id || item?.tripId || ''),
+      type: String(item?.type || '').trim().toLowerCase(),
+      date: String(item?.date || '').slice(0, 10),
+      title: String(item?.title || '').trim(),
+      person: String(item?.person || '').trim(),
+      amount: Number(item?.amount) || 0,
+      note: String(item?.note || '').trim()
+    });
+    const syncPersonSelections = () => {
+      const names = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
+      if (!names.includes(newExpense.value.payer)) newExpense.value.payer = names[0] || '';
+      newExpense.value.involved = normalizeInvolved(newExpense.value.involved).filter(name => names.includes(normalizePersonName(name)));
+      if (!newExpense.value.involved.length) newExpense.value.involved = [...names];
+      if (!names.includes(newSharedWalletDeposit.value.person)) newSharedWalletDeposit.value.person = names[0] || '';
     };
     const expenseCreatedTime = (expense) => {
       const fromId = parseInt(String(expense?.id || '').split('_')[0], 10);
@@ -538,11 +578,8 @@ createApp({
       if (getItineraryType(item) !== '交通') return [];
       const details = getTransportDetails(item);
       return [
-        details.mode,
         details.number ? `班次 ${details.number}` : '',
-        details.terminal ? `航廈／月台 ${details.terminal}` : '',
-        details.seat ? `座位 ${details.seat}` : '',
-        details.checkin ? `報到 ${details.checkin}` : ''
+        details.terminal ? `航廈／月台 ${details.terminal}` : ''
       ].filter(Boolean);
     };
 
@@ -839,6 +876,7 @@ createApp({
         localStorage.setItem(cacheKey(tripId), JSON.stringify({
           itinerary: itinerary.value,
           expenses: expenses.value,
+          sharedWalletTransactions: sharedWalletTransactions.value,
           people: people.value,
           hotels: hotels.value,
           alternatives: alternatives.value,
@@ -857,10 +895,12 @@ createApp({
 
         itinerary.value = Array.isArray(c.itinerary) ? c.itinerary.map(normalizeItineraryRecord) : [];
         expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
-        people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
-        if (!people.value.some(person => person.name === newPublicFund.value.payer)) {
-          newPublicFund.value.payer = people.value[0]?.name || '';
-        }
+        sharedWalletTransactions.value = Array.isArray(c.sharedWalletTransactions)
+          ? c.sharedWalletTransactions.map(normalizeSharedWalletTransaction)
+          : [];
+        people.value = filterActualPeople(c.people);
+        if (!people.value.length) people.value = [{id:'default', name:'我'}];
+        syncPersonSelections();
         hotels.value    = Array.isArray(c.hotels) ? c.hotels.map(normalizeHotelRecord) : [];
         alternatives.value = Array.isArray(c.alternatives) ? c.alternatives.map(normalizeAlternativeRecord) : [];
 
@@ -2185,7 +2225,14 @@ createApp({
 
         console.log('fetchTrips api ms =', Math.round(t_api1 - t_api0), data);
 
-        trips.value = Array.isArray(data) ? data : [];
+        const localTrips = new Map(trips.value.map(item => [String(item.id), item]));
+        trips.value = Array.isArray(data) ? data.map(item => {
+          const local = localTrips.get(String(item.id));
+          if (item?.shared_wallet_enabled == null && local?.shared_wallet_enabled != null) {
+            return { ...item, shared_wallet_enabled: local.shared_wallet_enabled };
+          }
+          return item;
+        }) : [];
         saveTripsCache();
 
         const t_assign = performance.now();
@@ -2207,7 +2254,8 @@ createApp({
         id,
         name,
         city: newTripCity.value.trim() || '',
-        start_date: ''
+        start_date: '',
+        shared_wallet_enabled: false
       };
 
       trips.value.push(newTrip);
@@ -2224,8 +2272,10 @@ createApp({
 
       itinerary.value = [];
       expenses.value = [];
+      sharedWalletTransactions.value = [];
       people.value = [];
-      newPublicFund.value = { payer: '', amount: '' };
+      newSharedWalletDeposit.value = { date: defaultWalletDate(), person: '', amount: '', note: '' };
+      newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', note: '' };
       hotels.value = [];
       hotelSearchQuery.value = '';
       hotelSearchResults.value = [];
@@ -2304,12 +2354,15 @@ createApp({
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
         const htl  = Array.isArray(data?.hotels) ? data.hotels : [];
+        const walletPayload = Array.isArray(data?.sharedWalletTransactions)
+          ? data.sharedWalletTransactions
+          : (Array.isArray(data?.shared_wallet_transactions) ? data.shared_wallet_transactions : null);
         itinerary.value = itin.map(normalizeItineraryRecord);
         expenses.value = exp.map(normalizeExpenseRecord);
-        people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
-        if (!people.value.some(person => person.name === newPublicFund.value.payer)) {
-          newPublicFund.value.payer = people.value[0]?.name || '';
-        }
+        people.value = filterActualPeople(ppl);
+        if (!people.value.length) people.value = [{id:'default', name:'我'}];
+        syncPersonSelections();
+        if (walletPayload) sharedWalletTransactions.value = walletPayload.map(normalizeSharedWalletTransaction);
         hotels.value = htl.map(normalizeHotelRecord);
         alternatives.value = [];
 
@@ -3214,6 +3267,85 @@ createApp({
       }
     };
 
+    const moveItineraryToAlternative = async (place) => {
+      if (isPromotingAlternative.value) return;
+      if (!currentTrip.value?.id || !place?.id || isAlternativeItem(place)) return;
+      if (!confirm(`將「${place.name || '此行程'}」轉為備案？`)) return;
+
+      const id = String(place.id);
+      const tripId = currentTrip.value.id;
+      const day = place.day ? parseInt(place.day, 10) || currentDay.value : currentDay.value;
+      const idx = itinerary.value.findIndex(item => String(item.id) === id);
+      if (idx < 0) return;
+
+      isPromotingAlternative.value = true;
+      const backupItinerary = itinerary.value.map(item => ({ ...item }));
+      const itineraryIds = getOrderIds(tripId, day, false).filter(itemId => String(itemId) !== id);
+      const alternativeIds = getOrderIds(tripId, day, true).filter(itemId => String(itemId) !== id);
+      alternativeIds.push(id);
+      let editCommitted = false;
+
+      itinerary.value[idx].is_alternative = 'v';
+      itinerary.value[idx].order = null;
+      setOrderIds(tripId, day, itineraryIds, false);
+      setOrderIds(tripId, day, alternativeIds, true);
+      currentDay.value = day;
+
+      await nextTick();
+      scheduleSortableInit();
+      updateMapMarkers();
+      scheduleTripCacheSave();
+
+      try {
+        const res = await postJSON({
+          action: 'edit',
+          type: 'itinerary',
+          data: { id, trip_id: tripId, day, is_alternative: 'v' }
+        });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'move itinerary to alternative failed');
+        }
+        editCommitted = true;
+
+        const orderResults = await Promise.allSettled([
+          saveOrderToDB(tripId, day, itineraryIds, false),
+          saveOrderToDB(tripId, day, alternativeIds, true)
+        ]);
+        if (orderResults.some(result => result.status === 'rejected')) {
+          throw new Error('save alternative order failed');
+        }
+      } catch (err) {
+        console.error('moveItineraryToAlternative failed:', err);
+        itinerary.value = backupItinerary.map(item => ({ ...item }));
+
+        if (editCommitted) {
+          const rollbackItineraryIds = getOrderIds(tripId, day, false);
+          const rollbackAlternativeIds = getOrderIds(tripId, day, true);
+          try {
+            await postJSON({
+              action: 'edit',
+              type: 'itinerary',
+              data: { id, trip_id: tripId, day, is_alternative: '' }
+            });
+            await Promise.allSettled([
+              saveOrderToDB(tripId, day, rollbackItineraryIds, false),
+              saveOrderToDB(tripId, day, rollbackAlternativeIds, true)
+            ]);
+          } catch (rollbackErr) {
+            console.error('move itinerary rollback failed:', rollbackErr);
+          }
+        }
+
+        await nextTick();
+        scheduleSortableInit();
+        updateMapMarkers();
+        scheduleTripCacheSave();
+        alert('轉為備案失敗，已回復原本正式行程。');
+      } finally {
+        isPromotingAlternative.value = false;
+      }
+    };
+
 
     const openExternalMap = (p) => {
       if (isKoreaTrip.value) {
@@ -3356,36 +3488,27 @@ createApp({
 
     const normalExpenseRecords = computed(() => {
       return expenses.value
-        .filter(e => !isPublicAccountFund(e))
+        .filter(e => !isLegacyPublicAccountExpense(e))
         .slice()
         .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
     });
 
-    const publicAccountContributions = computed(() => {
-      return expenses.value
-        .filter(isPublicAccountFund)
+    const legacyPublicAccountExpenseCount = computed(() => expenses.value.filter(isLegacyPublicAccountExpense).length);
+
+    const sharedWalletEnabled = computed(() => parseBooleanFlag(currentTrip.value?.shared_wallet_enabled));
+
+    const sharedWalletRecords = computed(() => {
+      return sharedWalletTransactions.value
+        .filter(item => (item.type === 'deposit' || item.type === 'payment') && Number(item.amount) > 0)
         .slice()
-        .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
     });
 
-    const publicAccountExpenses = computed(() => {
-      return expenses.value.filter(expense =>
-        !isPublicAccountFund(expense)
-        && normalizePersonName(expense?.payer) === PUBLIC_ACCOUNT_NAME
-      );
-    });
-
-    const publicAccountContributionTotal = computed(() =>
-      publicAccountContributions.value.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
-    );
-
-    const publicAccountSpentTotal = computed(() =>
-      publicAccountExpenses.value.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
-    );
-
-    const publicAccountBalance = computed(() =>
-      publicAccountContributionTotal.value - publicAccountSpentTotal.value
-    );
+    const sharedWalletDeposits = computed(() => sharedWalletRecords.value.filter(item => item.type === 'deposit'));
+    const sharedWalletPayments = computed(() => sharedWalletRecords.value.filter(item => item.type === 'payment'));
+    const sharedWalletDepositTotal = computed(() => sharedWalletDeposits.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
+    const sharedWalletPaymentTotal = computed(() => sharedWalletPayments.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
+    const sharedWalletBalance = computed(() => sharedWalletDepositTotal.value - sharedWalletPaymentTotal.value);
 
     const hasExpenseFilters = computed(() =>
       expenseFilter.value.day !== 'all' ||
@@ -3808,48 +3931,153 @@ createApp({
       }
     };
 
-    const addPublicFund = async () => {
-      if (isAddingPublicFund.value || !currentTrip.value?.id) return;
+    const syncSharedWalletPayload = async (payload) => {
+      try {
+        const res = await postJSON(payload, { queueOnFail: false });
+        if (!res || res.status !== 'error') return res;
 
-      const payer = normalizePersonName(newPublicFund.value.payer);
-      const amount = Number(newPublicFund.value.amount || 0);
-      const validPayers = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
-      if (!payer || !validPayers.includes(payer) || amount <= 0) return;
+        const message = String(res.message || 'shared wallet sync failed');
+        if (/unknown action|missing type|invalid type|unknown shared wallet action/i.test(message)) {
+          enqueuePendingWrite(payload, new Error(message));
+          return { status: 'queued', queued: true, message };
+        }
+        const serverError = new Error(message);
+        serverError.isWalletServerError = true;
+        throw serverError;
+      } catch (err) {
+        if (err?.isWalletServerError) throw err;
+        if (!pendingSyncQueue.value.some(job => job.payload === payload)) {
+          enqueuePendingWrite(payload, err);
+        }
+        return { status: 'queued', queued: true, message: String(err?.message || err || '') };
+      }
+    };
 
-      const id = generateId();
-      const contribution = normalizeExpenseRecord({
-        id,
-        title: '存入公費',
+    const updateSharedWalletSetting = async (eventOrValue) => {
+      if (isUpdatingSharedWalletSetting.value || !currentTrip.value?.id) return;
+      const enabled = typeof eventOrValue === 'boolean'
+        ? eventOrValue
+        : Boolean(eventOrValue?.target?.checked);
+      const tripId = currentTrip.value.id;
+      const previous = currentTrip.value.shared_wallet_enabled;
+
+      isUpdatingSharedWalletSetting.value = true;
+      currentTrip.value = { ...currentTrip.value, shared_wallet_enabled: enabled };
+      const tripIndex = trips.value.findIndex(item => String(item.id) === String(tripId));
+      if (tripIndex !== -1) trips.value[tripIndex] = { ...trips.value[tripIndex], shared_wallet_enabled: enabled };
+      scheduleTripCacheSave();
+      saveTripsCache();
+
+      try {
+        const res = await syncSharedWalletPayload({
+          action: 'shared_wallet_setting_update',
+          tripId,
+          enabled: enabled ? 'true' : 'false',
+          data: { trip_id: tripId, enabled }
+        });
+        if (res && res.status === 'error') throw new Error(res.message || 'wallet setting update failed');
+      } catch (err) {
+        currentTrip.value = { ...currentTrip.value, shared_wallet_enabled: previous };
+        if (tripIndex !== -1) trips.value[tripIndex] = { ...trips.value[tripIndex], shared_wallet_enabled: previous };
+        scheduleTripCacheSave();
+        saveTripsCache();
+        alert('共同旅費錢包設定更新失敗，請稍後再試。');
+      } finally {
+        isUpdatingSharedWalletSetting.value = false;
+      }
+    };
+
+    const addSharedWalletTransaction = async (type) => {
+      if (isSavingSharedWallet.value || !currentTrip.value?.id || !sharedWalletEnabled.value) return;
+      const isDeposit = type === 'deposit';
+      const form = isDeposit ? newSharedWalletDeposit.value : newSharedWalletPayment.value;
+      const amount = Number(form.amount || 0);
+      const date = String(form.date || '').trim();
+      const person = normalizePersonName(form.person);
+      const title = String(form.title || '').trim();
+      const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || amount <= 0) return;
+      if (isDeposit && (!person || !validPeople.includes(person))) return;
+      if (!isDeposit && !title) return;
+      if (!isDeposit && amount > sharedWalletBalance.value) {
+        alert(`共同錢包餘額不足，目前可用 $${Math.round(sharedWalletBalance.value)}。`);
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const transaction = normalizeSharedWalletTransaction({
+        id: generateId(),
+        trip_id: currentTrip.value.id,
+        type,
+        date,
+        title: isDeposit ? '存入' : title,
+        person: isDeposit ? person : '',
         amount,
-        payer,
-        involved: [PUBLIC_ACCOUNT_NAME],
-        category: '公費儲值',
-        day: currentDay.value || 1,
-        trip_id: currentTrip.value.id
+        note: String(form.note || '').trim(),
+        created_at: now,
+        updated_at: now
       });
 
-      isAddingPublicFund.value = true;
-      expenses.value.unshift(contribution);
-      newPublicFund.value.amount = '';
+      isSavingSharedWallet.value = true;
+      sharedWalletTransactions.value.unshift(transaction);
       scheduleTripCacheSave();
 
       try {
-        const res = await postJSON({
-          action: 'add',
-          type: 'expenses',
-          data: { ...contribution, involved: PUBLIC_ACCOUNT_NAME }
+        const res = await syncSharedWalletPayload({
+          action: 'shared_wallet_add',
+          tripId: currentTrip.value.id,
+          data: transaction
         });
-        if (res && res.status === 'error') {
-          throw new Error(res.message || 'add public fund failed');
+        if (res && res.status === 'error') throw new Error(res.message || 'wallet transaction add failed');
+
+        if (isDeposit) {
+          newSharedWalletDeposit.value = { date: defaultWalletDate(), person, amount: '', note: '' };
+        } else {
+          newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', note: '' };
         }
       } catch (err) {
-        console.error('addPublicFund failed:', err);
-        const idx = expenses.value.findIndex(expense => String(expense.id) === String(id));
-        if (idx !== -1) expenses.value.splice(idx, 1);
+        const index = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(transaction.id));
+        if (index !== -1) sharedWalletTransactions.value.splice(index, 1);
         scheduleTripCacheSave();
-        alert('公費存入失敗，已取消剛剛新增的金額。');
+        alert(isDeposit ? '存入紀錄新增失敗，請稍後再試。' : '公費支出新增失敗，請稍後再試。');
       } finally {
-        isAddingPublicFund.value = false;
+        isSavingSharedWallet.value = false;
+      }
+    };
+
+    const addSharedWalletDeposit = () => addSharedWalletTransaction('deposit');
+    const addSharedWalletPayment = () => addSharedWalletTransaction('payment');
+
+    const removeSharedWalletTransaction = async (item) => {
+      if (isSavingSharedWallet.value || !item?.id || !currentTrip.value?.id) return;
+      if (item.type === 'deposit' && sharedWalletBalance.value - Number(item.amount || 0) < 0) {
+        alert('刪除此筆存入後錢包會變成負數，請先調整支出紀錄。');
+        return;
+      }
+      if (!confirm(`確定刪除此筆${item.type === 'deposit' ? '存入' : '公費支出'}紀錄？`)) return;
+
+      const index = sharedWalletTransactions.value.findIndex(record => String(record.id) === String(item.id));
+      if (index < 0) return;
+      const backup = { ...sharedWalletTransactions.value[index] };
+      isSavingSharedWallet.value = true;
+      sharedWalletTransactions.value.splice(index, 1);
+      scheduleTripCacheSave();
+
+      try {
+        const res = await syncSharedWalletPayload({
+          action: 'shared_wallet_delete',
+          tripId: currentTrip.value.id,
+          id: item.id,
+          data: { id: item.id, trip_id: currentTrip.value.id }
+        });
+        if (res && res.status === 'error') throw new Error(res.message || 'wallet transaction delete failed');
+      } catch (err) {
+        sharedWalletTransactions.value.splice(index, 0, backup);
+        scheduleTripCacheSave();
+        alert('錢包紀錄刪除失敗，請稍後再試。');
+      } finally {
+        isSavingSharedWallet.value = false;
       }
     };
 
@@ -3862,19 +4090,11 @@ createApp({
 
       if (!title || amount <= 0 || !payer) return;
       if (!currentTrip.value?.id) return;
-
-      if (payer === PUBLIC_ACCOUNT_NAME) {
-        const involved = normalizeInvolved(newExpense.value.involved)
-          .filter(name => people.value.some(person => normalizePersonName(person.name) === normalizePersonName(name)));
-        if (!involved.length) {
-          alert('請選擇這筆公費支出的分攤成員。');
-          return;
-        }
-        if (amount > publicAccountBalance.value) {
-          alert(`公費餘額不足，目前可用 $${Math.round(publicAccountBalance.value)}。`);
-          return;
-        }
-      }
+      const validPeople = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
+      const involved = normalizeInvolved(newExpense.value.involved)
+        .map(normalizePersonName)
+        .filter(name => validPeople.includes(name));
+      if (!validPeople.includes(payer) || !involved.length) return;
 
       isAddingExpense.value = true;
       setTimeout(() => {
@@ -3889,7 +4109,7 @@ createApp({
         amount,
         payer,
         day: newExpense.value.day || currentDay.value || 1,
-        involved: [...newExpense.value.involved],
+        involved,
         trip_id: currentTrip.value.id
       });
 
@@ -3969,24 +4189,11 @@ createApp({
       const amount = Number(editExpense.value.amount || 0);
       const payer = normalizePersonName(editExpense.value.payer);
       if (!title || amount <= 0 || !payer) return;
-
-      if (payer === PUBLIC_ACCOUNT_NAME) {
-        const involved = normalizeInvolved(editExpense.value.involved)
-          .filter(name => people.value.some(person => normalizePersonName(person.name) === normalizePersonName(name)));
-        const original = expenses.value[idx];
-        const originalPublicSpend = normalizePersonName(original?.payer) === PUBLIC_ACCOUNT_NAME && !isPublicAccountFund(original)
-          ? Number(original.amount) || 0
-          : 0;
-        const availableBalance = publicAccountBalance.value + originalPublicSpend;
-        if (!involved.length) {
-          alert('請選擇這筆公費支出的分攤成員。');
-          return;
-        }
-        if (amount > availableBalance) {
-          alert(`公費餘額不足，目前可用 $${Math.round(availableBalance)}。`);
-          return;
-        }
-      }
+      const validPeople = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
+      const involved = normalizeInvolved(editExpense.value.involved)
+        .map(normalizePersonName)
+        .filter(name => validPeople.includes(name));
+      if (!validPeople.includes(payer) || !involved.length) return;
 
       isSavingExpense.value = true;
 
@@ -3999,7 +4206,7 @@ createApp({
           amount,
           payer,
           day: editExpense.value.day || 1,
-          involved: normalizeInvolved(editExpense.value.involved),
+          involved,
           trip_id: currentTrip.value.id
         });
 
@@ -4046,7 +4253,7 @@ createApp({
     const addPerson = async () => {
       const name = newPerson.value.trim();
       if (!name) return;
-      if (normalizePersonName(name) === PUBLIC_ACCOUNT_NAME) {
+      if (isSystemWalletPerson(name)) {
         alert('「公帳」是共同旅費錢包的系統名稱，請使用其他成員名稱。');
         return;
       }
@@ -4054,7 +4261,7 @@ createApp({
       people.value.push({ id: uid, name, trip_id: currentTrip.value.id });
       if (!newExpense.value.involved.includes(name)) newExpense.value.involved.push(name);
       if (!newExpense.value.payer) newExpense.value.payer = name;
-      if (!newPublicFund.value.payer) newPublicFund.value.payer = name;
+      if (!newSharedWalletDeposit.value.person) newSharedWalletDeposit.value.person = name;
       newPerson.value = '';
       await postJSON({ action:'add', type:'people', data: { id: uid, name, trip_id: currentTrip.value.id } });
     };
@@ -4063,13 +4270,12 @@ createApp({
       const item = people.value[idx];
       if (!item?.id || !confirm('確定移除此成員？')) return;
       people.value.splice(idx, 1);
-      if (newPublicFund.value.payer === item.name) {
-        newPublicFund.value.payer = people.value[0]?.name || '';
-      }
+      syncPersonSelections();
       await postJSON({ action:'del', type:'people', id: item.id });
     };
 
     const totalExpense = computed(() => normalExpenseRecords.value.reduce((s,i) => s + (Number(i.amount) || 0), 0));
+    const actualTripExpense = computed(() => totalExpense.value + (sharedWalletEnabled.value ? sharedWalletPaymentTotal.value : 0));
 
     const balanceSheet = computed(() => {
       if(!people.value.length) return [];
@@ -4079,22 +4285,17 @@ createApp({
         if (name) b[name] = 0;
       });
 
-      expenses.value.forEach(expense => {
+      normalExpenseRecords.value.forEach(expense => {
         const amount = Number(expense.amount) || 0;
         const payer = normalizePersonName(expense.payer);
         if (amount <= 0) return;
-
-        if (isPublicAccountFund(expense)) {
-          if (b[payer] !== undefined) b[payer] += amount;
-          return;
-        }
 
         const involved = normalizeInvolved(expense.involved).map(normalizePersonName);
         const targets = involved.length ? involved : Object.keys(b);
         const validTargets = targets.filter(name => b[name] !== undefined);
 
-        if (payer !== PUBLIC_ACCOUNT_NAME && b[payer] === undefined) return;
-        if (payer !== PUBLIC_ACCOUNT_NAME) b[payer] += amount;
+        if (b[payer] === undefined) return;
+        b[payer] += amount;
 
         if(validTargets.length) {
           const share = amount / validTargets.length;
@@ -4327,7 +4528,7 @@ createApp({
     });
 
     watch(currentView, () => scheduleSortableInit());
-    watch([itinerary, expenses, people, hotels], () => scheduleTripCacheSave(), { deep: true });
+    watch([itinerary, expenses, sharedWalletTransactions, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
@@ -4370,12 +4571,13 @@ createApp({
       APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, dayViewMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
-      isAddingPlace, isAddingExpense, isAddingPublicFund, isSavingExpense,
+      isAddingPlace, isAddingExpense, isSavingSharedWallet, isUpdatingSharedWalletSetting, isSavingExpense,
       isAddingAlternative, isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,
-      people, itinerary, expenses, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
-      newPlace, newTime, newPlaceType, newNote, newPerson, newExpense, newPublicFund,
-      expenseFilter, categories, itineraryTypes, transportModes, PUBLIC_ACCOUNT_NAME,
+      people, itinerary, expenses, sharedWalletTransactions, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
+      newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
+      walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
+      expenseFilter, categories, itineraryTypes,
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
       isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
@@ -4404,11 +4606,13 @@ createApp({
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
       hotelDayRangeLabel, openHotelMap,
-      searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, promoteAlternativeToItinerary,
+      searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, promoteAlternativeToItinerary, moveItineraryToAlternative,
 
-      addPublicFund, addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
-      totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
-      publicAccountContributions, publicAccountContributionTotal, publicAccountSpentTotal, publicAccountBalance,
+      updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
+      addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
+      totalExpense, actualTripExpense, balanceSheet, categoryAnalysis, formatInvolved,
+      sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
+      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, legacyPublicAccountExpenseCount,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
