@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260708.12';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260708.13';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};

@@ -397,8 +397,10 @@ html, body {
 
     .map-locator-toggle {
       position: absolute;
-      right: 14px;
+      left: 50%;
+      right: auto;
       bottom: 16px;
+      transform: translateX(-50%);
       z-index: 20;
       min-width: 132px;
       height: 46px;
@@ -418,7 +420,7 @@ html, body {
     }
 
     .map-locator-toggle:active {
-      transform: scale(0.97);
+      transform: translateX(-50%) scale(0.97);
     }
 
     .map-locator-toggle.is-active {
