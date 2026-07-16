@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260708.13';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260708.14';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};
@@ -25,6 +25,7 @@ createApp({
     const isFlushingQueue = ref(false);
     const isAddingPlace = ref(false);
     const isAddingExpense = ref(false);
+    const isAddingPublicFund = ref(false);
 
     const currentDay = ref(1);
     const totalDays = ref(1);
@@ -43,9 +44,11 @@ createApp({
     const newNote = ref('');
     const newPerson = ref('');
     const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
+    const newPublicFund = ref({ payer: '', amount: '' });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
-    const itineraryTypes = ['景點', '購物', '活動', '美食', '其他'];
+    const itineraryTypes = ['景點', '交通', '購物', '活動', '美食', '其他'];
+    const transportModes = ['航班', '火車', '巴士', '渡輪', '其他'];
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
@@ -105,7 +108,7 @@ createApp({
     const alternativeSelectedPlaceData = ref(null);
     const isAddingAlternative = ref(false);
     const isDeletingAlternative = ref(false);
-    const isAddingAlternativeToItinerary = ref(false);
+    const isPromotingAlternative = ref(false);
     let alternativeSearchTimeout = null;
 
     const itineraryListEl = ref(null);
@@ -120,7 +123,14 @@ createApp({
 
     const showEditModal = ref(false);
     const editPlaceId = ref('');
-    const editPlace = ref({ name: '', type: '景點', time: '', message: '', day: 1 });
+    const editPlace = ref({
+      name: '',
+      type: '景點',
+      time: '',
+      message: '',
+      day: 1,
+      transport: { mode: '', number: '', terminal: '', seat: '', checkin: '' }
+    });
 
     const showEditExpenseModal = ref(false);
     const editExpenseId = ref('');
@@ -472,6 +482,76 @@ createApp({
 
     const isAlternativeItem = (item) => getAlternativeFlag(item) === 'v';
 
+    const TRANSPORT_META_PREFIX = '[[TRAVEL_TRANSPORT_V1:';
+    const TRANSPORT_META_SUFFIX = ']]';
+    const createEmptyTransportDetails = () => ({
+      mode: '',
+      number: '',
+      terminal: '',
+      seat: '',
+      checkin: ''
+    });
+
+    const normalizeTransportDetails = (value = {}) => ({
+      mode: String(value.mode || '').trim(),
+      number: String(value.number || '').trim(),
+      terminal: String(value.terminal || '').trim(),
+      seat: String(value.seat || '').trim(),
+      checkin: String(value.checkin || '').trim()
+    });
+
+    const parseItineraryMessage = (message) => {
+      const raw = String(message || '');
+      const firstLineEnd = raw.search(/\r?\n/);
+      const firstLine = firstLineEnd === -1 ? raw : raw.slice(0, firstLineEnd);
+      const note = firstLineEnd === -1 ? '' : raw.slice(firstLineEnd).replace(/^\r?\n/, '');
+
+      if (!firstLine.startsWith(TRANSPORT_META_PREFIX) || !firstLine.endsWith(TRANSPORT_META_SUFFIX)) {
+        return { transport: createEmptyTransportDetails(), note: raw };
+      }
+
+      try {
+        const encoded = firstLine.slice(TRANSPORT_META_PREFIX.length, -TRANSPORT_META_SUFFIX.length);
+        const parsed = JSON.parse(decodeURIComponent(encoded));
+        return { transport: normalizeTransportDetails(parsed), note };
+      } catch (err) {
+        console.warn('parseItineraryMessage failed:', err);
+        return { transport: createEmptyTransportDetails(), note: raw };
+      }
+    };
+
+    const serializeItineraryMessage = (type, note, transport) => {
+      const cleanNote = String(note || '').trim();
+      if (String(type || '').trim() !== '交通') return cleanNote;
+
+      const details = normalizeTransportDetails(transport);
+      const hasDetails = Object.values(details).some(Boolean);
+      if (!hasDetails) return cleanNote;
+
+      const encoded = encodeURIComponent(JSON.stringify(details));
+      return `${TRANSPORT_META_PREFIX}${encoded}${TRANSPORT_META_SUFFIX}${cleanNote ? `\n${cleanNote}` : ''}`;
+    };
+
+    const getItineraryNote = (item) => parseItineraryMessage(item?.message).note;
+    const getTransportDetails = (item) => parseItineraryMessage(item?.message).transport;
+    const getTransportSummary = (item) => {
+      if (getItineraryType(item) !== '交通') return [];
+      const details = getTransportDetails(item);
+      return [
+        details.mode,
+        details.number ? `班次 ${details.number}` : '',
+        details.terminal ? `航廈／月台 ${details.terminal}` : '',
+        details.seat ? `座位 ${details.seat}` : '',
+        details.checkin ? `報到 ${details.checkin}` : ''
+      ].filter(Boolean);
+    };
+
+    const getItineraryInfoText = (item) => {
+      const transportText = getTransportSummary(item).join(' · ');
+      const note = getItineraryNote(item);
+      return [transportText, note].filter(Boolean).join('｜');
+    };
+
     const normalizeItineraryType = (value) => {
       const type = String(value || '').trim();
       if (!type) return '景點';
@@ -485,8 +565,8 @@ createApp({
         咖啡: '美食',
         商圈: '購物',
         門票: '活動',
-        交通: '其他',
-        移動: '其他',
+        交通: '交通',
+        移動: '交通',
         住宿: '其他',
         飯店: '其他'
       };
@@ -778,6 +858,9 @@ createApp({
         itinerary.value = Array.isArray(c.itinerary) ? c.itinerary.map(normalizeItineraryRecord) : [];
         expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
         people.value    = Array.isArray(c.people) ? c.people : [{id:'default', name:'我'}];
+        if (!people.value.some(person => person.name === newPublicFund.value.payer)) {
+          newPublicFund.value.payer = people.value[0]?.name || '';
+        }
         hotels.value    = Array.isArray(c.hotels) ? c.hotels.map(normalizeHotelRecord) : [];
         alternatives.value = Array.isArray(c.alternatives) ? c.alternatives.map(normalizeAlternativeRecord) : [];
 
@@ -946,13 +1029,17 @@ createApp({
     };
 
     const saveOrderToDB = async (tripId, day, ids, isAlternative = false) => {
-      await postJSON({
+      const response = await postJSON({
         action: 'save_order',
         tripId,
         day: String(day),
         order: (ids||[]).join(','),
         isAlternative: isAlternative ? 'v' : ''
       });
+      if (response && response.status === 'error') {
+        throw new Error(response.message || 'save order failed');
+      }
+      return response;
     };
 
     const escapeHtml = (s) => String(s)
@@ -1930,7 +2017,7 @@ createApp({
             infoWindow.setContent(
               `<div style="padding:8px; color:#111; max-width:240px;">
                 <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '')}</div>
-                <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</div>
+                <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(getItineraryInfoText(item))}</div>
                 <button
                   id="${buttonId}"
                   style="background:#ef4444;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
@@ -1953,7 +2040,7 @@ createApp({
           infoWindow.setContent(
             `<div style="padding:6px; color:#111">
               <b>${escapeHtml(item.name || '')}</b><br/>
-              <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</span><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(getItineraryInfoText(item))}</span><br/>
               <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
             </div>`
           );
@@ -1987,7 +2074,7 @@ createApp({
             infoWindow.setContent(
               `<div style="padding:8px; color:#111; max-width:240px;">
                 <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '')}</div>
-                <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</div>
+                <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(getItineraryInfoText(item))}</div>
                 <button
                   id="${buttonId}"
                   style="background:#f59e0b;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
@@ -2010,7 +2097,7 @@ createApp({
           infoWindow.setContent(
             `<div style="padding:6px; color:#111">
               <b>${escapeHtml(item.name || '')}</b><br/>
-              <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(item.message||'')}</span><br/>
+              <span style="font-size:12px; color:#555">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(getItineraryInfoText(item))}</span><br/>
               <a href="${link}" target="_blank" style="color:#2563eb;">Google Maps</a>
             </div>`
           );
@@ -2138,6 +2225,7 @@ createApp({
       itinerary.value = [];
       expenses.value = [];
       people.value = [];
+      newPublicFund.value = { payer: '', amount: '' };
       hotels.value = [];
       hotelSearchQuery.value = '';
       hotelSearchResults.value = [];
@@ -2219,6 +2307,9 @@ createApp({
         itinerary.value = itin.map(normalizeItineraryRecord);
         expenses.value = exp.map(normalizeExpenseRecord);
         people.value = ppl.length ? ppl : [{id:'default', name:'我'}];
+        if (!people.value.some(person => person.name === newPublicFund.value.payer)) {
+          newPublicFund.value.payer = people.value[0]?.name || '';
+        }
         hotels.value = htl.map(normalizeHotelRecord);
         alternatives.value = [];
 
@@ -3044,40 +3135,29 @@ createApp({
       }
     };
 
-    const addAlternativeToItinerary = async (alt) => {
-      if (isAddingAlternativeToItinerary.value) return;
-      if (!currentTrip.value?.id || !alt) return;
+    const promoteAlternativeToItinerary = async (alt) => {
+      if (isPromotingAlternative.value) return;
+      if (!currentTrip.value?.id || !alt?.id || !isAlternativeItem(alt)) return;
+      if (!confirm(`將「${alt.name || '此備案'}」轉為正式行程？`)) return;
 
-      isAddingAlternativeToItinerary.value = true;
-      setTimeout(() => {
-        isAddingAlternativeToItinerary.value = false;
-      }, 500);
+      const id = String(alt.id);
+      const tripId = currentTrip.value.id;
+      const day = alt.day ? parseInt(alt.day, 10) || currentDay.value : currentDay.value;
+      const idx = itinerary.value.findIndex(item => String(item.id) === id);
+      if (idx < 0) return;
 
-      const id = generateId();
-      const d = alt.day ? parseInt(alt.day, 10) || currentDay.value : currentDay.value;
+      isPromotingAlternative.value = true;
+      const backupItinerary = itinerary.value.map(item => ({ ...item }));
+      const alternativeIds = getOrderIds(tripId, day, true).filter(itemId => String(itemId) !== id);
+      const itineraryIds = getOrderIds(tripId, day, false).filter(itemId => String(itemId) !== id);
+      itineraryIds.push(id);
+      let editCommitted = false;
 
-      const item = normalizeItineraryRecord({
-        id,
-        name: alt.name || '備案',
-        name_ko: '',
-        type: getItineraryType(alt),
-        address: alt.address || '',
-        day: d,
-        lat: alt.lat != null ? Number(alt.lat) : null,
-        lng: alt.lng != null ? Number(alt.lng) : null,
-        place_id: alt.place_id || '',
-        message: alt.message || '',
-        time: '',
-        trip_id: currentTrip.value.id
-      });
-
-      const oldIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
-      const ids = oldIds.slice();
-      ids.push(String(id));
-
-      itinerary.value.push(item);
-      setOrderIds(currentTrip.value.id, d, ids);
-      currentDay.value = d;
+      itinerary.value[idx].is_alternative = '';
+      itinerary.value[idx].order = null;
+      setOrderIds(tripId, day, alternativeIds, true);
+      setOrderIds(tripId, day, itineraryIds, false);
+      currentDay.value = day;
 
       await nextTick();
       scheduleSortableInit();
@@ -3085,28 +3165,52 @@ createApp({
       scheduleTripCacheSave();
 
       try {
-        const res = await postJSON({ action:'add', type:'itinerary', data: item });
+        const res = await postJSON({
+          action: 'edit',
+          type: 'itinerary',
+          data: { id, trip_id: tripId, day, is_alternative: '' }
+        });
         if (res && res.status === 'error') {
-          throw new Error(res.message || 'add itinerary from alternative failed');
+          throw new Error(res.message || 'promote alternative failed');
         }
+        editCommitted = true;
 
-        await saveOrderToDB(currentTrip.value.id, d, ids);
+        const orderResults = await Promise.allSettled([
+          saveOrderToDB(tripId, day, alternativeIds, true),
+          saveOrderToDB(tripId, day, itineraryIds, false)
+        ]);
+        if (orderResults.some(result => result.status === 'rejected')) {
+          throw new Error('save promoted itinerary order failed');
+        }
       } catch (err) {
-        console.error('addAlternativeToItinerary sync failed:', err);
+        console.error('promoteAlternativeToItinerary failed:', err);
+        itinerary.value = backupItinerary.map(item => ({ ...item }));
 
-        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
-        if (idx !== -1) itinerary.value.splice(idx, 1);
-
-        const rollbackIds = getOrderIds(currentTrip.value.id, d).filter(x => String(x) !== String(id));
-        setOrderIds(currentTrip.value.id, d, rollbackIds);
-        try { await saveOrderToDB(currentTrip.value.id, d, rollbackIds); } catch(e) {}
+        if (editCommitted) {
+          const rollbackAlternativeIds = getOrderIds(tripId, day, true);
+          const rollbackItineraryIds = getOrderIds(tripId, day, false);
+          try {
+            await postJSON({
+              action: 'edit',
+              type: 'itinerary',
+              data: { id, trip_id: tripId, day, is_alternative: 'v' }
+            });
+            await Promise.allSettled([
+              saveOrderToDB(tripId, day, rollbackAlternativeIds, true),
+              saveOrderToDB(tripId, day, rollbackItineraryIds, false)
+            ]);
+          } catch (rollbackErr) {
+            console.error('promote alternative rollback failed:', rollbackErr);
+          }
+        }
 
         await nextTick();
         scheduleSortableInit();
         updateMapMarkers();
         scheduleTripCacheSave();
-
-        alert('加入正式行程失敗，已取消剛剛新增的資料，請稍後再試。');
+        alert('轉為正式行程失敗，已回復原本備案。');
+      } finally {
+        isPromotingAlternative.value = false;
       }
     };
 
@@ -3137,13 +3241,15 @@ createApp({
 
     const openEditModal = (p) => {
       if (!p || !p.id) return;
+      const parsedMessage = parseItineraryMessage(p.message);
       editPlaceId.value = String(p.id);
       editPlace.value = {
         name: String(p.name || ''),
         type: getItineraryType(p),
         time: formatTime(p.time || ''),
-        message: String(p.message || ''),
-        day: p.day ? parseInt(p.day, 10) : 1
+        message: parsedMessage.note,
+        day: p.day ? parseInt(p.day, 10) : 1,
+        transport: parsedMessage.transport
       };
       showEditModal.value = true;
     };
@@ -3169,12 +3275,14 @@ createApp({
       const newDay = editPlace.value.day ? parseInt(editPlace.value.day, 10) : 1;
       const oldDay = itinerary.value[idx].day ? parseInt(itinerary.value[idx].day, 10) : 1;
       const currentIsAlt = isAlternativeItem(itinerary.value[idx]);
+      const editedType = normalizeItineraryType(editPlace.value.type);
+      const storedMessage = serializeItineraryMessage(editedType, editPlace.value.message, editPlace.value.transport);
 
       // 先更新前端，讓編輯結果立即顯示。
       itinerary.value[idx].name = editPlace.value.name || '';
-      itinerary.value[idx].type = normalizeItineraryType(editPlace.value.type);
+      itinerary.value[idx].type = editedType;
       itinerary.value[idx].time = editPlace.value.time || '';
-      itinerary.value[idx].message = editPlace.value.message || '';
+      itinerary.value[idx].message = storedMessage;
       itinerary.value[idx].day = newDay;
       if (oldDay !== newDay) itinerary.value[idx].order = null;
 
@@ -3252,6 +3360,32 @@ createApp({
         .slice()
         .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
     });
+
+    const publicAccountContributions = computed(() => {
+      return expenses.value
+        .filter(isPublicAccountFund)
+        .slice()
+        .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
+    });
+
+    const publicAccountExpenses = computed(() => {
+      return expenses.value.filter(expense =>
+        !isPublicAccountFund(expense)
+        && normalizePersonName(expense?.payer) === PUBLIC_ACCOUNT_NAME
+      );
+    });
+
+    const publicAccountContributionTotal = computed(() =>
+      publicAccountContributions.value.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
+    );
+
+    const publicAccountSpentTotal = computed(() =>
+      publicAccountExpenses.value.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0)
+    );
+
+    const publicAccountBalance = computed(() =>
+      publicAccountContributionTotal.value - publicAccountSpentTotal.value
+    );
 
     const hasExpenseFilters = computed(() =>
       expenseFilter.value.day !== 'all' ||
@@ -3674,14 +3808,73 @@ createApp({
       }
     };
 
+    const addPublicFund = async () => {
+      if (isAddingPublicFund.value || !currentTrip.value?.id) return;
+
+      const payer = normalizePersonName(newPublicFund.value.payer);
+      const amount = Number(newPublicFund.value.amount || 0);
+      const validPayers = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
+      if (!payer || !validPayers.includes(payer) || amount <= 0) return;
+
+      const id = generateId();
+      const contribution = normalizeExpenseRecord({
+        id,
+        title: '存入公費',
+        amount,
+        payer,
+        involved: [PUBLIC_ACCOUNT_NAME],
+        category: '公費儲值',
+        day: currentDay.value || 1,
+        trip_id: currentTrip.value.id
+      });
+
+      isAddingPublicFund.value = true;
+      expenses.value.unshift(contribution);
+      newPublicFund.value.amount = '';
+      scheduleTripCacheSave();
+
+      try {
+        const res = await postJSON({
+          action: 'add',
+          type: 'expenses',
+          data: { ...contribution, involved: PUBLIC_ACCOUNT_NAME }
+        });
+        if (res && res.status === 'error') {
+          throw new Error(res.message || 'add public fund failed');
+        }
+      } catch (err) {
+        console.error('addPublicFund failed:', err);
+        const idx = expenses.value.findIndex(expense => String(expense.id) === String(id));
+        if (idx !== -1) expenses.value.splice(idx, 1);
+        scheduleTripCacheSave();
+        alert('公費存入失敗，已取消剛剛新增的金額。');
+      } finally {
+        isAddingPublicFund.value = false;
+      }
+    };
+
     const addExpense = async () => {
       if (isAddingExpense.value) return;
 
       const title = String(newExpense.value.title || '').trim();
       const amount = Number(newExpense.value.amount || 0);
+      const payer = normalizePersonName(newExpense.value.payer);
 
-      if (!title || amount <= 0) return;
+      if (!title || amount <= 0 || !payer) return;
       if (!currentTrip.value?.id) return;
+
+      if (payer === PUBLIC_ACCOUNT_NAME) {
+        const involved = normalizeInvolved(newExpense.value.involved)
+          .filter(name => people.value.some(person => normalizePersonName(person.name) === normalizePersonName(name)));
+        if (!involved.length) {
+          alert('請選擇這筆公費支出的分攤成員。');
+          return;
+        }
+        if (amount > publicAccountBalance.value) {
+          alert(`公費餘額不足，目前可用 $${Math.round(publicAccountBalance.value)}。`);
+          return;
+        }
+      }
 
       isAddingExpense.value = true;
       setTimeout(() => {
@@ -3694,6 +3887,7 @@ createApp({
         ...newExpense.value,
         title,
         amount,
+        payer,
         day: newExpense.value.day || currentDay.value || 1,
         involved: [...newExpense.value.involved],
         trip_id: currentTrip.value.id
@@ -3773,7 +3967,26 @@ createApp({
 
       const title = String(editExpense.value.title || '').trim();
       const amount = Number(editExpense.value.amount || 0);
-      if (!title || amount <= 0) return;
+      const payer = normalizePersonName(editExpense.value.payer);
+      if (!title || amount <= 0 || !payer) return;
+
+      if (payer === PUBLIC_ACCOUNT_NAME) {
+        const involved = normalizeInvolved(editExpense.value.involved)
+          .filter(name => people.value.some(person => normalizePersonName(person.name) === normalizePersonName(name)));
+        const original = expenses.value[idx];
+        const originalPublicSpend = normalizePersonName(original?.payer) === PUBLIC_ACCOUNT_NAME && !isPublicAccountFund(original)
+          ? Number(original.amount) || 0
+          : 0;
+        const availableBalance = publicAccountBalance.value + originalPublicSpend;
+        if (!involved.length) {
+          alert('請選擇這筆公費支出的分攤成員。');
+          return;
+        }
+        if (amount > availableBalance) {
+          alert(`公費餘額不足，目前可用 $${Math.round(availableBalance)}。`);
+          return;
+        }
+      }
 
       isSavingExpense.value = true;
 
@@ -3784,6 +3997,7 @@ createApp({
           id,
           title,
           amount,
+          payer,
           day: editExpense.value.day || 1,
           involved: normalizeInvolved(editExpense.value.involved),
           trip_id: currentTrip.value.id
@@ -3832,10 +4046,15 @@ createApp({
     const addPerson = async () => {
       const name = newPerson.value.trim();
       if (!name) return;
+      if (normalizePersonName(name) === PUBLIC_ACCOUNT_NAME) {
+        alert('「公帳」是共同旅費錢包的系統名稱，請使用其他成員名稱。');
+        return;
+      }
       const uid = generateId();
       people.value.push({ id: uid, name, trip_id: currentTrip.value.id });
       if (!newExpense.value.involved.includes(name)) newExpense.value.involved.push(name);
       if (!newExpense.value.payer) newExpense.value.payer = name;
+      if (!newPublicFund.value.payer) newPublicFund.value.payer = name;
       newPerson.value = '';
       await postJSON({ action:'add', type:'people', data: { id: uid, name, trip_id: currentTrip.value.id } });
     };
@@ -3844,6 +4063,9 @@ createApp({
       const item = people.value[idx];
       if (!item?.id || !confirm('確定移除此成員？')) return;
       people.value.splice(idx, 1);
+      if (newPublicFund.value.payer === item.name) {
+        newPublicFund.value.payer = people.value[0]?.name || '';
+      }
       await postJSON({ action:'del', type:'people', id: item.id });
     };
 
@@ -3851,21 +4073,32 @@ createApp({
 
     const balanceSheet = computed(() => {
       if(!people.value.length) return [];
-      let b = {};
-      people.value.forEach(p => b[p.name] = 0);
+      const b = {};
+      people.value.forEach(person => {
+        const name = normalizePersonName(person.name);
+        if (name) b[name] = 0;
+      });
 
-      expenses.value.forEach(e => {
-        const amt = Number(e.amount) || 0;
-        if(b[e.payer] === undefined) return;
+      expenses.value.forEach(expense => {
+        const amount = Number(expense.amount) || 0;
+        const payer = normalizePersonName(expense.payer);
+        if (amount <= 0) return;
 
-        b[e.payer] += amt;
-        const inv = normalizeInvolved(e.involved);
-        const targets = inv.length ? inv : people.value.map(p => p.name);
-        const v = targets.filter(n => b[n] !== undefined);
+        if (isPublicAccountFund(expense)) {
+          if (b[payer] !== undefined) b[payer] += amount;
+          return;
+        }
 
-        if(v.length) {
-          const share = amt / v.length;
-          v.forEach(n => b[n] -= share);
+        const involved = normalizeInvolved(expense.involved).map(normalizePersonName);
+        const targets = involved.length ? involved : Object.keys(b);
+        const validTargets = targets.filter(name => b[name] !== undefined);
+
+        if (payer !== PUBLIC_ACCOUNT_NAME && b[payer] === undefined) return;
+        if (payer !== PUBLIC_ACCOUNT_NAME) b[payer] += amount;
+
+        if(validTargets.length) {
+          const share = amount / validTargets.length;
+          validTargets.forEach(name => b[name] -= share);
         }
       });
 
@@ -3901,14 +4134,16 @@ createApp({
         }
 
         dayItems.forEach(item => {
-          const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
+          const info = getItineraryInfoText(item);
+          const msg = info ? ` (${info.replace(/\n/g, ' ')})` : '';
           text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
         });
 
         if(dayAlternatives.length > 0) {
           text += `  📌 備案\n`;
           dayAlternatives.forEach(item => {
-            const msg = item.message ? ` (${String(item.message).replace(/\n/g, ' ')})` : '';
+            const info = getItineraryInfoText(item);
+            const msg = info ? ` (${info.replace(/\n/g, ' ')})` : '';
             text += `    ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
           });
         }
@@ -3929,7 +4164,8 @@ createApp({
       const links = getMapExportLinks(place || {});
       const name = escapeHtml(place?.name || place?.title || '地點');
       const time = formatTime(place?.time || '');
-      const msg = place?.message ? escapeHtml(String(place.message).replace(/\n/g, ' ')) : '';
+      const info = getItineraryInfoText(place);
+      const msg = info ? escapeHtml(info.replace(/\n/g, ' ')) : '';
       const addr = place?.address ? escapeHtml(place.address) : '';
       const appText = isKoreaTrip.value ? '開啟 Naver Map' : '開啟地圖 App';
       const appBtn = links.app
@@ -4134,11 +4370,12 @@ createApp({
       APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity,
       currentTab, dayViewMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
-      isAddingPlace, isAddingExpense, isSavingExpense,
-      isAddingAlternative, isDeletingAlternative, isAddingAlternativeToItinerary,
+      isAddingPlace, isAddingExpense, isAddingPublicFund, isSavingExpense,
+      isAddingAlternative, isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,
       people, itinerary, expenses, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
-      newPlace, newTime, newPlaceType, newNote, newPerson, newExpense, expenseFilter, categories, itineraryTypes,
+      newPlace, newTime, newPlaceType, newNote, newPerson, newExpense, newPublicFund,
+      expenseFilter, categories, itineraryTypes, transportModes, PUBLIC_ACCOUNT_NAME,
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
       isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
@@ -4157,6 +4394,7 @@ createApp({
       searchPlacesInput, useCoordinateInput, selectPlace,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
       getItineraryType, getItineraryTypeTone, getItineraryCategoryLabel, getItineraryIcon,
+      getItineraryNote, getTransportSummary,
       hasMapCoordinates, itineraryListEl, alternativeListEl, formatTime,
 
       fitBoundsToTrip, applyMapDisplayFilter,
@@ -4166,10 +4404,11 @@ createApp({
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
       hotelDayRangeLabel, openHotelMap,
-      searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, addAlternativeToItinerary,
+      searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, promoteAlternativeToItinerary,
 
-      addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
+      addPublicFund, addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, balanceSheet, categoryAnalysis, formatInvolved,
+      publicAccountContributions, publicAccountContributionTotal, publicAccountSpentTotal, publicAccountBalance,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 

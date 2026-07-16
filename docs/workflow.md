@@ -61,6 +61,13 @@
 - `探點搜尋` 可使用 Autocomplete、限定欄位的 Place Details 與 Geocoding，但只顯示暫時 marker，不新增行程。
 - 探點與行程定位面板必須互斥開啟，且探點不得要求 Places Photo 或其他圖片欄位。
 
+## 功能資料規則
+
+- 交通班次沿用 itinerary `message`，首行為版本化 JSON envelope；顯示、編輯、匯出都必須透過解析 helper，不得把 metadata 直接顯示給使用者。
+- 公費存入使用 expense 的 `involved: 公帳`；公費支出使用 `payer: 公帳`，不得新增另一張資料表。
+- 公費存入不列入總支出；公費實際支出必須列入總支出與分類分析。
+- 備案轉正式行程必須更新原 ID 與排序，不得複製成另一筆資料。
+
 ## 版本與快取
 
 - 版本格式使用 `YYYYMMDD.NN`。

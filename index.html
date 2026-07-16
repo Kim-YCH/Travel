@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260708.13 -->
+<!-- version: 20260708.14 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.13" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.13" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.13" />
-  <link rel="manifest" href="./site.webmanifest?v=20260708.13" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260708.14" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260708.14" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260708.14" />
+  <link rel="manifest" href="./site.webmanifest?v=20260708.14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260708.13" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.13" />
+  <link rel="stylesheet" href="./style.css?v=20260708.14" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260708.14" />
 </head>
 <body>
 
@@ -394,6 +394,10 @@
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
                 <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
 
+                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通班次資料">
+                  <span v-for="detail in getTransportSummary(place)" :key="place.id + '-' + detail">{{ detail }}</span>
+                </div>
+
                 <div class="itinerary-tags">
                   <span
                     v-if="hasMapCoordinates(place)"
@@ -407,11 +411,11 @@
               </div>
 
               <div
-                v-if="place.message"
+                v-if="getItineraryNote(place)"
                 class="itinerary-card-footer"
                 @click="handleItineraryContentClick($event, place)"
               >
-                <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
+                <div class="itinerary-message" v-html="linkifyMessage(getItineraryNote(place))"></div>
               </div>
 
               <div class="itinerary-actions">
@@ -495,6 +499,10 @@
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
                 <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
 
+                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通班次資料">
+                  <span v-for="detail in getTransportSummary(place)" :key="'alternative-' + place.id + '-' + detail">{{ detail }}</span>
+                </div>
+
                 <div class="itinerary-tags">
                   <span
                     v-if="hasMapCoordinates(place)"
@@ -508,14 +516,21 @@
               </div>
 
               <div
-                v-if="place.message"
+                v-if="getItineraryNote(place)"
                 class="itinerary-card-footer"
                 @click="handleItineraryContentClick($event, place)"
               >
-                <div v-if="place.message" class="itinerary-message" v-html="linkifyMessage(place.message)"></div>
+                <div class="itinerary-message" v-html="linkifyMessage(getItineraryNote(place))"></div>
               </div>
 
               <div class="itinerary-actions">
+                <button
+                  class="icon-btn icon-btn-promote"
+                  title="轉為正式行程"
+                  aria-label="轉為正式行程"
+                  @click.stop="promoteAlternativeToItinerary(place)"
+                  :disabled="isPromotingAlternative || isLoading"
+                >↑</button>
                 <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
                 <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading">✕</button>
               </div>
@@ -544,6 +559,52 @@
               </span>
             </div>
           </div>
+        </div>
+
+        <div class="card public-account-card">
+          <div class="public-account-header">
+            <div>
+              <span>共同旅費錢包</span>
+              <strong :class="publicAccountBalance < 0 ? 'is-negative' : ''">
+                ${{ Math.round(publicAccountBalance) }}
+              </strong>
+            </div>
+            <div class="public-account-totals">
+              <span>存入 ${{ Math.round(publicAccountContributionTotal) }}</span>
+              <span>使用 ${{ Math.round(publicAccountSpentTotal) }}</span>
+            </div>
+          </div>
+
+          <div class="public-account-form">
+            <select v-model="newPublicFund.payer" aria-label="存入公費的成員">
+              <option disabled value="">選擇成員</option>
+              <option v-for="(p, index) in people" :key="'fund-payer-' + p.id" :value="p.name">
+                {{ p.name || '成員 ' + (index+1) }}
+              </option>
+            </select>
+            <input v-model.number="newPublicFund.amount" type="number" min="1" inputmode="decimal" placeholder="存入金額" aria-label="存入公費金額">
+            <button
+              type="button"
+              class="public-account-add-btn"
+              @click="addPublicFund"
+              :disabled="isAddingPublicFund || !newPublicFund.payer || Number(newPublicFund.amount) <= 0"
+            >{{ isAddingPublicFund ? '寫入中' : '存入' }}</button>
+          </div>
+
+          <div v-if="publicAccountContributions.length" class="public-account-ledger">
+            <div v-for="fund in publicAccountContributions" :key="'fund-' + fund.id" class="public-account-entry">
+              <div>
+                <strong>{{ fund.payer }}</strong>
+                <span>Day {{ fund.day || 1 }} 存入</span>
+              </div>
+              <div>
+                <strong>+${{ Math.round(fund.amount) }}</strong>
+                <button type="button" @click="removeExpense(fund.id)" title="刪除存入紀錄" aria-label="刪除存入紀錄">×</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="public-account-hint">一般記帳的付款人選「公帳」，就會從這個餘額扣除。</p>
         </div>
 
         <div v-if="categoryAnalysis.length > 0" class="card">
@@ -586,7 +647,12 @@
             <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
             <select v-model="newExpense.payer" class="flex-1">
               <option disabled value="">請選擇</option>
-              <option v-for="(p, index) in people" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
+              <option v-for="(p, index) in people" :key="'new-exp-payer-' + p.id" :value="p.name">
+                {{ p.name || '成員 ' + (index+1) }}
+              </option>
+              <option :value="PUBLIC_ACCOUNT_NAME" :disabled="publicAccountBalance <= 0">
+                公帳（餘額 ${{ Math.round(publicAccountBalance) }}）
+              </option>
             </select>
           </div>
 
@@ -621,7 +687,8 @@
                 <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span>
               </div>
               <div class="text-xs text-gray-500 mt-1 break-words">
-                {{ exp.payer }} 先付 <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤
+                {{ exp.payer === PUBLIC_ACCOUNT_NAME ? '公帳支付' : exp.payer + ' 先付' }}
+                <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤
               </div>
             </div>
 
@@ -822,8 +889,37 @@
           <option v-for="d in totalDays" :key="'edit-day-' + d" :value="d">Day {{ d }}</option>
         </select>
 
-        <div class="text-xs font-bold text-gray-500 ml-1">時間</div>
+        <div class="text-xs font-bold text-gray-500 ml-1">{{ editPlace.type === '交通' ? '出發時間' : '時間' }}</div>
         <input v-model="editPlace.time" type="time">
+
+        <section v-if="editPlace.type === '交通'" class="transport-editor" aria-label="交通班次資料">
+          <div class="transport-editor-title">交通班次</div>
+          <div class="transport-editor-grid">
+            <label>
+              <span>方式</span>
+              <select v-model="editPlace.transport.mode">
+                <option disabled value="">請選擇</option>
+                <option v-for="mode in transportModes" :key="'transport-mode-' + mode" :value="mode">{{ mode }}</option>
+              </select>
+            </label>
+            <label>
+              <span>班次</span>
+              <input v-model="editPlace.transport.number" placeholder="例如 CI100">
+            </label>
+            <label>
+              <span>航廈／月台</span>
+              <input v-model="editPlace.transport.terminal" placeholder="例如 T2、3 號月台">
+            </label>
+            <label>
+              <span>座位</span>
+              <input v-model="editPlace.transport.seat" placeholder="例如 12A">
+            </label>
+            <label class="transport-editor-wide">
+              <span>報到時間</span>
+              <input v-model="editPlace.transport.checkin" type="time">
+            </label>
+          </div>
+        </section>
 
         <div class="text-xs font-bold text-gray-500 ml-1">備註</div>
         <textarea v-model="editPlace.message" rows="3" placeholder="備註..."></textarea>
@@ -934,6 +1030,7 @@
           <option v-for="(p, index) in people" :key="'edit-exp-payer-' + p.id" :value="p.name">
             {{ p.name || '成員 ' + (index+1) }}
           </option>
+          <option :value="PUBLIC_ACCOUNT_NAME">公帳</option>
         </select>
 
         <div>
@@ -959,20 +1056,20 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260708.13"></script>
-<script src="./cache-refresh.js?v=20260708.13"></script>
-<script src="./keyword-map.js?v=20260708.13"></script>
-<script src="./js/utils.js?v=20260708.13"></script>
-<script src="./js/api.js?v=20260708.13"></script>
-<script src="./js/cache.js?v=20260708.13"></script>
-<script src="./js/maps.js?v=20260708.13"></script>
-<script src="./js/places.js?v=20260708.13"></script>
-<script src="./js/itinerary.js?v=20260708.13"></script>
-<script src="./js/hotels.js?v=20260708.13"></script>
-<script src="./js/expenses.js?v=20260708.13"></script>
-<script src="./app.js?v=20260708.13"></script>
-<script src="./search-zh-label.js?v=20260708.13"></script>
-<script src="./prep-checklist.js?v=20260708.13"></script>
+<script src="./config.js?v=20260708.14"></script>
+<script src="./cache-refresh.js?v=20260708.14"></script>
+<script src="./keyword-map.js?v=20260708.14"></script>
+<script src="./js/utils.js?v=20260708.14"></script>
+<script src="./js/api.js?v=20260708.14"></script>
+<script src="./js/cache.js?v=20260708.14"></script>
+<script src="./js/maps.js?v=20260708.14"></script>
+<script src="./js/places.js?v=20260708.14"></script>
+<script src="./js/itinerary.js?v=20260708.14"></script>
+<script src="./js/hotels.js?v=20260708.14"></script>
+<script src="./js/expenses.js?v=20260708.14"></script>
+<script src="./app.js?v=20260708.14"></script>
+<script src="./search-zh-label.js?v=20260708.14"></script>
+<script src="./prep-checklist.js?v=20260708.14"></script>
 
 </body>
 </html>
