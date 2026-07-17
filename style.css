@@ -1371,6 +1371,10 @@ html, body {
       font-size: 13px;
     }
 
+    .shared-wallet-form-wide {
+      grid-column: 1 / -1;
+    }
+
     .shared-wallet-submit {
       grid-column: 1 / -1;
       min-height: 46px;

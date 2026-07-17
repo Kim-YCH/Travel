@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260716.2';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260717.1';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};
@@ -17,6 +17,7 @@ createApp({
 
     const currentTab = ref('itinerary');
     const dayViewMode = ref('list');
+    const moneyDisplayMode = ref('personal');
     const isDayMapView = () => currentTab.value === 'itinerary' && dayViewMode.value === 'map';
     const isLoading = ref(false);
     const syncStatus = ref('synced');
@@ -53,7 +54,7 @@ createApp({
       return new Date(now.getTime() - offset).toISOString().slice(0, 10);
     };
     const newSharedWalletDeposit = ref({ date: defaultWalletDate(), person: '', amount: '', note: '' });
-    const newSharedWalletPayment = ref({ date: defaultWalletDate(), title: '', amount: '', note: '' });
+    const newSharedWalletPayment = ref({ date: defaultWalletDate(), title: '', amount: '', person: '', note: '' });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
     const itineraryTypes = ['景點', '交通', '購物', '活動', '美食', '其他'];
@@ -500,6 +501,8 @@ createApp({
       newExpense.value.involved = normalizeInvolved(newExpense.value.involved).filter(name => names.includes(normalizePersonName(name)));
       if (!newExpense.value.involved.length) newExpense.value.involved = [...names];
       if (!names.includes(newSharedWalletDeposit.value.person)) newSharedWalletDeposit.value.person = names[0] || '';
+      const walletPaymentPerson = normalizePersonName(newSharedWalletPayment.value.person);
+      newSharedWalletPayment.value.person = names.includes(walletPaymentPerson) ? walletPaymentPerson : '';
     };
     const expenseCreatedTime = (expense) => {
       const fromId = parseInt(String(expense?.id || '').split('_')[0], 10);
@@ -2272,6 +2275,7 @@ createApp({
     const selectTrip = async (trip) => {
       if(!trip) return;
 
+      moneyDisplayMode.value = 'personal';
       currentTrip.value = trip;
 
       itinerary.value = [];
@@ -2279,7 +2283,7 @@ createApp({
       sharedWalletTransactions.value = [];
       people.value = [];
       newSharedWalletDeposit.value = { date: defaultWalletDate(), person: '', amount: '', note: '' };
-      newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', note: '' };
+      newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', person: '', note: '' };
       hotels.value = [];
       hotelSearchQuery.value = '';
       hotelSearchResults.value = [];
@@ -2318,6 +2322,7 @@ createApp({
     };
 
     const exitTrip = () => {
+      moneyDisplayMode.value = 'personal';
       currentView.value = 'lobby';
       currentTrip.value = null;
       pendingSyncQueue.value = [];
@@ -3501,6 +3506,11 @@ createApp({
 
     const sharedWalletEnabled = computed(() => parseBooleanFlag(currentTrip.value?.shared_wallet_enabled));
 
+    const toggleMoneyDisplayMode = () => {
+      if (!sharedWalletEnabled.value) return;
+      moneyDisplayMode.value = moneyDisplayMode.value === 'personal' ? 'wallet' : 'personal';
+    };
+
     const sharedWalletRecords = computed(() => {
       return sharedWalletTransactions.value
         .filter(item => (item.type === 'deposit' || item.type === 'payment') && Number(item.amount) > 0)
@@ -3513,6 +3523,39 @@ createApp({
     const sharedWalletDepositTotal = computed(() => sharedWalletDeposits.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
     const sharedWalletPaymentTotal = computed(() => sharedWalletPayments.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
     const sharedWalletBalance = computed(() => sharedWalletDepositTotal.value - sharedWalletPaymentTotal.value);
+    const sharedWalletMemberBalances = computed(() => {
+      const names = Array.from(new Set(
+        people.value
+          .map(person => normalizePersonName(person.name))
+          .filter(Boolean)
+      ));
+      const balances = {};
+      names.forEach(name => { balances[name] = 0; });
+
+      sharedWalletDeposits.value.forEach(item => {
+        const person = normalizePersonName(item.person);
+        const amount = Number(item.amount) || 0;
+        if (balances[person] === undefined || amount <= 0) return;
+        balances[person] += amount;
+      });
+
+      sharedWalletPayments.value.forEach(item => {
+        const person = normalizePersonName(item.person);
+        const amount = Number(item.amount) || 0;
+        if (amount <= 0) return;
+
+        if (person) {
+          if (balances[person] !== undefined) balances[person] -= amount;
+          return;
+        }
+
+        if (!names.length) return;
+        const share = amount / names.length;
+        names.forEach(name => { balances[name] -= share; });
+      });
+
+      return names.map(name => ({ name, balance: balances[name] }));
+    });
 
     const hasExpenseFilters = computed(() =>
       expenseFilter.value.day !== 'all' ||
@@ -3967,6 +4010,7 @@ createApp({
 
       isUpdatingSharedWalletSetting.value = true;
       currentTrip.value = { ...currentTrip.value, shared_wallet_enabled: enabled };
+      if (!enabled) moneyDisplayMode.value = 'personal';
       const tripIndex = trips.value.findIndex(item => String(item.id) === String(tripId));
       if (tripIndex !== -1) trips.value[tripIndex] = { ...trips.value[tripIndex], shared_wallet_enabled: enabled };
       scheduleTripCacheSave();
@@ -4000,6 +4044,9 @@ createApp({
       const person = normalizePersonName(form.person);
       const title = String(form.title || '').trim();
       const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
+      const transactionPerson = isDeposit
+        ? person
+        : (validPeople.includes(person) ? person : '');
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || amount <= 0) return;
       if (isDeposit && (!person || !validPeople.includes(person))) return;
@@ -4016,7 +4063,7 @@ createApp({
         type,
         date,
         title: isDeposit ? '存入' : title,
-        person: isDeposit ? person : '',
+        person: transactionPerson,
         amount,
         note: String(form.note || '').trim(),
         created_at: now,
@@ -4038,7 +4085,7 @@ createApp({
         if (isDeposit) {
           newSharedWalletDeposit.value = { date: defaultWalletDate(), person, amount: '', note: '' };
         } else {
-          newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', note: '' };
+          newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', person: '', note: '' };
         }
       } catch (err) {
         const index = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(transaction.id));
@@ -4521,6 +4568,10 @@ createApp({
       }
     });
 
+    watch(sharedWalletEnabled, enabled => {
+      if (!enabled) moneyDisplayMode.value = 'personal';
+    });
+
     watch(dayViewMode, () => {
       scheduleSortableInit();
       if (isDayMapView()) {
@@ -4574,7 +4625,7 @@ createApp({
     return {
       APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, dayViewMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
+      currentTab, dayViewMode, moneyDisplayMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
       isAddingPlace, isAddingExpense, isSavingSharedWallet, isUpdatingSharedWalletSetting, isSavingExpense,
       isAddingAlternative, isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,
@@ -4612,11 +4663,11 @@ createApp({
       hotelDayRangeLabel, openHotelMap,
       searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, promoteAlternativeToItinerary, moveItineraryToAlternative,
 
-      updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
+      toggleMoneyDisplayMode, updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, actualTripExpense, balanceSheet, categoryAnalysis, formatInvolved,
       sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
-      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, legacyPublicAccountExpenseCount,
+      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
 
