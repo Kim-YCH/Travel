@@ -581,8 +581,8 @@ createApp({
       if (getItineraryType(item) !== '交通') return [];
       const details = getTransportDetails(item);
       return [
-        details.number ? `班次 ${details.number}` : '',
-        details.terminal ? `航廈／月台 ${details.terminal}` : ''
+        details.number || '',
+        details.terminal || ''
       ].filter(Boolean);
     };
 
