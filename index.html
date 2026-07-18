@@ -78,16 +78,22 @@
   </div>
 
   <!-- App -->
-  <div v-else class="flex flex-col h-full overflow-hidden">
+  <div
+    v-else
+    class="app-shell flex flex-col h-full overflow-hidden"
+    :class="{ 'app-map-mode': currentTab === 'itinerary' && dayViewMode === 'map' }"
+  >
     <header class="app-header bg-blue-600 text-white shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
       <div class="app-header-title">
-        <h1 class="text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1>
-        <div class="text-xs text-blue-200">
+        <h1 class="text-lg font-bold tracking-wide">
+          {{ currentTrip.name }}<span class="app-header-map-day"> · Day {{ currentDay }}</span>
+        </h1>
+        <div class="app-header-subtitle text-xs text-blue-200">
           Day {{ currentDay }} | {{ dayLabel(currentDay) }} | {{ currentTrip.city }}
         </div>
         <button
           @click.stop="manualSync"
-          class="mt-1 text-[10px] px-2 py-0.5 rounded-full border border-white/20 active:scale-95 transition"
+          class="app-header-sync-status mt-1 text-[10px] px-2 py-0.5 rounded-full border border-white/20 active:scale-95 transition"
           :class="syncStatusBadgeClass"
         >{{ syncStatusText }}</button>
       </div>
@@ -132,7 +138,7 @@
         class="p-4 space-y-4 pb-24 tab-panel"
         :class="dayViewMode === 'map' ? 'itinerary-map-mode' : ''"
       >
-        <div class="flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0 relative z-50">
+        <div class="itinerary-day-tabs flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0 relative z-50">
           <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
             <button
               @click.stop.prevent="onDayClick(d)"
@@ -141,7 +147,7 @@
               :class="currentDay === d ? 'day-tab-active' : 'day-tab-inactive'"
             >
               <div>Day {{ d }}</div>
-              <div class="text-[10px] font-normal opacity-90">
+              <div class="day-tab-date text-[10px] font-normal opacity-90">
                 {{ dayLabel(d) || '—' }}
               </div>
             </button>
@@ -151,7 +157,7 @@
 
           <button
             @click="addNewDay"
-            class="px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600"
+            class="day-add-button px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600"
           >+</button>
         </div>
 

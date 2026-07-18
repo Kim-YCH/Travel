@@ -1980,9 +1980,55 @@ html, body {
       line-height: 1.1;
     }
 
-/* Itinerary map mode keeps the Day controls, then lets the map fill the rest. */
+/* Map mode keeps the existing controls while giving the map all remaining space. */
+.app-shell.app-map-mode,
+.app-map-mode .content-fixed {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-header-map-day {
+  display: none;
+}
+
+.app-map-mode .app-header {
+  min-height: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 8px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  z-index: 50;
+}
+
+.app-map-mode .app-header h1 {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-map-mode .app-header-map-day {
+  display: inline;
+}
+
+.app-map-mode .app-header-subtitle,
+.app-map-mode .app-header-sync-status,
+.app-map-mode .trip-weather-card {
+  display: none !important;
+}
+
+.app-map-mode .app-header > button {
+  flex-shrink: 0;
+  padding: 5px 10px;
+}
+
 .tab-panel.itinerary-map-mode {
-  padding-bottom: 8px !important;
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -1991,14 +2037,86 @@ html, body {
   min-height: 0;
 }
 
+.itinerary-map-mode .itinerary-day-tabs {
+  min-height: 48px;
+  margin: 0 !important;
+  padding: 6px 12px;
+  gap: 7px;
+  background: rgba(248, 250, 252, 0.96);
+  z-index: 10;
+}
+
+.itinerary-map-mode .itinerary-day-tabs .day-btn-wrap > button {
+  min-height: 36px;
+  padding: 6px 13px;
+  line-height: 1.15;
+}
+
+.itinerary-map-mode .day-tab-date,
+.itinerary-map-mode .day-x,
+.itinerary-map-mode .day-add-button {
+  display: none !important;
+}
+
 .itinerary-map-mode .itinerary-map-panel {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: hidden;
+}
+
+.itinerary-map-mode .day-map-container {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+.itinerary-map-mode .day-map-container #map {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   min-height: 0 !important;
 }
 
-.itinerary-map-mode .day-map-container,
-.itinerary-map-mode #map {
-  min-height: 0 !important;
-  height: 100% !important;
+.itinerary-map-mode .day-view-switch {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(250px, calc(100% - 40px));
+  margin: 0 !important;
+  padding: 5px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.itinerary-map-mode .day-view-switch .map-mode-btn {
+  height: 38px !important;
+  border-radius: 999px;
+}
+
+.itinerary-map-mode .map-locator-toggle {
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+.itinerary-map-mode .map-locator-current {
+  bottom: calc(126px + env(safe-area-inset-bottom, 0px));
+}
+
+.itinerary-map-mode .map-locator-sheet,
+.itinerary-map-mode .map-probe-panel {
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
 }
 
 @media (max-width: 430px) {

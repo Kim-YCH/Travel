@@ -2254,6 +2254,8 @@ createApp({
     };
 
     const switchDayViewMode = async (mode) => {
+      const previousMapCenter = mapInstance?.getCenter?.()?.toJSON?.() || null;
+      const previousMapZoom = mapInstance?.getZoom?.();
       dayViewMode.value = mode === 'map' ? 'map' : 'list';
       await nextTick();
 
@@ -2266,6 +2268,10 @@ createApp({
           if (mapInstance && window.google) {
             google.maps.event.trigger(mapInstance, 'resize');
             updateMapMarkers();
+            if (previousMapCenter && Number.isFinite(previousMapZoom)) {
+              mapInstance.setCenter(previousMapCenter);
+              mapInstance.setZoom(previousMapZoom);
+            }
           }
         }, 100);
       } else {
