@@ -1,10 +1,10 @@
-// version: 20260718.5
+// version: 20260718.6
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260718.5';
+  const VERSION = '20260718.6';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -22,6 +22,7 @@
   let lastRemoteUpdatedAt = '';
   let lastAutoRefreshAt = 0;
   let lastMembersFingerprint = '';
+  let remoteLoadRequestId = 0;
   const boundRoots = new WeakSet();
   const AUTO_REFRESH_MS = 60000;
   const AUTO_CHECK_MS = 30000;
@@ -254,6 +255,11 @@
     }
 
     const saved = safeJsonParse(localStorage.getItem(currentTripKey), null);
+    const savedOwner = String(saved && saved.owner || '').trim();
+    if (savedOwner && savedOwner !== selectedOwner) {
+      state = buildEmptyState(selectedOwner);
+      return;
+    }
     state = normalizeState(saved || null, selectedOwner);
   }
 
@@ -312,11 +318,15 @@
   }
 
   async function loadFromSheet(options = {}) {
-    if (!API_URL || isLoadingRemote || pendingWrites > 0 || !selectedOwner) return;
+    if (!API_URL || pendingWrites > 0 || !selectedOwner) return;
+    if (isLoadingRemote && !options.replacePending) return;
     const trip = getCurrentTripInfo();
     if (!trip.name || trip.name === '共用清單') return;
 
     const silent = !!options.silent;
+    const requestOwner = selectedOwner;
+    const requestTripIdentity = trip.id || trip.name;
+    const requestId = ++remoteLoadRequestId;
     isLoadingRemote = true;
     if (!silent) {
       syncStatus = isBrowserOnline() ? '讀取資料庫' : '離線，只可查看';
@@ -327,7 +337,7 @@
       if (!isBrowserOnline()) throw new Error('offline');
       let url = API_URL
         + '?action=prep_checklist_get'
-        + '&owner=' + encodeURIComponent(selectedOwner)
+        + '&owner=' + encodeURIComponent(requestOwner)
         + '&t=' + encodeURIComponent(Date.now());
 
       if (trip.id) url += '&tripId=' + encodeURIComponent(trip.id);
@@ -335,6 +345,12 @@
 
       const res = await fetch(url);
       const data = await res.json();
+      const currentTrip = getCurrentTripInfo();
+      const isCurrentRequest = requestId === remoteLoadRequestId
+        && selectedOwner === requestOwner
+        && (currentTrip.id || currentTrip.name) === requestTripIdentity;
+      if (!isCurrentRequest) return;
+
       if (data && data.status === 'success') {
         // 20260705.1：資料庫是主資料。讀取時用 Google Sheet 取代前端快取，但只刷新準備清單區塊。
         applyRemoteData(data, '已同步');
@@ -345,11 +361,15 @@
         updateSyncUI();
       }
     } catch (err) {
+      if (requestId !== remoteLoadRequestId || selectedOwner !== requestOwner) return;
       console.warn('prep checklist load failed:', err);
       syncStatus = isBrowserOnline() ? '讀取失敗' : '離線，只可查看';
       updateSyncUI();
     } finally {
-      isLoadingRemote = false;
+      if (requestId === remoteLoadRequestId) {
+        isLoadingRemote = false;
+        updateSyncUI();
+      }
     }
   }
 
@@ -706,6 +726,8 @@
   function changeSelectedOwner(owner) {
     const next = String(owner || '').trim();
     if (next === selectedOwner) return;
+    remoteLoadRequestId += 1;
+    isLoadingRemote = false;
     selectedOwner = next;
     storeOwner(selectedOwner);
     syncStatus = selectedOwner ? '讀取資料庫' : '';
@@ -713,7 +735,7 @@
     lastRemoteUpdatedAt = '';
     loadLocalState();
     render();
-    if (selectedOwner) loadFromSheet();
+    if (selectedOwner) loadFromSheet({ replacePending: true });
   }
 
   function addSectionFromInputs() {
@@ -1154,7 +1176,7 @@
     if (key !== currentTripKey || !state) {
       loadLocalState();
       render();
-      if (selectedOwner && isBrowserOnline()) loadFromSheet();
+      if (selectedOwner && isBrowserOnline()) loadFromSheet({ replacePending: true });
       lastMembersFingerprint = memberFp;
     } else {
       const fab = root && root.querySelector('.prep-fab');
