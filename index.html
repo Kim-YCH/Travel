@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260717.1 -->
+<!-- version: 20260718.5 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260717.1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260717.1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260717.1" />
-  <link rel="manifest" href="./site.webmanifest?v=20260717.1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260718.5" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260718.5" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260718.5" />
+  <link rel="manifest" href="./site.webmanifest?v=20260718.5" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260717.1" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260717.1" />
+  <link rel="stylesheet" href="./style.css?v=20260718.5" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260718.5" />
 </head>
 <body>
 
@@ -554,6 +554,7 @@
       <div v-show="currentTab === 'money'" class="p-3 space-y-3 pb-24 tab-panel money-page">
         <div
           class="card money-summary bg-gradient-to-r from-gray-800 to-gray-700 text-white shadow-lg"
+          :class="{ 'is-switchable': sharedWalletEnabled }"
           @click="toggleMoneyDisplayMode"
         >
           <div class="money-summary-total">
@@ -563,10 +564,11 @@
 
           <template v-if="moneyDisplayMode === 'personal'">
             <div class="money-summary-breakdown">
-              <span>個人分帳支出 <strong>${{ Math.round(totalExpense) }}</strong></span>
+              <span>個人分帳支出</span>
+              <strong>${{ Math.round(totalExpense) }}</strong>
             </div>
 
-            <div class="space-y-1 border-t border-gray-600 pt-3 text-sm">
+            <div class="money-summary-members">
               <div v-for="res in balanceSheet" :key="'personal-' + res.name" class="flex justify-between">
                 <span>{{ res.name }}</span>
                 <span :class="res.balance>=0?'text-green-400':'text-red-400'" class="font-bold">
@@ -577,11 +579,14 @@
           </template>
 
           <template v-else>
-            <div class="money-summary-breakdown">
-              <span>共同錢包支出 <strong>${{ Math.round(sharedWalletPaymentTotal) }}</strong></span>
+            <div class="money-summary-breakdown money-summary-wallet-breakdown">
+              <span>共同錢包支出</span>
+              <strong>${{ Math.round(sharedWalletPaymentTotal) }}</strong>
+              <span>共同錢包餘額</span>
+              <strong>${{ Math.round(sharedWalletBalance) }}</strong>
             </div>
 
-            <div class="space-y-1 border-t border-gray-600 pt-3 text-sm">
+            <div class="money-summary-members">
               <div v-for="res in sharedWalletMemberBalances" :key="'wallet-' + res.name" class="flex justify-between">
                 <span>{{ res.name }}</span>
                 <span :class="res.balance>=0?'text-green-400':'text-red-400'" class="font-bold">
@@ -592,16 +597,13 @@
           </template>
         </div>
 
-        
-        <div v-if="sharedWalletEnabled && moneyDisplayMode === 'wallet'" class="card shared-wallet-card">
+        <div v-if="sharedWalletEnabled && moneyDisplayMode === 'wallet'" class="card money-entry-card shared-wallet-card">
           <div class="shared-wallet-header">
-            <div>
+            <div class="shared-wallet-heading-row">
               <span>共同旅費錢包</span>
-              <strong>${{ Math.round(sharedWalletBalance) }}</strong>
             </div>
-            <div class="shared-wallet-totals">
-              <span>總存入 ${{ Math.round(sharedWalletDepositTotal) }}</span>
-              <span>錢包支出 ${{ Math.round(sharedWalletPaymentTotal) }}</span>
+            <div class="shared-wallet-balance-row">
+              <strong>${{ Math.round(sharedWalletBalance) }}</strong>
             </div>
           </div>
 
@@ -623,165 +625,192 @@
           </div>
 
           <div v-if="walletEntryMode === 'deposit'" class="shared-wallet-form">
-            <input v-model="newSharedWalletDeposit.date" type="date" aria-label="存入日期">
-            <select v-model="newSharedWalletDeposit.person" aria-label="存入人">
-              <option disabled value="">選擇存入人</option>
-              <option v-for="(p, index) in people" :key="'wallet-person-' + p.id" :value="p.name">
-                {{ p.name || '成員 ' + (index + 1) }}
-              </option>
-            </select>
-            <input v-model.number="newSharedWalletDeposit.amount" type="number" min="1" inputmode="decimal" placeholder="金額" aria-label="存入金額">
-            <input v-model="newSharedWalletDeposit.note" type="text" placeholder="備註（選填）" aria-label="存入備註">
+            <label class="money-field">
+              <span>存入人</span>
+              <select v-model="newSharedWalletDeposit.person" aria-label="存入人">
+                <option disabled value="">選擇存入人</option>
+                <option v-for="(p, index) in people" :key="'wallet-person-' + p.id" :value="p.name">
+                  {{ p.name || '成員 ' + (index + 1) }}
+                </option>
+              </select>
+            </label>
+            <label class="money-field">
+              <span>金額</span>
+              <input v-model.number="newSharedWalletDeposit.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額" aria-label="存入金額">
+            </label>
             <button
               type="button"
               class="shared-wallet-submit"
               @click="addSharedWalletDeposit"
-              :disabled="isSavingSharedWallet || !newSharedWalletDeposit.date || !newSharedWalletDeposit.person || Number(newSharedWalletDeposit.amount) <= 0"
+              :disabled="isSavingSharedWallet || !newSharedWalletDeposit.person || Number(newSharedWalletDeposit.amount) <= 0"
             >{{ isSavingSharedWallet ? '寫入中' : '存入' }}</button>
           </div>
 
           <div v-else class="shared-wallet-form">
-            <input v-model="newSharedWalletPayment.date" type="date" aria-label="公費支出日期">
-            <input v-model="newSharedWalletPayment.title" type="text" placeholder="支出項目" aria-label="公費支出項目">
-            <input v-model.number="newSharedWalletPayment.amount" type="number" min="1" inputmode="decimal" placeholder="金額" aria-label="公費支出金額">
-            <select v-model="newSharedWalletPayment.person" aria-label="使用人">
-              <option value="">所有人分攤</option>
-              <option
-                v-for="(p, index) in people"
-                :key="'wallet-use-person-' + p.id"
-                :value="p.name"
-              >
-                {{ p.name || '成員 ' + (index + 1) }}
-              </option>
-            </select>
-            <input v-model="newSharedWalletPayment.note" class="shared-wallet-form-wide" type="text" placeholder="備註（選填）" aria-label="公費支出備註">
+            <label class="money-field">
+              <span>支出項目</span>
+              <input v-model="newSharedWalletPayment.title" type="text" placeholder="支出項目" aria-label="公費支出項目">
+            </label>
+            <label class="money-field">
+              <span>金額</span>
+              <input v-model.number="newSharedWalletPayment.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額" aria-label="公費支出金額">
+            </label>
+            <div class="money-field">
+              <span>使用人</span>
+              <div class="wallet-person-options" aria-label="公費支出使用人">
+                <button
+                  type="button"
+                  :class="{ active: newSharedWalletPayment.persons.length === 0 }"
+                  @click="selectAllSharedWalletPaymentPeople"
+                >所有人分攤</button>
+                <button
+                  v-for="(p, index) in people"
+                  :key="'wallet-use-person-' + p.id"
+                  type="button"
+                  :class="{ active: newSharedWalletPayment.persons.includes(p.name) }"
+                  @click="toggleSharedWalletPaymentPerson(p.name)"
+                >
+                  {{ p.name || '成員 ' + (index + 1) }}
+                </button>
+              </div>
+            </div>
+            <div class="money-field">
+              <span>分類</span>
+              <div class="wallet-category-options" aria-label="公費支出分類">
+                <button
+                  v-for="cat in categories"
+                  :key="'wallet-category-' + cat"
+                  type="button"
+                  :class="{ active: newSharedWalletPayment.category === cat }"
+                  @click="newSharedWalletPayment.category = cat"
+                >{{ cat }}</button>
+              </div>
+            </div>
             <button
               type="button"
-              class="shared-wallet-submit is-payment"
+              class="shared-wallet-submit"
               @click="addSharedWalletPayment"
-              :disabled="isSavingSharedWallet || !newSharedWalletPayment.date || !newSharedWalletPayment.title || Number(newSharedWalletPayment.amount) <= 0"
+              :disabled="isSavingSharedWallet || !newSharedWalletPayment.title || Number(newSharedWalletPayment.amount) <= 0"
             >{{ isSavingSharedWallet ? '寫入中' : '新增支出' }}</button>
           </div>
 
-          <div v-if="sharedWalletRecords.length" class="shared-wallet-ledger">
-            <div v-for="item in sharedWalletRecords" :key="'wallet-' + item.id" class="shared-wallet-entry" :class="'is-' + item.type">
-              <div>
-                <strong>{{ item.type === 'deposit' ? (item.person || '存入') : item.title }}</strong>
-                <span>
-                  {{ item.date }}<template v-if="item.type === 'payment'">｜{{ item.person ? item.person + '使用' : '所有人分攤' }}</template><template v-if="item.note">｜{{ item.note }}</template>
-                </span>
-              </div>
-              <div>
-                <strong>{{ item.type === 'deposit' ? '+' : '-' }}${{ Math.round(item.amount) }}</strong>
-                <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
+          <div v-if="sharedWalletRecords.length" class="shared-wallet-ledger-wrap">
+            <h3>共同錢包紀錄</h3>
+            <div class="shared-wallet-ledger">
+              <div v-for="item in sharedWalletRecords" :key="'wallet-' + item.id" class="shared-wallet-entry" :class="'is-' + item.type">
+                <span class="shared-wallet-entry-icon" aria-hidden="true">{{ item.type === 'deposit' ? '💰' : getExpenseCategoryIcon(item.category) }}</span>
+                <div class="shared-wallet-entry-main">
+                  <span v-if="item.type === 'payment'" class="shared-wallet-entry-kind">{{ item.person ? '個人使用' : '所有人分攤' }}</span>
+                  <strong>{{ item.type === 'deposit' ? (item.person || '存入') : item.title }}</strong>
+                  <span>
+                    {{ item.date }}<template v-if="item.type === 'payment'">｜{{ item.category || '其他' }}｜{{ formatSharedWalletUsers(item) }}</template><template v-else-if="item.note">｜{{ item.note }}</template>
+                  </span>
+                </div>
+                <div class="shared-wallet-entry-actions">
+                  <strong>{{ item.type === 'deposit' ? '+' : '-' }}${{ Math.round(item.amount) }}</strong>
+                  <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <template v-if="moneyDisplayMode === 'personal'">
-        <div v-if="categoryAnalysis.length > 0" class="card">
-          <h3 class="font-bold text-gray-700 text-sm mb-3">📊 消費分析</h3>
+          <div class="card money-entry-card personal-expense-card">
+            <h2 class="money-entry-title">個人分帳</h2>
+
+            <div class="personal-expense-top-row">
+              <label class="money-field">
+                <span>項目</span>
+                <input v-model="newExpense.title" placeholder="項目">
+              </label>
+              <label class="money-field">
+                <span>金額</span>
+                <input v-model.number="newExpense.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額">
+              </label>
+            </div>
+
+            <div class="money-field">
+              <span>分類</span>
+              <div class="personal-category-options">
+                <button
+                  v-for="cat in categories"
+                  :key="cat"
+                  type="button"
+                  :class="{ active: newExpense.category === cat }"
+                  @click="newExpense.category = cat"
+                >{{ cat }}</button>
+              </div>
+            </div>
+
+            <label class="money-field">
+              <span>付款</span>
+              <select v-model="newExpense.payer">
+                <option disabled value="">請選擇</option>
+                <option v-for="(p, index) in people" :key="'new-exp-payer-' + p.id" :value="p.name">
+                  {{ p.name || '成員 ' + (index+1) }}
+                </option>
+              </select>
+            </label>
+
+            <div class="money-field">
+              <span>分攤給（點擊切換）</span>
+              <div class="personal-member-options">
+                <label v-for="(p, index) in people" :key="p.id" class="personal-member-option">
+                  <input type="checkbox" :value="p.name" v-model="newExpense.involved">
+                  <span>{{ p.name || '成員 ' + (index+1) }}</span>
+                </label>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              @click="addExpense"
+              class="personal-expense-submit"
+              :disabled="isAddingExpense"
+            >{{ isAddingExpense ? '寫入中' : '記帳' }}</button>
+
+            <div class="personal-expense-ledger-wrap">
+              <h3>個人分帳紀錄</h3>
+              <div v-if="filteredExpenses.length" class="personal-expense-ledger">
+                <div v-for="exp in filteredExpenses" :key="exp.id" class="personal-expense-entry">
+                  <span class="personal-expense-entry-icon" aria-hidden="true">{{ getExpenseCategoryIcon(exp.category) }}</span>
+                  <div class="personal-expense-entry-main">
+                    <strong>{{ exp.title }}</strong>
+                    <span>{{ expenseDateLabel(exp) }}｜{{ exp.payer }}先付｜{{ formatInvolved(exp.involved) }}分攤</span>
+                  </div>
+                  <div class="personal-expense-entry-actions">
+                    <strong>-${{ Math.round(exp.amount) }}</strong>
+                    <div>
+                      <button type="button" @click="openEditExpenseModal(exp)" title="編輯" aria-label="編輯個人分帳" :disabled="isSavingExpense">✏️</button>
+                      <button type="button" @click="removeExpense(exp.id)" title="刪除" aria-label="刪除個人分帳" :disabled="isSavingExpense">×</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="categoryAnalysis.length > 0" class="card money-category-analysis">
+          <h3 class="font-bold text-gray-700 text-sm mb-3">📊 旅程消費分析</h3>
           <div class="space-y-3">
             <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
               <div class="flex justify-between mb-1">
                 <span class="text-gray-600">{{ cat.name }}</span>
                 <span class="font-bold text-gray-800">
-                  ${{ cat.total }} ({{ totalExpense ? ((cat.total/totalExpense)*100).toFixed(0) : 0 }}%)
+                  ${{ cat.total }} ({{ actualTripExpense ? ((cat.total/actualTripExpense)*100).toFixed(0) : 0 }}%)
                 </span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-2">
                 <div
                   class="bg-blue-500 h-2 rounded-full stat-bar"
-                  :style="{ width: totalExpense ? (cat.total/totalExpense)*100 + '%' : '0%' }"
+                  :style="{ width: actualTripExpense ? (cat.total/actualTripExpense)*100 + '%' : '0%' }"
                 ></div>
               </div>
             </div>
           </div>
         </div>
-
-        <div class="card border border-blue-100">
-          <div class="grid grid-cols-3 gap-3 mb-3">
-            <input v-model="newExpense.title" placeholder="項目" class="col-span-2">
-            <input v-model.number="newExpense.amount" type="number" placeholder="$" class="font-mono font-bold">
-          </div>
-
-          <div class="mb-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            <button
-              v-for="cat in categories"
-              :key="cat"
-              @click="newExpense.category = cat"
-              class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition"
-              :class="newExpense.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'"
-            >{{ cat }}</button>
-          </div>
-
-          <div class="mb-3 flex gap-2 items-center">
-            <span class="text-lg text-gray-500 font-bold w-10 text-center">付款</span>
-            <select v-model="newExpense.payer" class="flex-1">
-              <option disabled value="">請選擇</option>
-              <option v-for="(p, index) in people" :key="'new-exp-payer-' + p.id" :value="p.name">
-                {{ p.name || '成員 ' + (index+1) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="mb-4">
-            <span class="text-xs text-gray-500 font-bold block mb-2 ml-1">分攤給 (點擊切換)</span>
-            <div class="flex flex-wrap gap-2">
-              <label v-for="(p, index) in people" :key="p.id" class="checkbox-wrapper cursor-pointer relative">
-                <input type="checkbox" :value="p.name" v-model="newExpense.involved" class="absolute opacity-0 w-0 h-0">
-                <div class="px-3 py-1.5 rounded-full border border-gray-200 text-sm bg-white transition select-none text-gray-700 hover:bg-gray-50">
-                  {{ p.name || '成員 ' + (index+1) }}
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <button
-            @click="addExpense"
-            class="w-full bg-blue-600 text-white h-[54px] rounded-xl font-bold shadow transition text-lg disabled:opacity-60 disabled:cursor-not-allowed"
-            :disabled="isAddingExpense"
-          >記帳</button>
-        </div>
-
-        <div class="space-y-2">
-          <div
-            v-for="(exp, idx) in filteredExpenses"
-            :key="exp.id"
-            class="card flex justify-between items-center py-3 border-l-4 border-gray-300"
-          >
-            <div class="min-w-0">
-              <div class="font-bold text-gray-800 text-lg break-words">
-                {{ exp.title }}
-                <span class="text-xs font-normal text-white bg-gray-400 px-1.5 py-0.5 rounded ml-1">{{ exp.category }}</span>
-              </div>
-              <div class="text-xs text-gray-500 mt-1 break-words">
-                {{ exp.payer }} 先付
-                <span class="text-gray-300">|</span> {{ formatInvolved(exp.involved) }} 分攤
-              </div>
-            </div>
-
-            <div class="flex flex-col items-end gap-1 shrink-0 pl-2">
-              <span class="font-bold text-xl text-gray-800 font-mono">${{ exp.amount }}</span>
-              <div class="flex items-center gap-1">
-                <button
-                  @click="openEditExpenseModal(exp)"
-                  class="text-gray-300 hover:text-blue-600 px-2"
-                  title="編輯"
-                  :disabled="isSavingExpense"
-                >✏️</button>
-                <button
-                  @click="removeExpense(exp.id)"
-                  class="text-gray-300 hover:text-red-500 px-2"
-                  title="刪除"
-                  :disabled="isSavingExpense"
-                >×</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        </template>
       </div>
 
       <!-- Prep -->
@@ -1127,20 +1156,20 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260717.1"></script>
-<script src="./cache-refresh.js?v=20260717.1"></script>
-<script src="./keyword-map.js?v=20260717.1"></script>
-<script src="./js/utils.js?v=20260717.1"></script>
-<script src="./js/api.js?v=20260717.1"></script>
-<script src="./js/cache.js?v=20260717.1"></script>
-<script src="./js/maps.js?v=20260717.1"></script>
-<script src="./js/places.js?v=20260717.1"></script>
-<script src="./js/itinerary.js?v=20260717.1"></script>
-<script src="./js/hotels.js?v=20260717.1"></script>
-<script src="./js/expenses.js?v=20260717.1"></script>
-<script src="./app.js?v=20260717.1"></script>
-<script src="./search-zh-label.js?v=20260717.1"></script>
-<script src="./prep-checklist.js?v=20260717.1"></script>
+<script src="./config.js?v=20260718.5"></script>
+<script src="./cache-refresh.js?v=20260718.5"></script>
+<script src="./keyword-map.js?v=20260718.5"></script>
+<script src="./js/utils.js?v=20260718.5"></script>
+<script src="./js/api.js?v=20260718.5"></script>
+<script src="./js/cache.js?v=20260718.5"></script>
+<script src="./js/maps.js?v=20260718.5"></script>
+<script src="./js/places.js?v=20260718.5"></script>
+<script src="./js/itinerary.js?v=20260718.5"></script>
+<script src="./js/hotels.js?v=20260718.5"></script>
+<script src="./js/expenses.js?v=20260718.5"></script>
+<script src="./app.js?v=20260718.5"></script>
+<script src="./search-zh-label.js?v=20260718.5"></script>
+<script src="./prep-checklist.js?v=20260718.5"></script>
 
 </body>
 </html>

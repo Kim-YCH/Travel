@@ -1,10 +1,10 @@
-// version: 20260717.1
+// version: 20260718.5
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260717.1';
+  const VERSION = '20260718.5';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 

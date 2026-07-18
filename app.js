@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260717.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260718.5';
     const TravelUtils = window.TravelUtils || {};
     const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
     const TravelCache = window.TravelCache || {};
@@ -28,11 +28,16 @@ createApp({
     const isAddingExpense = ref(false);
     const isSavingSharedWallet = ref(false);
     const isUpdatingSharedWalletSetting = ref(false);
+    const isRefreshingMoney = ref(false);
 
     const currentDay = ref(1);
     const totalDays = ref(1);
     const todayKey = ref('');
     let todayRefreshTimer = null;
+    let moneyRefreshTimer = null;
+    let lastMoneyRefreshAt = 0;
+    const MONEY_REFRESH_INTERVAL_MS = 60 * 1000;
+    const MONEY_REFRESH_THROTTLE_MS = 15 * 1000;
 
     const people = ref([]);
     const itinerary = ref([]);
@@ -53,8 +58,8 @@ createApp({
       const offset = now.getTimezoneOffset() * 60000;
       return new Date(now.getTime() - offset).toISOString().slice(0, 10);
     };
-    const newSharedWalletDeposit = ref({ date: defaultWalletDate(), person: '', amount: '', note: '' });
-    const newSharedWalletPayment = ref({ date: defaultWalletDate(), title: '', amount: '', person: '', note: '' });
+    const newSharedWalletDeposit = ref({ person: '', amount: '', note: '' });
+    const newSharedWalletPayment = ref({ title: '', amount: '', persons: [], category: '飲食', note: '' });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
     const itineraryTypes = ['景點', '交通', '購物', '活動', '美食', '其他'];
@@ -413,6 +418,17 @@ createApp({
       return toYMD(addDays(base, (parseInt(day, 10) || 1) - 1));
     };
 
+    const expenseCategoryIcons = {
+      '飲食': '🍽️',
+      '交通': '🚆',
+      '住宿': '🏨',
+      '購物': '🛍️',
+      '門票': '🎟️',
+      '其他': '🧾'
+    };
+    const getExpenseCategoryIcon = (category) => expenseCategoryIcons[category] || expenseCategoryIcons['其他'];
+    const expenseDateLabel = (expense) => dayDateYMD(expense?.day || 1);
+
     const daysFromToday = (ymd) => {
       const target = parseYMD(ymd);
       const today = parseYMD(todayKey.value || toYMD(new Date())) || new Date();
@@ -465,6 +481,20 @@ createApp({
     // 舊公帳資料保留在後端，但新版前端不再把公帳視為旅伴或一般分帳資料。
     const PUBLIC_ACCOUNT_NAME = '公帳';
     const normalizePersonName = (name) => String(name || '').trim();
+    const normalizeSharedWalletPeople = (value) => {
+      if (Array.isArray(value)) {
+        return Array.from(new Set(value.map(normalizePersonName).filter(Boolean)));
+      }
+      const text = String(value || '').trim();
+      if (!text) return [];
+      if (text.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return normalizeSharedWalletPeople(parsed);
+        } catch (err) {}
+      }
+      return Array.from(new Set(text.split(',').map(normalizePersonName).filter(Boolean)));
+    };
     const isSystemWalletPerson = (person) => {
       const name = normalizePersonName(typeof person === 'string' ? person : person?.name);
       const role = String(person?.role || '').trim().toLowerCase();
@@ -491,8 +521,9 @@ createApp({
       type: String(item?.type || '').trim().toLowerCase(),
       date: String(item?.date || '').slice(0, 10),
       title: String(item?.title || '').trim(),
-      person: String(item?.person || '').trim(),
+      person: normalizeSharedWalletPeople(item?.person).join(','),
       amount: Number(item?.amount) || 0,
+      category: String(item?.category || '其他').trim() || '其他',
       note: String(item?.note || '').trim()
     });
     const syncPersonSelections = () => {
@@ -501,8 +532,28 @@ createApp({
       newExpense.value.involved = normalizeInvolved(newExpense.value.involved).filter(name => names.includes(normalizePersonName(name)));
       if (!newExpense.value.involved.length) newExpense.value.involved = [...names];
       if (!names.includes(newSharedWalletDeposit.value.person)) newSharedWalletDeposit.value.person = names[0] || '';
-      const walletPaymentPerson = normalizePersonName(newSharedWalletPayment.value.person);
-      newSharedWalletPayment.value.person = names.includes(walletPaymentPerson) ? walletPaymentPerson : '';
+      newSharedWalletPayment.value.persons = normalizeSharedWalletPeople(newSharedWalletPayment.value.persons)
+        .filter(name => names.includes(name));
+    };
+
+    const toggleSharedWalletPaymentPerson = (name) => {
+      const person = normalizePersonName(name);
+      const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
+      if (!person || !validPeople.includes(person)) return;
+      const selected = normalizeSharedWalletPeople(newSharedWalletPayment.value.persons)
+        .filter(item => validPeople.includes(item));
+      newSharedWalletPayment.value.persons = selected.includes(person)
+        ? selected.filter(item => item !== person)
+        : [...selected, person];
+    };
+
+    const selectAllSharedWalletPaymentPeople = () => {
+      newSharedWalletPayment.value.persons = [];
+    };
+
+    const formatSharedWalletUsers = (item) => {
+      const selected = normalizeSharedWalletPeople(item?.person);
+      return selected.length ? `${selected.join('、')}使用` : '所有人分攤';
     };
     const expenseCreatedTime = (expense) => {
       const fromId = parseInt(String(expense?.id || '').split('_')[0], 10);
@@ -2276,14 +2327,15 @@ createApp({
       if(!trip) return;
 
       moneyDisplayMode.value = 'personal';
+      lastMoneyRefreshAt = 0;
       currentTrip.value = trip;
 
       itinerary.value = [];
       expenses.value = [];
       sharedWalletTransactions.value = [];
       people.value = [];
-      newSharedWalletDeposit.value = { date: defaultWalletDate(), person: '', amount: '', note: '' };
-      newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', person: '', note: '' };
+      newSharedWalletDeposit.value = { person: '', amount: '', note: '' };
+      newSharedWalletPayment.value = { title: '', amount: '', persons: [], category: '飲食', note: '' };
       hotels.value = [];
       hotelSearchQuery.value = '';
       hotelSearchResults.value = [];
@@ -2315,7 +2367,11 @@ createApp({
 
       loadPendingQueue(tripId);
       if (pendingSyncQueue.value.length) {
-        flushPendingQueue().then(() => fetchData({ autoSelectToday: true }));
+        flushPendingQueue().then(() => {
+          if (!pendingSyncQueue.value.length) {
+            fetchData({ autoSelectToday: true });
+          }
+        });
       } else {
         fetchData({ autoSelectToday: true });
       }
@@ -2323,6 +2379,7 @@ createApp({
 
     const exitTrip = () => {
       moneyDisplayMode.value = 'personal';
+      lastMoneyRefreshAt = 0;
       currentView.value = 'lobby';
       currentTrip.value = null;
       pendingSyncQueue.value = [];
@@ -2345,18 +2402,24 @@ createApp({
     };
 
     const fetchData = async (options = {}) => {
-      if(!currentTrip.value) return;
+      if(!currentTrip.value) return false;
 
       const tripId = currentTrip.value.id;
       const t_start = performance.now();
-      isLoading.value = true;
+      const showLoading = options.silent !== true;
+      if (showLoading) isLoading.value = true;
 
       try {
         const t_api_start = performance.now();
-        const data = await apiGet({ type:'tripData', tripId });
+        const params = { type: 'tripData', tripId };
+        if (options.force) params.force = '1';
+        const data = await apiGet(params);
         const t_api_end = performance.now();
 
         console.log("tripData response ms =", Math.round(t_api_end - t_api_start), data);
+        if (!data || data.status === 'error') {
+          throw new Error(data?.message || 'tripData refresh failed');
+        }
 
         const trip = data?.trip || null;
         const itin = Array.isArray(data?.itinerary) ? data.itinerary : [];
@@ -2406,10 +2469,12 @@ createApp({
         }
 
         saveTripCache(tripId);
-        scheduleTripWeatherLoad(500);
+        if (!options.skipWeather) scheduleTripWeatherLoad(500);
+        lastMoneyRefreshAt = Date.now();
+        return true;
       } finally {
         console.log("fetchData total ms =", Math.round(performance.now() - t_start));
-        isLoading.value = false;
+        if (showLoading) isLoading.value = false;
       }
     };
 
@@ -3540,12 +3605,14 @@ createApp({
       });
 
       sharedWalletPayments.value.forEach(item => {
-        const person = normalizePersonName(item.person);
+        const selectedPeople = normalizeSharedWalletPeople(item.person)
+          .filter(name => balances[name] !== undefined);
         const amount = Number(item.amount) || 0;
         if (amount <= 0) return;
 
-        if (person) {
-          if (balances[person] !== undefined) balances[person] -= amount;
+        if (selectedPeople.length) {
+          const selectedShare = amount / selectedPeople.length;
+          selectedPeople.forEach(name => { balances[name] -= selectedShare; });
           return;
         }
 
@@ -4040,13 +4107,16 @@ createApp({
       const isDeposit = type === 'deposit';
       const form = isDeposit ? newSharedWalletDeposit.value : newSharedWalletPayment.value;
       const amount = Number(form.amount || 0);
-      const date = String(form.date || '').trim();
+      const date = defaultWalletDate();
       const person = normalizePersonName(form.person);
+      const selectedPeople = normalizeSharedWalletPeople(form.persons);
       const title = String(form.title || '').trim();
+      const category = categories.includes(form.category) ? form.category : '其他';
       const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
+      const validSelectedPeople = selectedPeople.filter(name => validPeople.includes(name));
       const transactionPerson = isDeposit
         ? person
-        : (validPeople.includes(person) ? person : '');
+        : validSelectedPeople.join(',');
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || amount <= 0) return;
       if (isDeposit && (!person || !validPeople.includes(person))) return;
@@ -4065,10 +4135,14 @@ createApp({
         title: isDeposit ? '存入' : title,
         person: transactionPerson,
         amount,
+        category: isDeposit ? '' : category,
         note: String(form.note || '').trim(),
         created_at: now,
         updated_at: now
       });
+      const transactionPayload = isDeposit
+        ? Object.fromEntries(Object.entries(transaction).filter(([key]) => key !== 'category'))
+        : transaction;
 
       isSavingSharedWallet.value = true;
       sharedWalletTransactions.value.unshift(transaction);
@@ -4078,14 +4152,14 @@ createApp({
         const res = await syncSharedWalletPayload({
           action: 'shared_wallet_add',
           tripId: currentTrip.value.id,
-          data: transaction
+          data: transactionPayload
         });
         if (res && res.status === 'error') throw new Error(res.message || 'wallet transaction add failed');
 
         if (isDeposit) {
-          newSharedWalletDeposit.value = { date: defaultWalletDate(), person, amount: '', note: '' };
+          newSharedWalletDeposit.value = { person, amount: '', note: '' };
         } else {
-          newSharedWalletPayment.value = { date: defaultWalletDate(), title: '', amount: '', person: '', note: '' };
+          newSharedWalletPayment.value = { title: '', amount: '', persons: [], category: '飲食', note: '' };
         }
       } catch (err) {
         const index = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(transaction.id));
@@ -4148,9 +4222,6 @@ createApp({
       if (!validPeople.includes(payer) || !involved.length) return;
 
       isAddingExpense.value = true;
-      setTimeout(() => {
-        isAddingExpense.value = false;
-      }, 500);
 
       const uid = generateId();
       const d = normalizeExpenseRecord({
@@ -4200,6 +4271,8 @@ createApp({
         }
 
         alert('記帳寫入失敗，已取消剛剛新增的資料，請稍後再試。');
+      } finally {
+        isAddingExpense.value = false;
       }
     };
 
@@ -4297,8 +4370,13 @@ createApp({
       const item = idx >= 0 ? expenses.value[idx] : null;
       if (!item?.id) return;
       if (!confirm('確定刪除此筆記帳？')) return;
+      isSavingExpense.value = true;
       expenses.value.splice(idx, 1);
-      await postJSON({ action:'del', type:'expenses', id: item.id });
+      try {
+        await postJSON({ action:'del', type:'expenses', id: item.id });
+      } finally {
+        isSavingExpense.value = false;
+      }
     };
 
     const addPerson = async () => {
@@ -4360,9 +4438,15 @@ createApp({
     const categoryAnalysis = computed(() => {
       const stats = {};
       normalExpenseRecords.value.forEach(e => {
-        const cat = e.category || '未分類';
+        const cat = e.category || '其他';
         stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
       });
+      if (sharedWalletEnabled.value) {
+        sharedWalletPayments.value.forEach(item => {
+          const cat = item.category || '其他';
+          stats[cat] = (stats[cat] || 0) + (Number(item.amount) || 0);
+        });
+      }
       return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b) => b.total - a.total);
     });
 
@@ -4518,9 +4602,67 @@ createApp({
       alert('已複製到剪貼簿');
     };
 
+    const canAutoRefreshMoney = () => (
+      currentView.value === 'app' &&
+      currentTab.value === 'money' &&
+      currentTrip.value?.id &&
+      !document.hidden
+    );
+
+    const refreshMoneyData = async (options = {}) => {
+      const force = options.force === true;
+      if (isRefreshingMoney.value || !currentTrip.value?.id) return false;
+      if (!force && !canAutoRefreshMoney()) return false;
+      if (!force && Date.now() - lastMoneyRefreshAt < MONEY_REFRESH_THROTTLE_MS) return false;
+      if (isLoading.value || isAddingExpense.value || isSavingExpense.value || isSavingSharedWallet.value) return false;
+
+      isRefreshingMoney.value = true;
+      if (force) {
+        syncStatus.value = 'syncing';
+        syncMessage.value = '';
+      }
+      try {
+        await flushPendingQueue();
+        if (pendingSyncQueue.value.length) return false;
+
+        const refreshed = await fetchData({
+          force,
+          silent: options.silent !== false,
+          skipWeather: true
+        });
+        if (refreshed) {
+          syncStatus.value = 'synced';
+          syncMessage.value = '已同步';
+        }
+        return refreshed;
+      } catch (err) {
+        console.error('refreshMoneyData failed:', err);
+        if (force) {
+          syncStatus.value = 'error';
+          syncMessage.value = '同步失敗';
+        }
+        return false;
+      } finally {
+        isRefreshingMoney.value = false;
+      }
+    };
+
+    const stopMoneyAutoRefresh = () => {
+      if (!moneyRefreshTimer) return;
+      clearInterval(moneyRefreshTimer);
+      moneyRefreshTimer = null;
+    };
+
+    const updateMoneyAutoRefresh = () => {
+      stopMoneyAutoRefresh();
+      if (!canAutoRefreshMoney()) return;
+      moneyRefreshTimer = setInterval(() => {
+        refreshMoneyData({ silent: true });
+      }, MONEY_REFRESH_INTERVAL_MS);
+    };
+
     const manualSync = async () => {
-      await flushPendingQueue();
-      await fetchData();
+      await refreshMoneyData({ force: true, silent: false });
     };
 
     const switchTab = async (tab) => {
@@ -4531,6 +4673,9 @@ createApp({
       await nextTick();
 
       scheduleSortableInit();
+      if (tab === 'money') {
+        await refreshMoneyData({ silent: true });
+      }
     };
 
     const syncStatusText = computed(() => {
@@ -4561,6 +4706,7 @@ createApp({
 
     watch(currentTab, () => {
       scheduleSortableInit();
+      updateMoneyAutoRefresh();
       if (isDayMapView()) {
         setTimeout(() => updateMapMarkers(), 80);
       } else if (currentTab.value === 'itinerary') {
@@ -4582,7 +4728,10 @@ createApp({
       }
     });
 
-    watch(currentView, () => scheduleSortableInit());
+    watch(currentView, () => {
+      scheduleSortableInit();
+      updateMoneyAutoRefresh();
+    });
     watch([itinerary, expenses, sharedWalletTransactions, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
@@ -4592,31 +4741,47 @@ createApp({
       // iOS 主畫面書籤會保留上次畫面，回到前景時主動刷新日期/倒數。
       if (currentView.value === 'lobby') {
         fetchTrips();
+      } else if (canAutoRefreshMoney()) {
+        refreshMoneyData({ silent: true });
       }
+      updateMoneyAutoRefresh();
     };
 
     const handleVisibilityChange = () => {
-      if (!document.hidden) handleAppResume();
+      if (document.hidden) {
+        stopMoneyAutoRefresh();
+        return;
+      }
+      handleAppResume();
+    };
+
+    const handleOnline = async () => {
+      await flushPendingQueue();
+      if (!pendingSyncQueue.value.length && canAutoRefreshMoney()) {
+        refreshMoneyData({ silent: true });
+      }
     };
 
     onMounted(async () => {
       refreshTodayKey();
       const hasTripsCache = loadTripsCache();
       console.log('loadTripsCache =', hasTripsCache);
-      window.addEventListener('online', () => flushPendingQueue());
+      window.addEventListener('online', handleOnline);
       window.addEventListener('focus', handleAppResume);
       window.addEventListener('pageshow', handleAppResume);
       document.addEventListener('visibilitychange', handleVisibilityChange);
       todayRefreshTimer = setInterval(refreshTodayKey, 60 * 1000);
+      updateMoneyAutoRefresh();
       fetchTrips();
     });
 
     onBeforeUnmount(() => {
-      window.removeEventListener('online', () => flushPendingQueue());
+      window.removeEventListener('online', handleOnline);
       window.removeEventListener('focus', handleAppResume);
       window.removeEventListener('pageshow', handleAppResume);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (todayRefreshTimer) clearInterval(todayRefreshTimer);
+      stopMoneyAutoRefresh();
       if (mapBounceTimer) clearTimeout(mapBounceTimer);
       if (probeSearchTimeout) clearTimeout(probeSearchTimeout);
       clearProbeMarker();
@@ -4664,8 +4829,9 @@ createApp({
       searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, promoteAlternativeToItinerary, moveItineraryToAlternative,
 
       toggleMoneyDisplayMode, updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
+      toggleSharedWalletPaymentPerson, selectAllSharedWalletPaymentPeople, formatSharedWalletUsers,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
-      totalExpense, actualTripExpense, balanceSheet, categoryAnalysis, formatInvolved,
+      totalExpense, actualTripExpense, balanceSheet, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
       sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,

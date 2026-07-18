@@ -1,8 +1,8 @@
-// version: 20260717.1
+// version: 20260718.5
 // Search result helper: progressively translate Korean/Japanese/Thai Google Places result titles into Chinese labels. Runs up to 3 translations in parallel.
 // Example: 서울타워（首爾塔）. The label is translated from the result title, not copied from the user's keyword.
 (function () {
-  const VERSION = '20260717.1';
+  const VERSION = '20260718.5';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
   const TARGET_LANG = 'zh-TW';
   const TRANSLATE_TIMEOUT_MS = 60000;
