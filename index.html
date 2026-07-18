@@ -85,9 +85,10 @@
   >
     <header class="app-header bg-blue-600 text-white shadow-md sticky top-0 z-50 flex justify-between items-center flex-shrink-0">
       <div class="app-header-title">
-        <h1 class="text-lg font-bold tracking-wide">
-          {{ currentTrip.name }}<span class="app-header-map-day"> · Day {{ currentDay }}</span>
-        </h1>
+        <div class="app-header-heading flex items-baseline min-w-0 gap-1">
+          <h1 class="min-w-0 flex-1 text-lg font-bold tracking-wide">{{ currentTrip.name }}</h1>
+          <span class="app-header-map-day flex-shrink-0 text-[15px] font-bold">· Day {{ currentDay }}</span>
+        </div>
         <div class="app-header-subtitle text-xs text-blue-200">
           Day {{ currentDay }} | {{ dayLabel(currentDay) }} | {{ currentTrip.city }}
         </div>
