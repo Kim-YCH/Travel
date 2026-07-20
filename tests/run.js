@@ -80,7 +80,7 @@ const U = win.TravelUtils, I = win.TravelItinerary, H = win.TravelHotels,
 
 /* --------------------------------------------------------- 2. 模組單元測試 */
 section('2. 行程模型與交通 envelope');
-const msg = I.serializeItineraryMessage('交通', '記得帶護照', { mode: '飛機', number: 'BR157', terminal: 'T1', seat: '32A', checkin: '2h' });
+const msg = I.serializeItineraryMessage('交通', '記得帶護照', { mode: '飛機', number: 'BR157', terminal: 'T1', seat: '32A', checkin: '11:05' });
 eq('envelope 前綴', msg.startsWith('[[TRAVEL_TRANSPORT_V1:'), true);
 const parsed = I.parseItineraryMessage(msg);
 eq('round-trip 班次', parsed.transport.number, 'BR157');
@@ -91,8 +91,8 @@ eq('非交通不包 envelope', I.serializeItineraryMessage('景點', '純備註'
 eq('交通但無明細', I.serializeItineraryMessage('交通', 'abc', {}), 'abc');
 eq('舊純文字訊息', I.parseItineraryMessage('舊的純文字').note, '舊的純文字');
 eq('壞掉的 envelope 不丟例外', I.parseItineraryMessage('[[TRAVEL_TRANSPORT_V1:%%%]]').note, '[[TRAVEL_TRANSPORT_V1:%%%]]');
-eq('交通摘要含座位與報到', I.getTransportSummary({ type: '交通', message: msg }), ['BR157', 'T1', '座位 32A', '報到 2h']);
-eq('資訊列組合', I.getItineraryInfoText({ type: '交通', message: msg }), 'BR157 · T1 · 座位 32A · 報到 2h｜記得帶護照');
+eq('交通摘要含座位與出發時間', I.getTransportSummary({ type: '交通', message: msg }), ['BR157', 'T1', '座位 32A', '出發 11:05']);
+eq('資訊列組合', I.getItineraryInfoText({ type: '交通', message: msg }), 'BR157 · T1 · 座位 32A · 出發 11:05｜記得帶護照');
 eq('只有班次時不出現空標籤',
   I.getTransportSummary({ type: '交通', message: I.serializeItineraryMessage('交通', '', { number: 'BR157' }) }),
   ['BR157']);

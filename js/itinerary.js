@@ -95,7 +95,11 @@
 
   const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
 
-  // 班次與航廈本身就看得懂，座位與報到時間需要標籤才不會混淆。
+  // 班次與航廈本身就看得懂，座位與時間需要標籤才不會混淆。
+  //
+  // checkin 這個鍵名是早期版本留下的：當時它代表報到時間，但報到時間通常等於行程本身的
+  // 排程時間，記兩次沒有意義。現在它存的是交通工具的出發時間，UI 也照此顯示。
+  // 鍵名維持 checkin 以免既有資料需要搬遷。
   const getTransportSummary = (item) => {
     if (getItineraryType(item) !== '交通') return [];
     const details = getTransportDetails(item);
@@ -103,7 +107,7 @@
       details.number || '',
       details.terminal || '',
       details.seat ? `座位 ${details.seat}` : '',
-      details.checkin ? `報到 ${details.checkin}` : ''
+      details.checkin ? `出發 ${details.checkin}` : ''
     ].filter(Boolean);
   };
 
