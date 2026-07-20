@@ -1296,6 +1296,45 @@ html, body {
       font-size: 13px;
     }
 
+    .settlement-plan {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #4b5563;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .settlement-plan-title {
+      color: #9ca3af;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .04em;
+    }
+
+    .settlement-plan-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .settlement-plan-from,
+    .settlement-plan-to {
+      overflow-wrap: anywhere;
+    }
+
+    .settlement-plan-from { color: #fca5a5; }
+    .settlement-plan-to { color: #86efac; }
+    .settlement-plan-arrow { color: #6b7280; flex-shrink: 0; }
+
+    .settlement-plan-amount {
+      color: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: nowrap;
+    }
+
     .money-entry-card {
       width: 100%;
       box-sizing: border-box;
@@ -1543,6 +1582,11 @@ html, body {
       color: #047857 !important;
       font-size: 9px !important;
       font-weight: 900;
+    }
+
+    .shared-wallet-entry-buttons {
+      display: flex;
+      gap: 4px;
     }
 
     .shared-wallet-entry-actions button,

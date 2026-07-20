@@ -72,7 +72,9 @@
 ## 版本與快取
 
 - 版本格式使用 `YYYYMMDD.NN`。
-- 同步更新 `config.js`、`cache-refresh.js`、`index.html` 註解及所有 CSS/JS query string。
+- 同步更新 `config.js`、`cache-refresh.js`、`sw.js` 的 `VERSION`、`index.html` 註解及所有 CSS/JS query string。
+- 新增或移除 `index.html` 載入的本地資源時，必須同步更新 `sw.js` 的 `SHELL_ASSETS`，否則離線會開不起來。`node tests/run.js` 會檢查。
+- 每次改動在 `docs/changelog.md` 最上方新增一節，並註明是否需要重新部署 Apps Script。
 - 有獨立版本常數的前端腳本也要同步。
 - Apps Script 後端版本可與前端一致，但部署仍是獨立動作。
 

@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260720.1 -->
+<!-- version: 20260720.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260720.1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260720.1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260720.1" />
-  <link rel="manifest" href="./site.webmanifest?v=20260720.1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260720.2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260720.2" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260720.2" />
+  <link rel="manifest" href="./site.webmanifest?v=20260720.2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260720.1" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260720.1" />
+  <link rel="stylesheet" href="./style.css?v=20260720.2" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260720.2" />
 </head>
 <body>
 
@@ -583,6 +583,20 @@
                 </span>
               </div>
             </div>
+
+            <div v-if="settlementPlan.length" class="settlement-plan" aria-label="結算方案">
+              <div class="settlement-plan-title">結算方案</div>
+              <div
+                v-for="step in settlementPlan"
+                :key="'settle-' + step.from + '-' + step.to"
+                class="settlement-plan-row"
+              >
+                <span class="settlement-plan-from">{{ step.from }}</span>
+                <span class="settlement-plan-arrow" aria-hidden="true">→</span>
+                <span class="settlement-plan-to">{{ step.to }}</span>
+                <strong class="settlement-plan-amount">${{ step.amount }}</strong>
+              </div>
+            </div>
           </template>
 
           <template v-else>
@@ -715,7 +729,10 @@
                 </div>
                 <div class="shared-wallet-entry-actions">
                   <strong>{{ item.type === 'deposit' ? '+' : '-' }}${{ Math.round(item.amount) }}</strong>
-                  <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
+                  <div class="shared-wallet-entry-buttons">
+                    <button type="button" @click="openEditWalletModal(item)" title="編輯錢包紀錄" aria-label="編輯錢包紀錄" :disabled="isSavingSharedWallet">✎</button>
+                    <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1026,6 +1043,14 @@
               <span>航廈／月台</span>
               <input v-model="editPlace.transport.terminal" placeholder="航廈 / 月台">
             </label>
+            <label>
+              <span>座位</span>
+              <input v-model="editPlace.transport.seat" placeholder="32A / 8車 12號">
+            </label>
+            <label>
+              <span>報到時間</span>
+              <input v-model="editPlace.transport.checkin" type="time">
+            </label>
           </div>
         </section>
 
@@ -1161,25 +1186,98 @@
       </div>
     </div>
   </div>
+
+  <!-- Edit shared wallet transaction modal -->
+  <div v-if="showEditWalletModal" class="modal-mask" @click.self="closeEditWalletModal">
+    <div class="modal-card space-y-3">
+      <div class="font-bold text-gray-800 text-lg">{{ editWallet.type === 'deposit' ? '編輯存入' : '編輯公費支出' }}</div>
+
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-gray-500 ml-1">日期</div>
+        <input v-model="editWallet.date" type="date">
+
+        <div class="text-xs font-bold text-gray-500 ml-1">金額</div>
+        <input v-model.number="editWallet.amount" type="number" placeholder="$" class="font-mono font-bold">
+
+        <template v-if="editWallet.type === 'deposit'">
+          <div class="text-xs font-bold text-gray-500 ml-1">存入人</div>
+          <select v-model="editWallet.person">
+            <option disabled value="">請選擇</option>
+            <option v-for="(p, index) in people" :key="'edit-wallet-person-' + p.id" :value="p.name">
+              {{ p.name || '成員 ' + (index+1) }}
+            </option>
+          </select>
+        </template>
+
+        <template v-else>
+          <div class="text-xs font-bold text-gray-500 ml-1">項目</div>
+          <input v-model="editWallet.title" placeholder="項目名稱">
+
+          <div class="text-xs font-bold text-gray-500 ml-1">分類</div>
+          <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <button
+              v-for="cat in categories"
+              :key="'edit-wallet-cat-' + cat"
+              @click="editWallet.category = cat"
+              class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition"
+              :class="editWallet.category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'"
+            >{{ cat }}</button>
+          </div>
+
+          <div>
+            <span class="text-xs text-gray-500 font-bold block mb-2 ml-1">使用者（不選＝所有人分攤）</span>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                @click="selectAllEditWalletPeople"
+                class="px-3 py-1.5 rounded-full border text-sm font-bold transition"
+                :class="!editWallet.persons.length ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'"
+              >所有人</button>
+              <button
+                type="button"
+                v-for="(p, index) in people"
+                :key="'edit-wallet-user-' + p.id"
+                @click="toggleEditWalletPerson(p.name)"
+                class="px-3 py-1.5 rounded-full border text-sm transition"
+                :class="editWallet.persons.includes(p.name) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200'"
+              >{{ p.name || '成員 ' + (index + 1) }}</button>
+            </div>
+          </div>
+        </template>
+
+        <div class="text-xs font-bold text-gray-500 ml-1">備註</div>
+        <input v-model="editWallet.note" placeholder="備註（選填）">
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button class="flex-1 border text-gray-600 small-btn active:scale-95" @click="closeEditWalletModal" :disabled="isSavingSharedWallet">取消</button>
+        <button
+          class="flex-1 bg-blue-600 text-white small-btn active:scale-95 disabled:opacity-60"
+          @click="saveEditWalletTransaction"
+          :disabled="isSavingSharedWallet || Number(editWallet.amount) <= 0 || (editWallet.type === 'payment' && !editWallet.title)"
+        >{{ isSavingSharedWallet ? '儲存中...' : '儲存' }}</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<script src="./config.js?v=20260720.1"></script>
-<script src="./cache-refresh.js?v=20260720.1"></script>
-<script src="./keyword-map.js?v=20260720.1"></script>
-<script src="./js/utils.js?v=20260720.1"></script>
-<script src="./js/api.js?v=20260720.1"></script>
-<script src="./js/cache.js?v=20260720.1"></script>
-<script src="./js/maps.js?v=20260720.1"></script>
-<script src="./js/places.js?v=20260720.1"></script>
-<script src="./js/itinerary.js?v=20260720.1"></script>
-<script src="./js/hotels.js?v=20260720.1"></script>
-<script src="./js/expenses.js?v=20260720.1"></script>
-<script src="./js/weather.js?v=20260720.1"></script>
-<script src="./js/export.js?v=20260720.1"></script>
-<script src="./js/probe-search.js?v=20260720.1"></script>
-<script src="./app.js?v=20260720.1"></script>
-<script src="./search-zh-label.js?v=20260720.1"></script>
-<script src="./prep-checklist.js?v=20260720.1"></script>
+<script src="./config.js?v=20260720.2"></script>
+<script src="./cache-refresh.js?v=20260720.2"></script>
+<script src="./keyword-map.js?v=20260720.2"></script>
+<script src="./js/utils.js?v=20260720.2"></script>
+<script src="./js/api.js?v=20260720.2"></script>
+<script src="./js/cache.js?v=20260720.2"></script>
+<script src="./js/maps.js?v=20260720.2"></script>
+<script src="./js/places.js?v=20260720.2"></script>
+<script src="./js/itinerary.js?v=20260720.2"></script>
+<script src="./js/hotels.js?v=20260720.2"></script>
+<script src="./js/expenses.js?v=20260720.2"></script>
+<script src="./js/weather.js?v=20260720.2"></script>
+<script src="./js/export.js?v=20260720.2"></script>
+<script src="./js/probe-search.js?v=20260720.2"></script>
+<script src="./app.js?v=20260720.2"></script>
+<script src="./search-zh-label.js?v=20260720.2"></script>
+<script src="./prep-checklist.js?v=20260720.2"></script>
 
 </body>
 </html>

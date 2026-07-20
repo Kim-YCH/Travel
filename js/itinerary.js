@@ -95,12 +95,15 @@
 
   const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
 
+  // 班次與航廈本身就看得懂，座位與報到時間需要標籤才不會混淆。
   const getTransportSummary = (item) => {
     if (getItineraryType(item) !== '交通') return [];
     const details = getTransportDetails(item);
     return [
       details.number || '',
-      details.terminal || ''
+      details.terminal || '',
+      details.seat ? `座位 ${details.seat}` : '',
+      details.checkin ? `報到 ${details.checkin}` : ''
     ].filter(Boolean);
   };
 

@@ -179,6 +179,13 @@ createApp({
     const editExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const isSavingExpense = ref(false);
 
+    const showEditWalletModal = ref(false);
+    const editWalletId = ref('');
+    const editWallet = ref({
+      type: 'payment', date: '', title: '', person: '',
+      persons: [], amount: 0, category: '飲食', note: ''
+    });
+
     const generateId = TravelUtils.generateId;
 
     const isKoreaCity = (city) => {
@@ -466,6 +473,22 @@ createApp({
 
     const selectAllSharedWalletPaymentPeople = () => {
       newSharedWalletPayment.value.persons = [];
+    };
+
+    // 編輯錢包交易時的使用者勾選，與新增表單分開，避免兩邊互相污染。
+    const toggleEditWalletPerson = (name) => {
+      const person = normalizePersonName(name);
+      const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
+      if (!person || !validPeople.includes(person)) return;
+      const selected = normalizeSharedWalletPeople(editWallet.value.persons)
+        .filter(item => validPeople.includes(item));
+      editWallet.value.persons = selected.includes(person)
+        ? selected.filter(item => item !== person)
+        : [...selected, person];
+    };
+
+    const selectAllEditWalletPeople = () => {
+      editWallet.value.persons = [];
     };
 
 
@@ -3196,6 +3219,89 @@ createApp({
     const addSharedWalletDeposit = () => addSharedWalletTransaction('deposit');
     const addSharedWalletPayment = () => addSharedWalletTransaction('payment');
 
+    const openEditWalletModal = (item) => {
+      if (!item?.id) return;
+      editWalletId.value = String(item.id);
+      editWallet.value = {
+        type: item.type === 'deposit' ? 'deposit' : 'payment',
+        date: String(item.date || '').slice(0, 10),
+        title: String(item.title || ''),
+        person: normalizePersonName(item.person),
+        persons: normalizeSharedWalletPeople(item.person),
+        amount: Number(item.amount) || 0,
+        category: categories.includes(item.category) ? item.category : '其他',
+        note: String(item.note || '')
+      };
+      showEditWalletModal.value = true;
+    };
+
+    const closeEditWalletModal = () => {
+      showEditWalletModal.value = false;
+      editWalletId.value = '';
+    };
+
+    const saveEditWalletTransaction = async () => {
+      if (isSavingSharedWallet.value || !currentTrip.value?.id) return;
+
+      const index = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(editWalletId.value));
+      if (index < 0) return;
+
+      const original = sharedWalletTransactions.value[index];
+      const form = editWallet.value;
+      const isDeposit = form.type === 'deposit';
+      const amount = Number(form.amount || 0);
+      const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date) || amount <= 0) return;
+      if (isDeposit && !validPeople.includes(normalizePersonName(form.person))) return;
+      if (!isDeposit && !String(form.title || '').trim()) return;
+
+      // 後端會擋餘額變負，前端先算一次才能給出有意義的訊息而不是通用錯誤。
+      const signed = (record) => (record.type === 'deposit' ? 1 : -1) * (Number(record.amount) || 0);
+      const nextRecord = normalizeSharedWalletTransaction({
+        ...original,
+        type: form.type,
+        date: form.date,
+        title: isDeposit ? (String(form.title || '').trim() || '存入') : String(form.title).trim(),
+        person: isDeposit
+          ? normalizePersonName(form.person)
+          : normalizeSharedWalletPeople(form.persons).filter(name => validPeople.includes(name)).join(','),
+        amount,
+        category: isDeposit ? '' : (categories.includes(form.category) ? form.category : '其他'),
+        note: String(form.note || '').trim(),
+        updated_at: new Date().toISOString()
+      });
+
+      const projected = sharedWalletBalance.value - signed(original) + signed(nextRecord);
+      if (projected < 0) {
+        alert(`修改後共同錢包會變成負數（${Math.round(projected)}），請先調整其他紀錄。`);
+        return;
+      }
+
+      const backup = { ...original };
+      isSavingSharedWallet.value = true;
+      sharedWalletTransactions.value.splice(index, 1, nextRecord);
+      scheduleTripCacheSave();
+
+      try {
+        const res = await syncSharedWalletPayload({
+          action: 'shared_wallet_edit',
+          tripId: currentTrip.value.id,
+          id: nextRecord.id,
+          data: { ...nextRecord, trip_id: currentTrip.value.id }
+        });
+        if (res && res.status === 'error') throw new Error(res.message || 'wallet transaction edit failed');
+        closeEditWalletModal();
+      } catch (err) {
+        const revertIndex = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(backup.id));
+        if (revertIndex !== -1) sharedWalletTransactions.value.splice(revertIndex, 1, backup);
+        scheduleTripCacheSave();
+        alert('錢包紀錄修改失敗，請稍後再試。');
+      } finally {
+        isSavingSharedWallet.value = false;
+      }
+    };
+
     const removeSharedWalletTransaction = async (item) => {
       if (isSavingSharedWallet.value || !item?.id || !currentTrip.value?.id) return;
       if (item.type === 'deposit' && sharedWalletBalance.value - Number(item.amount || 0) < 0) {
@@ -3455,6 +3561,12 @@ createApp({
       });
 
       return Object.keys(b).map(n => ({name:n, balance:b[n]}));
+    });
+
+    // 把個人分帳的淨額換算成「誰轉多少給誰」，N 個人最多 N-1 筆。
+    // 共同錢包的餘額語意是「存入 vs 使用」，不是互相欠款，因此不套用結算。
+    const settlementPlan = computed(() => {
+      return TravelExpenses.buildSettlementPlan(balanceSheet.value);
     });
 
     const categoryAnalysis = computed(() => {
@@ -3737,8 +3849,10 @@ createApp({
 
       toggleMoneyDisplayMode, updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
       toggleSharedWalletPaymentPerson, selectAllSharedWalletPaymentPeople, formatSharedWalletUsers,
+      showEditWalletModal, editWallet, openEditWalletModal, closeEditWalletModal, saveEditWalletTransaction,
+      toggleEditWalletPerson, selectAllEditWalletPeople,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
-      totalExpense, actualTripExpense, balanceSheet, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
+      totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
       sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
       filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,

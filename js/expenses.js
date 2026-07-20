@@ -104,7 +104,52 @@
     return Number.isFinite(fromDate) ? fromDate : 0;
   };
 
+  /**
+   * 從每個人的淨額算出實際轉帳清單。
+   *
+   * balanceSheet 只回答「誰多付了多少」，但旅程結束時真正要做的是轉帳。
+   * 這裡用貪婪配對：每次拿欠最多的人去還給被欠最多的人，兩者取較小值結清一邊。
+   * 每一輪至少有一個人歸零，所以 N 個人最多 N-1 筆轉帳。
+   *
+   * 金額以「元」為單位四捨五入，並用 0.5 元作為忽略門檻，
+   * 避免分攤除不盡時跑出 0.0001 這種毫無意義的轉帳。
+   */
+  const buildSettlementPlan = (balances) => {
+    const EPSILON = 0.5;
+
+    const debtors = [];
+    const creditors = [];
+    (Array.isArray(balances) ? balances : []).forEach((entry) => {
+      const name = normalizePersonName(entry?.name);
+      const balance = Number(entry?.balance) || 0;
+      if (!name) return;
+      if (balance < -EPSILON) debtors.push({ name, amount: -balance });
+      else if (balance > EPSILON) creditors.push({ name, amount: balance });
+    });
+
+    // 由大到小配對，讓大額先被消化，轉帳筆數比隨機順序少。
+    debtors.sort((a, b) => b.amount - a.amount);
+    creditors.sort((a, b) => b.amount - a.amount);
+
+    const plan = [];
+    let i = 0;
+    let j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const pay = Math.min(debtors[i].amount, creditors[j].amount);
+      if (pay > EPSILON) {
+        plan.push({ from: debtors[i].name, to: creditors[j].name, amount: Math.round(pay) });
+      }
+      debtors[i].amount -= pay;
+      creditors[j].amount -= pay;
+      if (debtors[i].amount <= EPSILON) i++;
+      if (creditors[j].amount <= EPSILON) j++;
+    }
+
+    return plan.filter((item) => item.amount > 0);
+  };
+
   window.TravelExpenses = Object.freeze({
+    buildSettlementPlan,
     EXPENSE_CATEGORIES,
     PUBLIC_ACCOUNT_NAME,
     expenseCategoryIcons,

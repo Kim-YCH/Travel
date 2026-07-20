@@ -34,7 +34,7 @@ const MODULE_FILES = [
 
 /* ------------------------------------------------------------------ 1. 語法 */
 section('1. 語法檢查');
-for (const f of [...MODULE_FILES, 'app.js', 'config.js', 'cache-refresh.js', 'keyword-map.js', 'search-zh-label.js', 'prep-checklist.js']) {
+for (const f of [...MODULE_FILES, 'app.js', 'config.js', 'cache-refresh.js', 'keyword-map.js', 'search-zh-label.js', 'prep-checklist.js', 'sw.js']) {
   try { new vm.Script(read(f), { filename: f }); ok(f); }
   catch (e) { bad(f, e.message); }
 }
@@ -91,8 +91,12 @@ eq('非交通不包 envelope', I.serializeItineraryMessage('景點', '純備註'
 eq('交通但無明細', I.serializeItineraryMessage('交通', 'abc', {}), 'abc');
 eq('舊純文字訊息', I.parseItineraryMessage('舊的純文字').note, '舊的純文字');
 eq('壞掉的 envelope 不丟例外', I.parseItineraryMessage('[[TRAVEL_TRANSPORT_V1:%%%]]').note, '[[TRAVEL_TRANSPORT_V1:%%%]]');
-eq('交通摘要只有班次與航廈', I.getTransportSummary({ type: '交通', message: msg }), ['BR157', 'T1']);
-eq('資訊列組合', I.getItineraryInfoText({ type: '交通', message: msg }), 'BR157 · T1｜記得帶護照');
+eq('交通摘要含座位與報到', I.getTransportSummary({ type: '交通', message: msg }), ['BR157', 'T1', '座位 32A', '報到 2h']);
+eq('資訊列組合', I.getItineraryInfoText({ type: '交通', message: msg }), 'BR157 · T1 · 座位 32A · 報到 2h｜記得帶護照');
+eq('只有班次時不出現空標籤',
+  I.getTransportSummary({ type: '交通', message: I.serializeItineraryMessage('交通', '', { number: 'BR157' }) }),
+  ['BR157']);
+eq('非交通類型沒有摘要', I.getTransportSummary({ type: '景點', message: msg }), []);
 
 section('3. 行程分類');
 eq('別名 早餐→美食', I.normalizeItineraryType('早餐'), '美食');
@@ -188,6 +192,43 @@ eq('天氣代碼未知', W.weatherCodeInfo(999).text, '天氣');
 eq('UV 低', W.uvLevelLabel(1), '低');
 eq('UV 危險', W.uvLevelLabel(12), '危險');
 eq('UV 非數字', W.uvLevelLabel('x'), '');
+
+/* -------------------------------------------------------------- 8f. 結算 */
+section('8f. 分帳結算方案');
+{
+  const plan = (b) => E.buildSettlementPlan(b);
+
+  eq('全部打平時沒有轉帳', plan([{ name: 'a', balance: 0 }, { name: 'b', balance: 0 }]), []);
+  eq('兩人一筆結清',
+    plan([{ name: '小明', balance: -300 }, { name: '小華', balance: 300 }]),
+    [{ from: '小明', to: '小華', amount: 300 }]);
+
+  // 三人各付不同金額：最多 2 筆
+  const three = plan([{ name: 'A', balance: -500 }, { name: 'B', balance: 200 }, { name: 'C', balance: 300 }]);
+  eq('三人最多 N-1 筆', three.length <= 2, true);
+  eq('三人結算內容', three, [
+    { from: 'A', to: 'C', amount: 300 },
+    { from: 'A', to: 'B', amount: 200 }
+  ]);
+
+  // 總額守恆：轉出總額等於所有負餘額的絕對值
+  const many = [
+    { name: 'A', balance: -450 }, { name: 'B', balance: -150 },
+    { name: 'C', balance: 100 }, { name: 'D', balance: 500 }
+  ];
+  const manyPlan = plan(many);
+  eq('四人最多 N-1 筆', manyPlan.length <= 3, true);
+  eq('轉出總額守恆', manyPlan.reduce((s, x) => s + x.amount, 0), 600);
+  eq('每筆金額皆為正', manyPlan.every((x) => x.amount > 0), true);
+  eq('沒有人轉給自己', manyPlan.every((x) => x.from !== x.to), true);
+
+  // 分攤除不盡產生的零頭不該變成轉帳
+  eq('忽略 0.5 元以下零頭',
+    plan([{ name: 'a', balance: -0.33 }, { name: 'b', balance: 0.33 }]), []);
+  eq('空清單', plan([]), []);
+  eq('非陣列輸入', plan(null), []);
+  eq('無名字的項目被忽略', plan([{ name: '  ', balance: -100 }, { name: 'b', balance: 100 }]), []);
+}
 
 /* ---------------------------------------------------------- 8e. 探點搜尋 */
 section('8e. 探點搜尋');
@@ -518,10 +559,10 @@ if (bindings) {
 /* ------------------------------------------------------------ 11. 版本一致性 */
 section('11. 靜態資源版本一致性');
 const version = (read('config.js').match(/APP_VERSION:\s*'([^']+)'/) || [])[1];
+const html = read('index.html');
 if (!version) bad('讀不到 config.js 的 APP_VERSION');
 else {
   ok('config.js APP_VERSION = ' + version);
-  const html = read('index.html');
   const wrong = [];
   for (const m of html.matchAll(/(?:src|href)="\.\/([^"?]+)\?v=([^"]+)"/g)) {
     if (m[2] !== version) wrong.push(`${m[1]} -> ${m[2]}`);
@@ -529,6 +570,18 @@ else {
   wrong.length
     ? bad(`index.html 有 ${wrong.length} 個資源版本號不符`, wrong.join('\n        '))
     : ok('index.html 所有資源 query string 版本一致');
+
+  const swSrc = read('sw.js');
+  const swVersion = (swSrc.match(/const VERSION = '([^']+)'/) || [])[1];
+  eq('sw.js 版本與 config.js 一致', swVersion, version);
+
+  // Service Worker 的 precache 清單必須涵蓋 index.html 實際載入的每個本地資源，
+  // 少一個就會在離線時整個 App 開不起來。
+  const htmlAssets = [...html.matchAll(/(?:src|href)="\.\/([^"?]+)\?v=[^"]+"/g)].map((m) => m[1]);
+  const missing = htmlAssets.filter((asset) => !swSrc.includes(`./${asset}?v=`));
+  missing.length
+    ? bad(`sw.js 的 precache 少了 ${missing.length} 個 index.html 有載入的資源`, missing.join(', '))
+    : ok(`sw.js precache 涵蓋 index.html 的全部 ${htmlAssets.length} 個本地資源`);
 }
 
 /* ------------------------------------------------------------------- 總結 */
