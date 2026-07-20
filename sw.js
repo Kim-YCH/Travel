@@ -9,7 +9,7 @@
  */
 'use strict';
 
-const VERSION = '20260720.2';
+const VERSION = '20260720.3';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const CDN_CACHE = `travel-cdn-${VERSION}`;
 
@@ -68,8 +68,21 @@ self.addEventListener('install', (event) => {
 
     const cdn = await caches.open(CDN_CACHE);
     await Promise.all(CDN_ASSETS.map(async (url) => {
+      // 先試 CORS。帶 crossorigin 屬性的 <script>（例如 Vue）發出的是 CORS 請求，
+      // 而 opaque response 無法滿足 CORS 請求 —— 硬塞會讓該 script 載入失敗。
+      // 沒有 CORS 標頭的來源（Tailwind）才退回 no-cors 存成 opaque，
+      // 它的標籤沒有 crossorigin，opaque 對它是安全的。
       try {
-        // no-cors 讓沒有 CORS 標頭的 CDN 也能存成 opaque response，<script> 仍可使用。
+        const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'reload' });
+        if (res.ok) {
+          await cdn.put(url, res);
+          return;
+        }
+      } catch (err) {
+        // 落到下面的 no-cors
+      }
+
+      try {
         const res = await fetch(url, { mode: 'no-cors', cache: 'reload' });
         await cdn.put(url, res);
       } catch (err) {
@@ -141,14 +154,21 @@ self.addEventListener('fetch', (event) => {
   if (CDN_ASSETS.some((asset) => req.url.startsWith(asset))) {
     event.respondWith((async () => {
       const cached = await caches.match(req);
-      if (cached) return cached;
+      // opaque response 不能拿來回應 CORS 請求，瀏覽器會判定失敗。
+      // 這種情況一律改走網路，寧可離線時少一個 CDN，也不要讓整頁掛掉。
+      const usable = cached && !(cached.type === 'opaque' && req.mode === 'cors');
+      if (usable) return cached;
+
       try {
         const res = await fetch(req);
-        const cache = await caches.open(CDN_CACHE);
-        cache.put(req, res.clone());
+        if (res && (res.ok || res.type === 'opaque')) {
+          const cache = await caches.open(CDN_CACHE);
+          cache.put(req, res.clone());
+        }
         return res;
       } catch (err) {
-        return Response.error();
+        // 網路也拿不到時，opaque 至少比什麼都沒有好。
+        return cached || Response.error();
       }
     })());
   }

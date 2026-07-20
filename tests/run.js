@@ -582,6 +582,22 @@ else {
   missing.length
     ? bad(`sw.js 的 precache 少了 ${missing.length} 個 index.html 有載入的資源`, missing.join(', '))
     : ok(`sw.js precache 涵蓋 index.html 的全部 ${htmlAssets.length} 個本地資源`);
+
+  // CDN 清單同樣不能漂移。
+  const cdnTags = [...html.matchAll(/<script src="(https:\/\/[^"]+)"([^>]*)>/g)]
+    .map((m) => ({ url: m[1], crossorigin: /crossorigin/.test(m[2]) }));
+  const cdnMissing = cdnTags.filter((tag) => !swSrc.includes(tag.url));
+  cdnMissing.length
+    ? bad(`sw.js 的 CDN_ASSETS 少了 ${cdnMissing.length} 個`, cdnMissing.map((t) => t.url).join(', '))
+    : ok(`sw.js CDN_ASSETS 涵蓋 index.html 的全部 ${cdnTags.length} 個 CDN script`);
+
+  // v20260720.2 的線上事故：CDN 只用 no-cors 預抓，存成 opaque response。
+  // 帶 crossorigin 的 <script>（Vue）發的是 CORS 請求，opaque 無法滿足，
+  // 導致 Vue 載入失敗、整個 App 掛掉。這兩項確保修法不會被改回去。
+  if (cdnTags.some((tag) => tag.crossorigin)) {
+    eq('sw.js 預抓 CDN 會先嘗試 CORS', /mode:\s*'cors'/.test(swSrc), true);
+    eq('sw.js 不把 opaque 回給 CORS 請求', /opaque'\s*&&\s*req\.mode\s*===\s*'cors'/.test(swSrc), true);
+  }
 }
 
 /* ------------------------------------------------------------------- 總結 */

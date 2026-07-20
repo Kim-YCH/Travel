@@ -5,6 +5,40 @@
 
 ---
 
+## 20260720.3
+
+### 修復（線上事故）
+
+**Service Worker 讓整個 App 無法啟動**
+
+`20260720.2` 推上線後，App 完全掛掉：Vue 沒有掛載，畫面直接顯示 `{{ ... }}` 原始模板，
+所有 modal 同時出現。本機測試正常，因為 Service Worker 只在 https 生效。
+
+原因是 `sw.js` 預抓 CDN 時一律使用 `mode: 'no-cors'`，存下的是 opaque response。
+但 `index.html` 的 Vue script 標籤帶有 `crossorigin="anonymous"`，瀏覽器發的是 CORS 請求，
+而 **opaque response 無法滿足 CORS 請求**。Vue 因此載入失敗，`app.js` 第一行解構 `Vue`
+就拋錯，`mount()` 從未執行。
+
+修法：
+
+- 預抓改為先嘗試 `mode: 'cors'`（jsdelivr 有 `access-control-allow-origin: *`），
+  失敗才退回 `no-cors`。Tailwind 沒有 CORS 標頭，但它的標籤也沒有 `crossorigin`，
+  存成 opaque 是安全的。
+- 額外防線：即使快取中是 opaque，也不回應 CORS 請求，一律改走網路。
+  寧可離線時少一個 CDN，也不要讓整頁掛掉。
+- 網路完全失敗時才退回 opaque，聊勝於無。
+
+`tests/run.js` 新增三項靜態檢查，避免同類問題再發生：CDN 清單不得與 `index.html` 漂移、
+`sw.js` 必須嘗試 CORS、不得把 opaque 回給 CORS 請求。
+
+### 需要的動作
+
+- **不需要重新部署 Apps Script。**
+- 舊版壞掉的 Service Worker 會在下次開啟頁面時自動被新版取代並重整，通常多載入一次即恢復。
+  若仍異常，在瀏覽器設定清除該站台資料後重開。
+
+---
+
 ## 20260720.2
 
 ### 新增
