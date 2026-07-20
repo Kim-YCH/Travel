@@ -8,7 +8,7 @@ createApp({
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
-      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather'
+      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -20,6 +20,7 @@ createApp({
     const TravelMaps = window.TravelMaps;
     const TravelExpenses = window.TravelExpenses;
     const TravelWeather = window.TravelWeather;
+    const TravelPlaces = window.TravelPlaces;
 
     const {
       PUBLIC_ACCOUNT_NAME,
@@ -144,8 +145,6 @@ createApp({
     const editHotelIsSearching = ref(false);
     const editHotelSelectedPlaceData = ref(null);
     const isSavingHotel = ref(false);
-    let hotelSearchTimeout = null;
-    let editHotelSearchTimeout = null;
 
     const newAlternative = ref({ message: '' });
     const alternativeSearchQuery = ref('');
@@ -155,7 +154,6 @@ createApp({
     const isAddingAlternative = ref(false);
     const isDeletingAlternative = ref(false);
     const isPromotingAlternative = ref(false);
-    let alternativeSearchTimeout = null;
 
     const itineraryListEl = ref(null);
     const alternativeListEl = ref(null);
@@ -845,6 +843,13 @@ createApp({
       });
     };
 
+    // 共用同一個 AutocompleteService，避免每處搜尋各自建立實例。
+    const ensureAutocompleteService = async () => {
+      if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!autocompleteService) autocompleteService = new google.maps.places.AutocompleteService();
+      return autocompleteService;
+    };
+
     const getPlaceDetails = (placeId, language = 'zh-TW') => {
       return new Promise(async (resolve) => {
         if (!window.google || !window.google.maps) {
@@ -862,7 +867,7 @@ createApp({
         service.getDetails(
           {
             placeId,
-            fields: window.TravelPlaces?.getPlaceDetailFields?.() || ['place_id', 'name', 'formatted_address', 'geometry', 'types'],
+            fields: TravelPlaces.getPlaceDetailFields(),
             language
           },
           (place, status) => {
@@ -2623,49 +2628,14 @@ createApp({
     };
 
 
-    const searchAlternativePlacesInput = async () => {
-      const q = alternativeSearchQuery.value.trim();
-
-      if (!q) {
-        alternativeSearchResults.value = [];
-        alternativeIsSearching.value = false;
-        alternativeSelectedPlaceData.value = null;
-        return;
-      }
-
-      alternativeSelectedPlaceData.value = null;
-      alternativeIsSearching.value = true;
-
-      if (alternativeSearchTimeout) clearTimeout(alternativeSearchTimeout);
-
-      alternativeSearchTimeout = setTimeout(async () => {
-        try {
-          if (!window.google || !window.google.maps) {
-            await loadGoogleMaps();
-          }
-
-          if (!autocompleteService) {
-            autocompleteService = new google.maps.places.AutocompleteService();
-          }
-
-          autocompleteService.getPlacePredictions(
-            { input: q, language: 'zh-TW' },
-            (predictions, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-                alternativeSearchResults.value = predictions;
-              } else {
-                alternativeSearchResults.value = [];
-              }
-              alternativeIsSearching.value = false;
-            }
-          );
-        } catch (err) {
-          console.error(err);
-          alternativeSearchResults.value = [];
-          alternativeIsSearching.value = false;
-        }
-      }, 300);
-    };
+    const { search: searchAlternativePlacesInput } = TravelPlaces.createPredictionSearch({
+      query: alternativeSearchQuery,
+      results: alternativeSearchResults,
+      isSearching: alternativeIsSearching,
+      selectedPlaceData: alternativeSelectedPlaceData,
+      ensureService: ensureAutocompleteService,
+      clearSelectionOnType: true
+    });
 
     const selectAlternativePlace = (item) => {
       alternativeSearchQuery.value = item.structured_formatting.main_text;
@@ -3223,55 +3193,17 @@ createApp({
     });
 
 
-    const clearHotelSearchDropdown = () => {
-      hotelSearchResults.value = [];
-      hotelIsSearching.value = false;
-    };
-
-    const searchHotelPlacesInput = async () => {
-      const q = hotelSearchQuery.value.trim();
-
-      if (!q) {
-        clearHotelSearchDropdown();
-        hotelSelectedPlaceData.value = null;
-        return;
-      }
-
-      hotelIsSearching.value = true;
-      if (hotelSearchTimeout) clearTimeout(hotelSearchTimeout);
-
-      hotelSearchTimeout = setTimeout(async () => {
-        try {
-          if (!window.google || !window.google.maps) {
-            await loadGoogleMaps();
-          }
-
-          if (!autocompleteService) {
-            autocompleteService = new google.maps.places.AutocompleteService();
-          }
-
-          autocompleteService.getPlacePredictions(
-            {
-              input: q,
-              language: 'zh-TW',
-              types: ['establishment']
-            },
-            (predictions, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-                hotelSearchResults.value = predictions;
-              } else {
-                hotelSearchResults.value = [];
-              }
-              hotelIsSearching.value = false;
-            }
-          );
-        } catch (err) {
-          console.error(err);
-          hotelSearchResults.value = [];
-          hotelIsSearching.value = false;
-        }
-      }, 300);
-    };
+    const {
+      search: searchHotelPlacesInput,
+      clearDropdown: clearHotelSearchDropdown
+    } = TravelPlaces.createPredictionSearch({
+      query: hotelSearchQuery,
+      results: hotelSearchResults,
+      isSearching: hotelIsSearching,
+      selectedPlaceData: hotelSelectedPlaceData,
+      ensureService: ensureAutocompleteService,
+      types: ['establishment']
+    });
 
     const selectHotelPlace = (item) => {
       hotelSearchQuery.value = item.structured_formatting?.main_text || '';
@@ -3279,56 +3211,18 @@ createApp({
       clearHotelSearchDropdown();
     };
 
-    const clearEditHotelSearchDropdown = () => {
-      editHotelSearchResults.value = [];
-      editHotelIsSearching.value = false;
-    };
-
-    const searchEditHotelPlacesInput = async () => {
-      const q = editHotelSearchQuery.value.trim();
-
-      if (!q) {
-        clearEditHotelSearchDropdown();
-        editHotelSelectedPlaceData.value = null;
-        return;
-      }
-
-      editHotelIsSearching.value = true;
-      editHotelSelectedPlaceData.value = null;
-      if (editHotelSearchTimeout) clearTimeout(editHotelSearchTimeout);
-
-      editHotelSearchTimeout = setTimeout(async () => {
-        try {
-          if (!window.google || !window.google.maps) {
-            await loadGoogleMaps();
-          }
-
-          if (!autocompleteService) {
-            autocompleteService = new google.maps.places.AutocompleteService();
-          }
-
-          autocompleteService.getPlacePredictions(
-            {
-              input: q,
-              language: 'zh-TW',
-              types: ['establishment']
-            },
-            (predictions, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-                editHotelSearchResults.value = predictions;
-              } else {
-                editHotelSearchResults.value = [];
-              }
-              editHotelIsSearching.value = false;
-            }
-          );
-        } catch (err) {
-          console.error(err);
-          editHotelSearchResults.value = [];
-          editHotelIsSearching.value = false;
-        }
-      }, 300);
-    };
+    const {
+      search: searchEditHotelPlacesInput,
+      clearDropdown: clearEditHotelSearchDropdown
+    } = TravelPlaces.createPredictionSearch({
+      query: editHotelSearchQuery,
+      results: editHotelSearchResults,
+      isSearching: editHotelIsSearching,
+      selectedPlaceData: editHotelSelectedPlaceData,
+      ensureService: ensureAutocompleteService,
+      types: ['establishment'],
+      clearSelectionOnType: true
+    });
 
     const selectEditHotelPlace = async (item) => {
       const mainText = item.structured_formatting?.main_text || item.description || '';

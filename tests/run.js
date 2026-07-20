@@ -188,7 +188,105 @@ eq('UV 低', W.uvLevelLabel(1), '低');
 eq('UV 危險', W.uvLevelLabel(12), '危險');
 eq('UV 非數字', W.uvLevelLabel('x'), '');
 
+/* ---------------------------------------- 8b. Autocomplete factory 行為對照 */
+section('8b. createPredictionSearch');
+{
+  const P = win.TravelPlaces;
+  const ref = (v) => ({ value: v });
+
+  // 模擬 google.maps.places：記下收到的 request，並回傳固定 predictions
+  let lastRequest = null;
+  let nextStatus = 'OK';
+  let nextPredictions = [{ description: 'A' }];
+  win.google = {
+    maps: {
+      places: {
+        PlacesServiceStatus: { OK: 'OK' }
+      }
+    }
+  };
+  const service = {
+    getPlacePredictions(request, cb) {
+      lastRequest = request;
+      cb(nextPredictions, nextStatus);
+    }
+  };
+
+  const build = (opts) => {
+    const state = {
+      query: ref(''), results: ref([]), isSearching: ref(false), selectedPlaceData: ref({ keep: true })
+    };
+    const api = P.createPredictionSearch({
+      ...state, ensureService: async () => service, delay: 0, ...opts
+    });
+    return { state, api };
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+
+  (async () => {
+    // 空輸入：關下拉並清掉已選地點
+    let { state, api } = build({});
+    state.query.value = '   ';
+    await api.search();
+    eq('空輸入清空結果', state.results.value, []);
+    eq('空輸入停止 loading', state.isSearching.value, false);
+    eq('空輸入清掉已選地點', state.selectedPlaceData.value, null);
+
+    // 不帶 types（備案）
+    ({ state, api } = build({ clearSelectionOnType: true }));
+    state.query.value = '東京';
+    await api.search();
+    eq('輸入時清掉已選地點', state.selectedPlaceData.value, null);
+    await tick();
+    eq('備案 request 不帶 types', Object.prototype.hasOwnProperty.call(lastRequest, 'types'), false);
+    eq('備案 request 語系', lastRequest.language, 'zh-TW');
+    eq('取得 predictions', state.results.value, [{ description: 'A' }]);
+    eq('結束後停止 loading', state.isSearching.value, false);
+
+    // 帶 types（住宿）
+    ({ state, api } = build({ types: ['establishment'] }));
+    state.query.value = '飯店';
+    await api.search();
+    eq('住宿保留已選地點', state.selectedPlaceData.value, { keep: true });
+    await tick();
+    eq('住宿 request 帶 types', lastRequest.types, ['establishment']);
+
+    // 非 OK 狀態
+    nextStatus = 'ZERO_RESULTS';
+    ({ state, api } = build({}));
+    state.query.value = 'x';
+    await api.search();
+    await tick();
+    eq('非 OK 狀態清空結果', state.results.value, []);
+    eq('非 OK 狀態停止 loading', state.isSearching.value, false);
+    nextStatus = 'OK';
+
+    // ensureService 丟例外（factory 會 console.error，這裡是預期行為，先靜音）
+    const realError = console.error;
+    console.error = () => {};
+    ({ state, api } = build({ ensureService: async () => { throw new Error('SDK 掛了'); } }));
+    state.query.value = 'x';
+    await api.search();
+    await tick();
+    console.error = realError;
+    eq('SDK 失敗時清空結果', state.results.value, []);
+    eq('SDK 失敗時停止 loading', state.isSearching.value, false);
+
+    // clearDropdown
+    ({ state, api } = build({}));
+    state.results.value = [1, 2];
+    state.isSearching.value = true;
+    api.clearDropdown();
+    eq('clearDropdown 清結果', state.results.value, []);
+    eq('clearDropdown 停 loading', state.isSearching.value, false);
+
+    delete win.google;
+    runSetupChecks();
+  })();
+}
+
 /* ------------------------------------------------- 9. 實際執行 app.js setup() */
+function runSetupChecks() {
 section('9. app.js setup() 實跑');
 const appWin = makeWindow();
 for (const f of MODULE_FILES) new Function('window', 'document', read(f))(appWin, appWin.document);
@@ -269,3 +367,5 @@ else {
 /* ------------------------------------------------------------------- 總結 */
 console.log('\n' + (failures ? `✗ ${failures} 項失敗` : '✓ 全部通過'));
 process.exit(failures ? 1 : 0);
+}
+
