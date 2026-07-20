@@ -28,7 +28,7 @@ const section = (t) => console.log('\n' + t);
 // 與 index.html 的載入順序一致
 const MODULE_FILES = [
   'js/utils.js', 'js/api.js', 'js/cache.js', 'js/maps.js', 'js/places.js',
-  'js/itinerary.js', 'js/hotels.js', 'js/expenses.js', 'js/weather.js'
+  'js/itinerary.js', 'js/hotels.js', 'js/expenses.js', 'js/weather.js', 'js/export.js'
 ];
 
 /* ------------------------------------------------------------------ 1. 語法 */
@@ -187,6 +187,123 @@ eq('天氣代碼未知', W.weatherCodeInfo(999).text, '天氣');
 eq('UV 低', W.uvLevelLabel(1), '低');
 eq('UV 危險', W.uvLevelLabel(12), '危險');
 eq('UV 非數字', W.uvLevelLabel('x'), '');
+
+/* ------------------------------------------------------- 8d. 天氣載入分支 */
+section('8d. 天氣載入');
+{
+  const daily = {
+    time: ['2026-07-20', '2026-07-21'],
+    weather_code: [0, 61],
+    temperature_2m_max: [31.4, 27.8],
+    temperature_2m_min: [24.6, 22.1],
+    precipitation_probability_max: [10, 80],
+    uv_index_max: [8.7, 3.2],
+    wind_speed_10m_max: [3.44, 6.15]
+  };
+  const built = W.buildWeatherFromDaily(daily, 1, { label: '東京', dayText: 'Day 2', targetDate: '2026-07-21' });
+  eq('狀態 ready', built.status, 'ready');
+  eq('天氣文字', built.title, '有雨');
+  eq('最高溫四捨五入', built.max, 28);
+  eq('最低溫四捨五入', built.min, 22);
+  eq('降雨機率', built.rain, 80);
+  eq('UV 取整數字串', built.uv, '3');
+  eq('UV 分級', built.uvLabel, '中等');
+  eq('風速一位小數', built.wind, '6.2');
+  const sparse = W.buildWeatherFromDaily({ time: ['x'], temperature_2m_max: [20], temperature_2m_min: [10] }, 0, {});
+  eq('缺少降雨欄位回 null', sparse.rain, null);
+  eq('缺少 UV 欄位回空字串', sparse.uv, '');
+
+  // create() 的日期分支：不需要網路即可驗證
+  const ref = (v) => ({ value: v });
+  const mk = (diff, ymd = '2026-07-25') => {
+    const tripWeather = ref({ status: 'idle' });
+    const api = W.create({
+      tripWeather,
+      currentTrip: ref({ id: 't1', city: '東京' }),
+      currentDay: ref(3),
+      dayDateYMD: () => ymd,
+      daysFromToday: () => diff,
+      getDayOrderedItems: () => [],
+      getHotelsForDay: () => [],
+      loadGoogleMaps: async () => {},
+      dateUtils: { toYMD: U.toYMD, parseYMD: U.parseYMD, addDays: U.addDays }
+    });
+    return { tripWeather, api };
+  };
+
+  (async () => {
+    let { tripWeather, api } = mk(null);
+    await api.loadTripWeather();
+    eq('未設定日期', tripWeather.value.subtitle, '尚未設定日期');
+
+    ({ tripWeather, api } = mk(-1));
+    await api.loadTripWeather();
+    eq('日期已過', tripWeather.value.title, '日期已過');
+
+    ({ tripWeather, api } = mk(20, '2026-08-20'));
+    await api.loadTripWeather();
+    eq('超出預報範圍', tripWeather.value.status, 'future');
+    eq('提示可查日期', tripWeather.value.subtitle, '2026-08-05 後可查');
+
+    // 有日期但找不到座標（無行程、無住宿、無 Geocoder）
+    ({ tripWeather, api } = mk(2));
+    await api.loadTripWeather();
+    eq('找不到座標', tripWeather.value.subtitle, '找不到目的地座標');
+  })();
+}
+
+/* -------------------------------------------------------------- 8c. 匯出 */
+section('8c. 行程匯出與備份');
+{
+  const X = win.TravelExport;
+  const ctx = {
+    trip: { name: '東京五日' },
+    totalDays: 2,
+    appVersion: '20260720.1',
+    isKoreaTrip: false,
+    dayLabel: (d) => (d === 1 ? '07/21 (二)' : ''),
+    getDayOrderedItems: (d, alt) => {
+      if (d !== 1) return [];
+      return alt
+        ? [{ name: '台場', time: '', type: '景點', message: '' }]
+        : [{ name: '淺草寺', time: '09:00', type: '景點', message: '記得早點去' }];
+    },
+    getHotelsForDay: (d) => (d === 1 ? [{ name: '東橫INN', address: '台東區' }] : []),
+    getMapExportLinks: (p) => (p.name === '淺草寺' ? { app: 'https://maps.test/1' } : {})
+  };
+
+  eq('行程文字輸出', X.buildItineraryText(ctx),
+    '【東京五日】行程表\n\n'
+    + '📅 Day 1 | 07/21 (二)\n'
+    + '  09:00 淺草寺 (記得早點去)\n'
+    + '  📌 備案\n'
+    + '    台場\n'
+    + '  🏠 東橫INN (台東區)\n'
+    + '\n'
+    + '📅 Day 2\n  (無行程)\n\n');
+  eq('沒有旅程時回空字串', X.buildItineraryText({ ...ctx, trip: null }), '');
+
+  const html = X.buildBackupHtml(ctx);
+  eq('備份含旅程名稱', html.includes('<h1>東京五日</h1>'), true);
+  eq('備份含 Day 標題', html.includes('📅 Day 1｜07/21 (二)'), true);
+  eq('備份跳過空白天', html.includes('Day 2'), false);
+  eq('備份含備案區塊', html.includes('📌 備案'), true);
+  eq('備份含住宿', html.includes('東橫INN'), true);
+  eq('備份含地圖按鈕', html.includes('href="https://maps.test/1"'), true);
+  eq('無連結地點不出按鈕', (html.match(/class="map-btn"/g) || []).length, 1);
+  eq('非韓國行程用一般文字', html.includes('開啟地圖 App'), true);
+  eq('韓國行程改用 Naver', X.buildBackupHtml({ ...ctx, isKoreaTrip: true }).includes('開啟 Naver Map'), true);
+  eq('備份頁尾含版本', html.includes('backup 20260720.1'), true);
+  eq('沒有旅程時備份為空', X.buildBackupHtml({ ...ctx, trip: null }), '');
+
+  // 名稱注入必須被逸出
+  const evil = X.buildBackupHtml({ ...ctx, trip: { name: '<script>x</script>' } });
+  eq('旅程名稱有逸出', evil.includes('<script>x</script>'), false);
+  eq('逸出後仍看得到內容', evil.includes('&lt;script&gt;'), true);
+
+  eq('備份檔名', X.backupFileName('東京/五日', '20260720.1'), '東京_五日_備份行程_20260720.1.html');
+  eq('備份檔名預設', X.backupFileName('', '1'), 'trip_備份行程_1.html');
+}
 
 /* ---------------------------------------- 8b. Autocomplete factory 行為對照 */
 section('8b. createPredictionSearch');

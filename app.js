@@ -8,7 +8,7 @@ createApp({
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
-      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces'
+      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -21,6 +21,7 @@ createApp({
     const TravelExpenses = window.TravelExpenses;
     const TravelWeather = window.TravelWeather;
     const TravelPlaces = window.TravelPlaces;
+    const TravelExport = window.TravelExport;
 
     const {
       PUBLIC_ACCOUNT_NAME,
@@ -116,8 +117,6 @@ createApp({
     const probeIsSearching = ref(false);
     const probePlace = ref(null);
     const tripWeather = ref({ status: 'idle' });
-    const weatherCache = new Map();
-    const weatherLocationCache = new Map();
     let mapInstance = null;
     let mapElementRef = null;
     let markers = [];
@@ -128,7 +127,6 @@ createApp({
     let autocompleteService = null;
     let probeMarker = null;
     let probeSearchTimeout = null;
-    let weatherLoadTimer = null;
 
     const newHotel = ref({ start_day: 1, end_day: 1 });
     const hotelSearchQuery = ref('');
@@ -898,155 +896,18 @@ createApp({
       window.location.href = `nmap://search?query=${encodedTitle}&appname=tripplanner`;
     };
 
-    const resolveWeatherLocation = async (day = currentDay.value) => {
-      const d = parseInt(day, 10) || 1;
-      const dayItem = getDayOrderedItems(d, false).find(item => item.lat != null && item.lng != null);
-      if (dayItem) {
-        return {
-          lat: Number(dayItem.lat),
-          lng: Number(dayItem.lng),
-          label: dayItem.name || currentTrip.value?.city || '目的地'
-        };
-      }
-
-      const dayHotel = getHotelsForDay(d).find(hotel => hotel.lat != null && hotel.lng != null);
-      if (dayHotel) {
-        return {
-          lat: Number(dayHotel.lat),
-          lng: Number(dayHotel.lng),
-          label: dayHotel.name || currentTrip.value?.city || '住宿'
-        };
-      }
-
-      const city = String(currentTrip.value?.city || '').trim();
-      if (!city) return null;
-
-      const cacheKey = city.toLowerCase();
-      if (weatherLocationCache.has(cacheKey)) return weatherLocationCache.get(cacheKey);
-
-      if (!window.google || !window.google.maps) await loadGoogleMaps();
-      if (!window.google || !google.maps?.Geocoder) return null;
-
-      const geocoder = new google.maps.Geocoder();
-      const location = await new Promise((resolve) => {
-        geocoder.geocode({ address: city }, (results, status) => {
-          if (status === 'OK' && results?.[0]?.geometry?.location) {
-            resolve({
-              lat: results[0].geometry.location.lat(),
-              lng: results[0].geometry.location.lng(),
-              label: city
-            });
-          } else {
-            resolve(null);
-          }
-        });
-      });
-
-      if (location) weatherLocationCache.set(cacheKey, location);
-      return location;
-    };
-
-    const loadTripWeather = async () => {
-      if (!currentTrip.value) return;
-
-      const targetDate = dayDateYMD(currentDay.value);
-      const diff = daysFromToday(targetDate);
-      const dayText = `Day ${currentDay.value}`;
-
-      if (diff == null) {
-        tripWeather.value = { status: 'unavailable', title: '天氣', subtitle: '尚未設定日期', dayText };
-        return;
-      }
-
-      if (diff < 0) {
-        tripWeather.value = { status: 'unavailable', title: '日期已過', subtitle: targetDate, dayText };
-        return;
-      }
-
-      if (diff > 15) {
-        const availableDate = toYMD(addDays(parseYMD(targetDate), -15));
-        tripWeather.value = {
-          status: 'future',
-          title: '預報尚早',
-          subtitle: `${availableDate} 後可查`,
-          dayText,
-          targetDate
-        };
-        return;
-      }
-
-      const location = await resolveWeatherLocation(currentDay.value);
-      if (!location) {
-        tripWeather.value = { status: 'unavailable', title: '天氣', subtitle: '找不到目的地座標', dayText };
-        return;
-      }
-
-      const cacheKey = `${currentTrip.value.id}_${currentDay.value}_${targetDate}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}`;
-      if (weatherCache.has(cacheKey)) {
-        tripWeather.value = weatherCache.get(cacheKey);
-        return;
-      }
-
-      tripWeather.value = { status: 'loading', title: '天氣載入中', subtitle: location.label, dayText };
-
-      const params = new URLSearchParams({
-        latitude: String(location.lat),
-        longitude: String(location.lng),
-        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,wind_speed_10m_max',
-        timezone: 'auto',
-        forecast_days: String(Math.min(16, Math.max(1, diff + 1))),
-        wind_speed_unit: 'ms'
-      });
-
-      try {
-        const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
-        if (!res.ok) throw new Error(`weather api ${res.status}`);
-        const data = await res.json();
-        const times = data?.daily?.time || [];
-        const idx = times.indexOf(targetDate);
-        if (idx < 0) throw new Error('target date not in forecast');
-
-        const codeInfo = weatherCodeInfo(data.daily.weather_code?.[idx]);
-        const max = Math.round(Number(data.daily.temperature_2m_max?.[idx]));
-        const min = Math.round(Number(data.daily.temperature_2m_min?.[idx]));
-        const rain = data.daily.precipitation_probability_max?.[idx];
-        const uv = data.daily.uv_index_max?.[idx];
-        const wind = data.daily.wind_speed_10m_max?.[idx];
-        const weather = {
-          status: 'ready',
-          icon: codeInfo.icon,
-          title: codeInfo.text,
-          subtitle: location.label,
-          dayText,
-          targetDate,
-          max,
-          min,
-          rain: rain != null ? Math.round(Number(rain)) : null,
-          uv: uv != null ? Number(uv).toFixed(0) : '',
-          uvLabel: uvLevelLabel(uv),
-          wind: wind != null ? Number(wind).toFixed(1) : ''
-        };
-
-        weatherCache.set(cacheKey, weather);
-        tripWeather.value = weather;
-      } catch (err) {
-        console.warn('loadTripWeather failed:', err);
-        tripWeather.value = {
-          status: 'unavailable',
-          title: '天氣暫不可用',
-          subtitle: location.label,
-          dayText,
-          targetDate
-        };
-      }
-    };
-
-    const scheduleTripWeatherLoad = (delay = 250) => {
-      clearTimeout(weatherLoadTimer);
-      weatherLoadTimer = setTimeout(() => {
-        loadTripWeather().catch(err => console.warn('loadTripWeather failed:', err));
-      }, delay);
-    };
+    const { resolveWeatherLocation, loadTripWeather, scheduleTripWeatherLoad } = TravelWeather.create({
+      tripWeather,
+      currentTrip,
+      currentDay,
+      dayDateYMD,
+      daysFromToday,
+      // 這幾個宣告在本行之後，包一層才不會踩到 TDZ。
+      getDayOrderedItems: (d, alt) => getDayOrderedItems(d, alt),
+      getHotelsForDay: (d) => getHotelsForDay(d),
+      loadGoogleMaps: () => loadGoogleMaps(),
+      dateUtils: { toYMD, parseYMD, addDays }
+    });
 
     const initGoogleMap = () => {
       if (!window.google || !window.google.maps) return;
@@ -3891,145 +3752,31 @@ createApp({
       return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b) => b.total - a.total);
     });
 
-    const buildItineraryText = () => {
-      if(!currentTrip.value) return '';
+    // 匯出所需的唯讀資料與輔助函式，交給 TravelExport 產生文字／HTML。
+    const exportContext = () => ({
+      trip: currentTrip.value,
+      totalDays: totalDays.value,
+      appVersion: APP_VERSION,
+      isKoreaTrip: isKoreaTrip.value,
+      dayLabel,
+      getDayOrderedItems,
+      getHotelsForDay,
+      getMapExportLinks
+    });
 
-      let text = `【${currentTrip.value.name}】行程表\n\n`;
-
-      for(let d = 1; d <= totalDays.value; d++) {
-        text += `📅 Day ${d}`;
-        const label = dayLabel(d);
-        if (label) text += ` | ${label}`;
-        text += `\n`;
-        const dayItems = getDayOrderedItems(d, false);
-        const dayAlternatives = getDayOrderedItems(d, true);
-        const dayHotels = getHotelsForDay(d);
-
-        if(dayItems.length === 0 && dayAlternatives.length === 0 && dayHotels.length === 0) {
-          text += "  (無行程)\n\n";
-          continue;
-        }
-
-        dayItems.forEach(item => {
-          const info = getItineraryInfoText(item);
-          const msg = info ? ` (${info.replace(/\n/g, ' ')})` : '';
-          text += `  ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
-        });
-
-        if(dayAlternatives.length > 0) {
-          text += `  📌 備案\n`;
-          dayAlternatives.forEach(item => {
-            const info = getItineraryInfoText(item);
-            const msg = info ? ` (${info.replace(/\n/g, ' ')})` : '';
-            text += `    ${formatTime(item.time) ? formatTime(item.time)+' ' : ''}${item.name}${msg}\n`;
-          });
-        }
-
-        dayHotels.forEach(hotel => {
-          const addr = hotel.address ? ` (${hotel.address})` : '';
-          text += `  🏠 ${hotel.name || '住宿'}${addr}\n`;
-        });
-
-        text += "\n";
-      }
-
-      return text;
-    };
+    const buildItineraryText = () => TravelExport.buildItineraryText(exportContext());
 
 
-    const buildBackupPlaceCardHtml = (place, icon = '📍') => {
-      const links = getMapExportLinks(place || {});
-      const name = escapeHtml(place?.name || place?.title || '地點');
-      const time = formatTime(place?.time || '');
-      const info = getItineraryInfoText(place);
-      const msg = info ? escapeHtml(info.replace(/\n/g, ' ')) : '';
-      const addr = place?.address ? escapeHtml(place.address) : '';
-      const appText = isKoreaTrip.value ? '開啟 Naver Map' : '開啟地圖 App';
-      const appBtn = links.app
-        ? `<a class="map-btn" href="${escapeHtml(links.app)}">${appText}</a>`
-        : '';
 
-      return `
-        <div class="place-card">
-          <div class="place-head">
-            <div class="place-icon">${icon}</div>
-            <div class="place-main">
-              <div class="place-title">${time ? `<span class="place-time">${escapeHtml(time)}</span>` : ''}${name}</div>
-              ${addr ? `<div class="place-address">${addr}</div>` : ''}
-              ${msg ? `<div class="place-note">${msg}</div>` : ''}
-            </div>
-          </div>
-          ${appBtn}
-        </div>`;
-    };
-
-    const buildBackupHtml = () => {
-      if (!currentTrip.value) return '';
-      const tripName = escapeHtml(currentTrip.value.name || '行程備份');
-      let body = '';
-
-      for (let d = 1; d <= totalDays.value; d++) {
-        const dayItems = getDayOrderedItems(d, false);
-        const dayAlternatives = getDayOrderedItems(d, true);
-        const dayHotels = getHotelsForDay(d);
-        if(dayItems.length === 0 && dayAlternatives.length === 0 && dayHotels.length === 0) continue;
-
-        const label = dayLabel(d);
-        body += `<section class="day-section"><h2>📅 Day ${d}${label ? `｜${escapeHtml(label)}` : ''}</h2>`;
-        dayItems.forEach(item => { body += buildBackupPlaceCardHtml(item, '📍'); });
-        if (dayAlternatives.length) {
-          body += `<div class="sub-title">📌 備案</div>`;
-          dayAlternatives.forEach(item => { body += buildBackupPlaceCardHtml(item, '📌'); });
-        }
-        dayHotels.forEach(hotel => { body += buildBackupPlaceCardHtml(hotel, '🏠'); });
-        body += `</section>`;
-      }
-
-      return `<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>${tripName} 備份行程</title>
-  <style>
-    body{margin:0;background:#f8fafc;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.45;}
-    .wrap{max-width:520px;margin:0 auto;padding:22px 16px 40px;}
-    .hero{background:#2563eb;color:white;border-radius:22px;padding:18px 16px;box-shadow:0 10px 28px rgba(37,99,235,.22);margin-bottom:16px;}
-    h1{margin:0;font-size:24px;font-weight:900;}
-    .hint{font-size:12px;color:#dbeafe;margin-top:6px;}
-    .day-section{margin:14px 0 18px;}
-    h2{font-size:16px;margin:0 0 10px;color:#334155;}
-    .sub-title{font-weight:900;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;display:inline-block;padding:4px 10px;margin:6px 0 8px;font-size:12px;}
-    .place-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:13px;margin-bottom:10px;box-shadow:0 3px 10px rgba(15,23,42,.05);}
-    .place-head{display:flex;gap:10px;align-items:flex-start;}
-    .place-icon{width:32px;height:32px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-    .place-main{min-width:0;flex:1;}
-    .place-title{font-size:16px;font-weight:900;color:#111827;word-break:break-word;}
-    .place-time{color:#2563eb;margin-right:7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
-    .place-address{font-size:12px;color:#64748b;margin-top:3px;word-break:break-word;}
-    .place-note{font-size:13px;color:#475569;background:#f8fafc;border-radius:12px;padding:8px 10px;margin-top:8px;word-break:break-word;}
-    .map-btn{display:block;text-align:center;text-decoration:none;background:#0d9488;color:#fff;font-weight:900;border-radius:14px;padding:11px 12px;margin-top:11px;}
-    .footer{font-size:11px;color:#94a3b8;text-align:center;margin-top:24px;}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="hero"><h1>${tripName}</h1><div class="hint">備份行程｜按地點下方按鈕可嘗試開啟地圖 App</div></div>
-    ${body || '<div class="place-card">目前沒有行程資料</div>'}
-    <div class="footer">backup ${escapeHtml(APP_VERSION)}</div>
-  </div>
-</body>
-</html>`;
-    };
+    const buildBackupHtml = () => TravelExport.buildBackupHtml(exportContext());
 
     const downloadBackupHtml = () => {
       const html = buildBackupHtml();
       if (!html) return;
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const a = document.createElement('a');
-      const safeName = String(currentTrip.value?.name || 'trip').replace(/[\\/:*?"<>|]+/g, '_');
       a.href = URL.createObjectURL(blob);
-      a.download = `${safeName}_備份行程_${APP_VERSION}.html`;
+      a.download = TravelExport.backupFileName(currentTrip.value?.name, APP_VERSION);
       document.body.appendChild(a);
       a.click();
       a.remove();
