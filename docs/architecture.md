@@ -14,11 +14,29 @@ See [workflow.md](./workflow.md) for the change, verification, versioning, and r
 
 ## Current Split
 
-- `js/utils.js`: ID and date helpers.
-- `js/api.js`: JSONP transport and Apps Script request wrappers.
-- `js/cache.js`: localStorage key helpers and safe JSON helpers.
-- `js/places.js`: the allowed Google Place Details field list. It deliberately excludes image fields.
-- `js/maps.js`, `js/itinerary.js`, `js/hotels.js`, `js/expenses.js`: reserved module entry points for gradual extraction.
+Every module is a plain IIFE that publishes one frozen `window.Travel*` namespace. `app.js` declares the
+handles it needs at the top of `setup()` and throws early if a module is missing, so there are no
+inline fallback copies to keep in sync.
+
+- `js/utils.js` (`TravelUtils`): ID, date, time formatting, HTML escaping, and message linkifying.
+- `js/api.js` (`TravelApi`): JSONP transport and Apps Script request wrappers.
+- `js/cache.js` (`TravelCache`): localStorage key helpers and safe JSON helpers.
+- `js/places.js` (`TravelPlaces`): the allowed Google Place Details field list. It deliberately excludes image fields.
+- `js/maps.js` (`TravelMaps`): hex colour helpers and the marker pin SVG builders.
+- `js/itinerary.js` (`TravelItinerary`): itinerary record model, type/tone/icon resolution, and the transport `message` envelope.
+- `js/hotels.js` (`TravelHotels`): hotel record model and day-range logic. `hasHotelOverlap` takes the list as its first argument; the module holds no state.
+- `js/expenses.js` (`TravelExpenses`): expense and shared-wallet record models, person normalisation, and legacy `公帳` detection.
+- `js/weather.js` (`TravelWeather`): weather code and UV level display mapping.
+
+Modules must stay free of Vue refs. Anything that needs reactive state stays in `app.js` until it can be
+extracted as a `createXxx({ refs })` factory in the style of `TravelApi.create`.
+
+## Verification
+
+`node tests/run.js` requires no dependencies and covers: syntax of every frontend script, unit tests for the
+pure modules, a real execution of `app.js`'s `setup()` in a stub environment (which catches references broken
+by extraction), a check that every identifier used in the `index.html` template is exposed by `setup()`, and
+static asset version consistency. Run it after any extraction; it does not replace the mobile UI check.
 
 ## Places Cost Policy
 

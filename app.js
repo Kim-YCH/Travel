@@ -5,9 +5,41 @@ createApp({
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
     const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260718.5';
-    const TravelUtils = window.TravelUtils || {};
-    const TravelApi = window.TravelApi?.create ? window.TravelApi.create({ apiUrl: API_URL }) : {};
-    const TravelCache = window.TravelCache || {};
+    // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
+    [
+      'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
+      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather'
+    ].forEach((name) => {
+      if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
+    });
+    const TravelUtils = window.TravelUtils;
+    const TravelApi = window.TravelApi.create({ apiUrl: API_URL });
+    const TravelCache = window.TravelCache;
+    const TravelItinerary = window.TravelItinerary;
+    const TravelHotels = window.TravelHotels;
+    const TravelMaps = window.TravelMaps;
+    const TravelExpenses = window.TravelExpenses;
+    const TravelWeather = window.TravelWeather;
+
+    const {
+      PUBLIC_ACCOUNT_NAME,
+      expenseCategoryIcons,
+      getExpenseCategoryIcon,
+      normalizeInvolved,
+      formatInvolved,
+      normalizeExpenseRecord,
+      normalizePersonName,
+      normalizeSharedWalletPeople,
+      isSystemWalletPerson,
+      filterActualPeople,
+      isLegacyPublicAccountExpense,
+      parseBooleanFlag,
+      normalizeSharedWalletTransaction,
+      formatSharedWalletUsers,
+      expenseCreatedTime
+    } = TravelExpenses;
+
+    const { weatherCodeInfo, uvLevelLabel } = TravelWeather;
 
     const currentView = ref('lobby');
     const currentTrip = ref(null);
@@ -61,8 +93,8 @@ createApp({
     const newSharedWalletDeposit = ref({ person: '', amount: '', note: '' });
     const newSharedWalletPayment = ref({ title: '', amount: '', persons: [], category: '飲食', note: '' });
     const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
-    const categories = ['飲食', '交通', '住宿', '購物', '門票', '其他'];
-    const itineraryTypes = ['景點', '交通', '購物', '活動', '美食', '其他'];
+    const categories = window.TravelExpenses.EXPENSE_CATEGORIES;
+    const itineraryTypes = window.TravelItinerary.ITINERARY_TYPES;
 
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
@@ -151,7 +183,7 @@ createApp({
     const editExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
     const isSavingExpense = ref(false);
 
-    const generateId = TravelUtils.generateId || (() => Date.now() + '_' + Math.floor(Math.random() * 1000));
+    const generateId = TravelUtils.generateId;
 
     const isKoreaCity = (city) => {
       const s = String(city || '').trim().toLowerCase();
@@ -349,22 +381,8 @@ createApp({
       };
     };
 
-    const pad2 = TravelUtils.pad2 || ((n) => String(n).padStart(2, '0'));
-    const toYMD = TravelUtils.toYMD || ((d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`);
+    const { pad2, toYMD, parseYMD, addDays, escapeHtml, linkifyMessage, formatTime, timeToNum } = TravelUtils;
     const refreshTodayKey = () => { todayKey.value = toYMD(new Date()); };
-    const parseYMD = TravelUtils.parseYMD || ((s) => {
-      if (!s) return null;
-      const p = String(s).split('-');
-      if (p.length !== 3) return null;
-      const y = parseInt(p[0],10), m = parseInt(p[1],10), d = parseInt(p[2],10);
-      if (!y || !m || !d) return null;
-      return new Date(y, m-1, d, 12, 0, 0);
-    });
-    const addDays = TravelUtils.addDays || ((d, n) => {
-      const x = new Date(d);
-      x.setDate(x.getDate()+n);
-      return x;
-    });
 
 
     const daysUntilTrip = (trip) => {
@@ -418,15 +436,6 @@ createApp({
       return toYMD(addDays(base, (parseInt(day, 10) || 1) - 1));
     };
 
-    const expenseCategoryIcons = {
-      '飲食': '🍽️',
-      '交通': '🚆',
-      '住宿': '🏨',
-      '購物': '🛍️',
-      '門票': '🎟️',
-      '其他': '🧾'
-    };
-    const getExpenseCategoryIcon = (category) => expenseCategoryIcons[category] || expenseCategoryIcons['其他'];
     const expenseDateLabel = (expense) => dayDateYMD(expense?.day || 1);
 
     const daysFromToday = (ymd) => {
@@ -438,94 +447,6 @@ createApp({
       return Math.round((target.getTime() - today.getTime()) / 86400000);
     };
 
-    const weatherCodeInfo = (code) => {
-      const n = Number(code);
-      if (n === 0) return { icon: '☀️', text: '晴朗' };
-      if ([1, 2].includes(n)) return { icon: '🌤️', text: '多雲時晴' };
-      if (n === 3) return { icon: '☁️', text: '多雲' };
-      if ([45, 48].includes(n)) return { icon: '🌫️', text: '有霧' };
-      if ([51, 53, 55, 56, 57].includes(n)) return { icon: '🌦️', text: '毛毛雨' };
-      if ([61, 63, 65, 66, 67, 80, 81, 82].includes(n)) return { icon: '🌧️', text: '有雨' };
-      if ([71, 73, 75, 77, 85, 86].includes(n)) return { icon: '❄️', text: '降雪' };
-      if ([95, 96, 99].includes(n)) return { icon: '⛈️', text: '雷雨' };
-      return { icon: '🌤️', text: '天氣' };
-    };
-
-    const uvLevelLabel = (uv) => {
-      const n = Number(uv);
-      if (!Number.isFinite(n)) return '';
-      if (n < 3) return '低';
-      if (n < 6) return '中等';
-      if (n < 8) return '高';
-      if (n < 11) return '過量';
-      return '危險';
-    };
-
-    const normalizeInvolved = (list) => {
-      if (Array.isArray(list)) return list.filter(Boolean);
-      if (typeof list === 'string') {
-        return list.split(',').map(s => s.trim()).filter(Boolean);
-      }
-      return [];
-    };
-
-    const normalizeExpenseRecord = (item) => ({
-      ...item,
-      amount: Number(item?.amount) || 0,
-      day: item?.day ? parseInt(item.day, 10) || 1 : 1,
-      involved: normalizeInvolved(item?.involved),
-      category: item?.category || '其他',
-      payer: item?.payer || ''
-    });
-
-    // 舊公帳資料保留在後端，但新版前端不再把公帳視為旅伴或一般分帳資料。
-    const PUBLIC_ACCOUNT_NAME = '公帳';
-    const normalizePersonName = (name) => String(name || '').trim();
-    const normalizeSharedWalletPeople = (value) => {
-      if (Array.isArray(value)) {
-        return Array.from(new Set(value.map(normalizePersonName).filter(Boolean)));
-      }
-      const text = String(value || '').trim();
-      if (!text) return [];
-      if (text.startsWith('[')) {
-        try {
-          const parsed = JSON.parse(text);
-          if (Array.isArray(parsed)) return normalizeSharedWalletPeople(parsed);
-        } catch (err) {}
-      }
-      return Array.from(new Set(text.split(',').map(normalizePersonName).filter(Boolean)));
-    };
-    const isSystemWalletPerson = (person) => {
-      const name = normalizePersonName(typeof person === 'string' ? person : person?.name);
-      const role = String(person?.role || '').trim().toLowerCase();
-      const type = String(person?.type || '').trim().toLowerCase();
-      return name === PUBLIC_ACCOUNT_NAME || role === 'public_wallet' || type === 'wallet';
-    };
-    const filterActualPeople = (items) => (Array.isArray(items) ? items : []).filter(person => !isSystemWalletPerson(person));
-    const isLegacyPublicAccountExpense = (expense) => {
-      const payer = normalizePersonName(expense?.payer);
-      const involved = normalizeInvolved(expense?.involved).map(normalizePersonName);
-      const category = String(expense?.category || '').trim();
-      const title = String(expense?.title || '').trim();
-      return payer === PUBLIC_ACCOUNT_NAME
-        || involved.includes(PUBLIC_ACCOUNT_NAME)
-        || category.includes('公帳')
-        || category.includes('公費')
-        || title === '存入公費';
-    };
-    const parseBooleanFlag = (value) => value === true || value === 1 || ['1', 'true', 'yes', 'on', 'v'].includes(String(value || '').trim().toLowerCase());
-    const normalizeSharedWalletTransaction = (item) => ({
-      ...item,
-      id: String(item?.id || ''),
-      trip_id: String(item?.trip_id || item?.tripId || ''),
-      type: String(item?.type || '').trim().toLowerCase(),
-      date: String(item?.date || '').slice(0, 10),
-      title: String(item?.title || '').trim(),
-      person: normalizeSharedWalletPeople(item?.person).join(','),
-      amount: Number(item?.amount) || 0,
-      category: String(item?.category || '其他').trim() || '其他',
-      note: String(item?.note || '').trim()
-    });
     const syncPersonSelections = () => {
       const names = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
       if (!names.includes(newExpense.value.payer)) newExpense.value.payer = names[0] || '';
@@ -551,224 +472,37 @@ createApp({
       newSharedWalletPayment.value.persons = [];
     };
 
-    const formatSharedWalletUsers = (item) => {
-      const selected = normalizeSharedWalletPeople(item?.person);
-      return selected.length ? `${selected.join('、')}使用` : '所有人分攤';
-    };
-    const expenseCreatedTime = (expense) => {
-      const fromId = parseInt(String(expense?.id || '').split('_')[0], 10);
-      if (Number.isFinite(fromId)) return fromId;
-      const fromDate = Date.parse(expense?.created_at || expense?.updated_at || '');
-      return Number.isFinite(fromDate) ? fromDate : 0;
-    };
 
-    const normalizeOrderValue = (value) => {
-      if (value === '' || value == null) return null;
-      const num = Number(value);
-      return Number.isFinite(num) && num > 0 ? num : null;
-    };
+    const {
+      normalizeOrderValue,
+      normalizeAlternativeFlag,
+      getAlternativeFlag,
+      isAlternativeItem,
+      createEmptyTransportDetails,
+      normalizeTransportDetails,
+      parseItineraryMessage,
+      serializeItineraryMessage,
+      getItineraryNote,
+      getTransportDetails,
+      getTransportSummary,
+      getItineraryInfoText,
+      normalizeItineraryType,
+      getItineraryType,
+      getItineraryTypeTone,
+      getItineraryCategoryLabel,
+      getItineraryIcon,
+      normalizeItineraryRecord,
+      normalizeAlternativeRecord
+    } = TravelItinerary;
 
-    const normalizeAlternativeFlag = (value) => {
-      return String(value || '').trim().toLowerCase() === 'v' ? 'v' : '';
-    };
+    const {
+      normalizeHotelRecord,
+      isHotelActiveOnDay,
+      hotelDayRangeLabel
+    } = TravelHotels;
 
-    const getAlternativeFlag = (item) => normalizeAlternativeFlag(item?.is_alternative ?? item?.['是否為備案']);
-
-    const isAlternativeItem = (item) => getAlternativeFlag(item) === 'v';
-
-    const TRANSPORT_META_PREFIX = '[[TRAVEL_TRANSPORT_V1:';
-    const TRANSPORT_META_SUFFIX = ']]';
-    const createEmptyTransportDetails = () => ({
-      mode: '',
-      number: '',
-      terminal: '',
-      seat: '',
-      checkin: ''
-    });
-
-    const normalizeTransportDetails = (value = {}) => ({
-      mode: String(value.mode || '').trim(),
-      number: String(value.number || '').trim(),
-      terminal: String(value.terminal || '').trim(),
-      seat: String(value.seat || '').trim(),
-      checkin: String(value.checkin || '').trim()
-    });
-
-    const parseItineraryMessage = (message) => {
-      const raw = String(message || '');
-      const firstLineEnd = raw.search(/\r?\n/);
-      const firstLine = firstLineEnd === -1 ? raw : raw.slice(0, firstLineEnd);
-      const note = firstLineEnd === -1 ? '' : raw.slice(firstLineEnd).replace(/^\r?\n/, '');
-
-      if (!firstLine.startsWith(TRANSPORT_META_PREFIX) || !firstLine.endsWith(TRANSPORT_META_SUFFIX)) {
-        return { transport: createEmptyTransportDetails(), note: raw };
-      }
-
-      try {
-        const encoded = firstLine.slice(TRANSPORT_META_PREFIX.length, -TRANSPORT_META_SUFFIX.length);
-        const parsed = JSON.parse(decodeURIComponent(encoded));
-        return { transport: normalizeTransportDetails(parsed), note };
-      } catch (err) {
-        console.warn('parseItineraryMessage failed:', err);
-        return { transport: createEmptyTransportDetails(), note: raw };
-      }
-    };
-
-    const serializeItineraryMessage = (type, note, transport) => {
-      const cleanNote = String(note || '').trim();
-      if (String(type || '').trim() !== '交通') return cleanNote;
-
-      const details = normalizeTransportDetails(transport);
-      const hasDetails = Object.values(details).some(Boolean);
-      if (!hasDetails) return cleanNote;
-
-      const encoded = encodeURIComponent(JSON.stringify(details));
-      return `${TRANSPORT_META_PREFIX}${encoded}${TRANSPORT_META_SUFFIX}${cleanNote ? `\n${cleanNote}` : ''}`;
-    };
-
-    const getItineraryNote = (item) => parseItineraryMessage(item?.message).note;
-    const getTransportDetails = (item) => parseItineraryMessage(item?.message).transport;
-    const getTransportSummary = (item) => {
-      if (getItineraryType(item) !== '交通') return [];
-      const details = getTransportDetails(item);
-      return [
-        details.number || '',
-        details.terminal || ''
-      ].filter(Boolean);
-    };
-
-    const getItineraryInfoText = (item) => {
-      const transportText = getTransportSummary(item).join(' · ');
-      const note = getItineraryNote(item);
-      return [transportText, note].filter(Boolean).join('｜');
-    };
-
-    const normalizeItineraryType = (value) => {
-      const type = String(value || '').trim();
-      if (!type) return '景點';
-
-      const aliases = {
-        早餐: '美食',
-        午餐: '美食',
-        晚餐: '美食',
-        餐廳: '美食',
-        飲食: '美食',
-        咖啡: '美食',
-        商圈: '購物',
-        門票: '活動',
-        交通: '交通',
-        移動: '交通',
-        住宿: '其他',
-        飯店: '其他'
-      };
-
-      return itineraryTypes.includes(type) ? type : (aliases[type] || '其他');
-    };
-
-    const getItineraryType = (item) => normalizeItineraryType(item?.type || item?.category || item?.place_type);
-
-    const includesAnyKeyword = (text, keywords) => keywords.some(keyword => text.includes(keyword));
-
-    const getItineraryTypeTone = (item) => {
-      const type = getItineraryType(item);
-      const source = [item?.type, item?.category, item?.place_type, item?.name, item?.title]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      if (includesAnyKeyword(source, ['住宿', '飯店', '酒店', '民宿', 'hotel', 'hostel', 'guesthouse', '호텔'])) return 'hotel';
-      if (includesAnyKeyword(source, ['咖啡', 'coffee', 'cafe', 'café', '카페', 'コーヒー', '喫茶'])) return 'cafe';
-      if (type === '美食' || includesAnyKeyword(source, ['美食', '餐廳', '食堂', '早餐', '午餐', '晚餐', '拉麵', '烤肉', 'restaurant', 'ramen', '맛집', '식당'])) return 'food';
-      if (type === '購物' || includesAnyKeyword(source, ['購物', '商場', '百貨', '超市', '市場', '藥妝', 'mall', 'outlet', 'shopping', '마트', '쇼핑'])) return 'shopping';
-      if (includesAnyKeyword(source, ['交通', '車站', '地鐵', '捷運', '機場', '巴士', '公車', 'station', 'airport', 'metro', 'subway', '버스', '공항', '駅'])) return 'transport';
-      if (type === '活動' || includesAnyKeyword(source, ['活動', '門票', '展覽', '表演', '演唱會', 'festival', 'ticket'])) return 'activity';
-      if (type === '其他') return 'other';
-      return 'sightseeing';
-    };
-
-    const getItineraryCategoryLabel = (item) => {
-      const tone = getItineraryTypeTone(item);
-      const labels = {
-        sightseeing: '景點',
-        food: '美食',
-        shopping: '購物',
-        hotel: '住宿',
-        transport: '交通',
-        cafe: '咖啡',
-        activity: '活動',
-        other: '其他'
-      };
-      return labels[tone] || getItineraryType(item);
-    };
-
-    const getItineraryIcon = (item) => {
-      const tone = getItineraryTypeTone(item);
-      if (tone === 'food') return '🍜';
-      if (tone === 'shopping') return '🛍️';
-      if (tone === 'hotel') return '🏠';
-      if (tone === 'transport') return '🚇';
-      if (tone === 'cafe') return '☕';
-      if (tone === 'activity') return '🎟️';
-      if (tone === 'other') return '📍';
-      return '🗼';
-    };
-
-    const normalizeItineraryRecord = (item) => ({
-      ...item,
-      day: item?.day ? parseInt(item.day, 10) || 1 : 1,
-      order: normalizeOrderValue(item?.order),
-      type: getItineraryType(item),
-      lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
-      lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
-      is_alternative: getAlternativeFlag(item)
-    });
-
-    const normalizeHotelRecord = (item) => ({
-      ...item,
-      start_day: item?.start_day ? parseInt(item.start_day, 10) || 1 : 1,
-      end_day: item?.end_day ? parseInt(item.end_day, 10) || 1 : 1,
-      lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
-      lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
-      name: String(item?.name || '').trim(),
-      address: String(item?.address || '').trim(),
-      place_id: String(item?.place_id || '').trim()
-    });
-
-    const normalizeAlternativeRecord = (item) => ({
-      ...item,
-      day: item?.day ? parseInt(item.day, 10) || 1 : 1,
-      lat: item?.lat !== '' && item?.lat != null ? Number(item.lat) : null,
-      lng: item?.lng !== '' && item?.lng != null ? Number(item.lng) : null,
-      name: String(item?.name || '').trim(),
-      type: getItineraryType(item),
-      address: String(item?.address || '').trim(),
-      place_id: String(item?.place_id || '').trim(),
-      message: String(item?.message || '')
-    });
-
-    const isHotelActiveOnDay = (hotel, day) => {
-      const d = parseInt(day, 10) || 1;
-      const start = parseInt(hotel?.start_day, 10) || 1;
-      const end = parseInt(hotel?.end_day, 10) || start;
-      return d >= Math.min(start, end) && d <= Math.max(start, end);
-    };
-
-    const hotelDayRangeLabel = (hotel) => {
-      const start = parseInt(hotel?.start_day, 10) || 1;
-      const end = parseInt(hotel?.end_day, 10) || start;
-      return start === end ? `Day ${start}` : `Day ${Math.min(start, end)} ~ Day ${Math.max(start, end)}`;
-    };
-
-    const hasHotelOverlap = (startDay, endDay, exceptId = '') => {
-      const s = Math.min(parseInt(startDay, 10) || 1, parseInt(endDay, 10) || 1);
-      const e = Math.max(parseInt(startDay, 10) || 1, parseInt(endDay, 10) || 1);
-      return hotels.value.some(h => {
-        if (exceptId && String(h.id) === String(exceptId)) return false;
-        const hs = Math.min(parseInt(h.start_day, 10) || 1, parseInt(h.end_day, 10) || 1);
-        const he = Math.max(parseInt(h.start_day, 10) || 1, parseInt(h.end_day, 10) || 1);
-        return s <= he && e >= hs;
-      });
-    };
+    const hasHotelOverlap = (startDay, endDay, exceptId = '') =>
+      TravelHotels.hasHotelOverlap(hotels.value, startDay, endDay, exceptId);
 
     const sortDayItemsByStoredOrder = (list) => {
       return list.slice().sort((a, b) => {
@@ -857,73 +591,10 @@ createApp({
       }
     };
 
-    const formatInvolved = (list) => {
-      const arr = normalizeInvolved(list);
-      return arr.length === 0 ? '全員' : arr.join(', ');
-    };
 
-    const formatTime = (timeStr) => {
-      if (!timeStr) return '';
-      if (typeof timeStr === 'string' && /^\d{1,2}:\d{2}$/.test(timeStr)) return timeStr;
-      try {
-        const date = new Date(timeStr);
-        if (isNaN(date.getTime())) return timeStr;
-        const h = date.getHours().toString().padStart(2, '0');
-        const m = date.getMinutes().toString().padStart(2, '0');
-        return `${h}:${m}`;
-      } catch (e) {
-        return timeStr;
-      }
-    };
 
-    const timeToNum = (t) => {
-      const s = formatTime(t);
-      if (!s) return 999999;
-      const p = s.split(':');
-      if (p.length !== 2) return 999999;
-      const hh = parseInt(p[0],10);
-      const mm = parseInt(p[1],10);
-      if (Number.isNaN(hh) || Number.isNaN(mm)) return 999999;
-      return hh * 60 + mm;
-    };
-
-    const jsonp = TravelApi.jsonp || ((url, timeoutMs = 30000) => new Promise((resolve, reject) => {
-      const cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-      const sep = url.includes('?') ? '&' : '?';
-      const full = `${url}${sep}callback=${cb}`;
-
-      const s = document.createElement('script');
-      const t = setTimeout(() => {
-        cleanup();
-        reject(new Error('JSONP timeout'));
-      }, timeoutMs);
-
-      const cleanup = () => {
-        clearTimeout(t);
-        if (s.parentNode) s.parentNode.removeChild(s);
-        try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-      };
-
-      window[cb] = (data) => {
-        cleanup();
-        resolve(data);
-      };
-
-      s.onerror = () => {
-        cleanup();
-        reject(new Error('JSONP load error'));
-      };
-
-      s.src = full;
-      document.head.appendChild(s);
-    }));
-
-    const apiGet = TravelApi.apiGet || (async (paramsObj) => {
-      const qs = new URLSearchParams(paramsObj).toString();
-      return await jsonp(`${API_URL}?${qs}`);
-    });
-
-    const cacheKey = TravelCache.tripCacheKey || ((tripId) => `trip_cache_${tripId}`);
+    const { jsonp, apiGet } = TravelApi;
+    const cacheKey = TravelCache.tripCacheKey;
 
     const saveTripCache = (tripId) => {
       try {
@@ -971,13 +642,8 @@ createApp({
       }
     };
 
-    const rawPostJSON = TravelApi.rawPostJSON || (async (payload) => {
-      const p = { ...payload };
-      if (p.data && typeof p.data === 'object') p.data = JSON.stringify(p.data);
-      return await apiGet(p);
-    });
-
-    const pendingQueueKey = TravelCache.pendingQueueKey || ((tripId) => `trip_pending_queue_${tripId}`);
+    const { rawPostJSON } = TravelApi;
+    const pendingQueueKey = TravelCache.pendingQueueKey;
 
     const savePendingQueue = () => {
       if (!currentTrip.value?.id) return;
@@ -1134,27 +800,6 @@ createApp({
         throw new Error(response.message || 'save order failed');
       }
       return response;
-    };
-
-    const escapeHtml = (s) => String(s)
-      .replaceAll('&','&amp;')
-      .replaceAll('<','&lt;')
-      .replaceAll('>','&gt;')
-      .replaceAll('"','&quot;')
-      .replaceAll("'","&#39;");
-
-    const linkifyMessage = (text) => {
-      const raw = String(text || '');
-      if (!raw) return '';
-
-      const escaped = escapeHtml(raw);
-      const urlRegex = /(https?:\/\/[^\s<]+[^\s<.,!?;:])/gi;
-
-      const linked = escaped.replace(urlRegex, (url) => {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-      });
-
-      return `📝 ${linked.replace(/\n/g, '<br>')}`;
     };
 
     const handleItineraryContentClick = (event, place) => {
@@ -1967,111 +1612,7 @@ createApp({
       updateMapMarkers();
     };
 
-    const normalizeHexColor = (color, fallback = '#ef4444') => {
-      const s = String(color || '').trim();
-      if (/^#[0-9a-fA-F]{6}$/.test(s)) return s;
-      if (/^#[0-9a-fA-F]{3}$/.test(s)) {
-        return '#' + s.slice(1).split('').map(ch => ch + ch).join('');
-      }
-      return fallback;
-    };
-
-    const shadeHexColor = (color, amount = 0) => {
-      const hex = normalizeHexColor(color).slice(1);
-      const clamp = (value) => Math.max(0, Math.min(255, value));
-      const r = clamp(parseInt(hex.slice(0, 2), 16) + amount);
-      const g = clamp(parseInt(hex.slice(2, 4), 16) + amount);
-      const b = clamp(parseInt(hex.slice(4, 6), 16) + amount);
-      return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-    };
-
-    const makeMapPinIcon = (fillColor) => {
-      if (!window.google || !google.maps) return null;
-
-      const baseColor = normalizeHexColor(fillColor);
-      const lightColor = shadeHexColor(baseColor, 34);
-      const darkColor = shadeHexColor(baseColor, -42);
-
-      // 水滴形定位 pin：正式行程、備案、住宿、探點共用同一外型，只用顏色與 label 區分。
-      const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="54" viewBox="0 0 36 54">
-          <defs>
-            <linearGradient id="pinGrad" x1="9" y1="3" x2="27" y2="50" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="${lightColor}"/>
-              <stop offset="0.48" stop-color="${baseColor}"/>
-              <stop offset="1" stop-color="${darkColor}"/>
-            </linearGradient>
-            <radialGradient id="holeGrad" cx="50%" cy="38%" r="65%">
-              <stop offset="0" stop-color="#ffffff"/>
-              <stop offset="1" stop-color="#eef2f7"/>
-            </radialGradient>
-            <filter id="pinShadow" x="-25%" y="-10%" width="150%" height="130%">
-              <feDropShadow dx="0" dy="2.2" stdDeviation="1.8" flood-color="#111827" flood-opacity="0.22"/>
-            </filter>
-          </defs>
-          <ellipse cx="18" cy="50" rx="9.5" ry="2.8" fill="#111827" opacity="0.16"/>
-          <path
-            filter="url(#pinShadow)"
-            d="M18 1.5C8.9 1.5 1.5 8.9 1.5 18C1.5 30.2 18 51 18 51C18 51 34.5 30.2 34.5 18C34.5 8.9 27.1 1.5 18 1.5Z"
-            fill="url(#pinGrad)"
-          />
-          <path
-            d="M10 6.8C6.9 9.3 5.1 13.4 5.2 17.8"
-            fill="none"
-            stroke="#ffffff"
-            stroke-opacity="0.28"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-          <circle cx="18" cy="17.8" r="8.2" fill="url(#holeGrad)" opacity="0.96"/>
-          <circle cx="18" cy="17.8" r="8.2" fill="none" stroke="${darkColor}" stroke-opacity="0.13" stroke-width="1.2"/>
-        </svg>
-      `;
-
-      return {
-        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-        scaledSize: new google.maps.Size(16, 24),
-        anchor: new google.maps.Point(8, 24),
-        labelOrigin: new google.maps.Point(8, 9)
-      };
-    };
-
-    const makeHotelMapPinIcon = (fillColor = '#0d9488') => {
-      if (!window.google || !google.maps) return null;
-
-      const baseColor = normalizeHexColor(fillColor, '#0d9488');
-      const lightColor = shadeHexColor(baseColor, 26);
-      const darkColor = shadeHexColor(baseColor, -34);
-
-      // 住宿 marker 回復成接近原本的實心 pin，不使用圓孔，避免 🏠 圖示被孔洞干擾。
-      const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="27" height="43" viewBox="0 0 27 43">
-          <defs>
-            <linearGradient id="hotelPinGrad" x1="6" y1="2" x2="21" y2="41" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="${lightColor}"/>
-              <stop offset="0.55" stop-color="${baseColor}"/>
-              <stop offset="1" stop-color="${darkColor}"/>
-            </linearGradient>
-            <filter id="hotelPinShadow" x="-25%" y="-10%" width="150%" height="130%">
-              <feDropShadow dx="0" dy="1.8" stdDeviation="1.4" flood-color="#111827" flood-opacity="0.22"/>
-            </filter>
-          </defs>
-          <ellipse cx="13.5" cy="40.5" rx="7" ry="2.2" fill="#111827" opacity="0.14"/>
-          <path
-            filter="url(#hotelPinShadow)"
-            d="M13.5 0C6.04 0 0 6.04 0 13.5C0 23.63 13.5 43 13.5 43C13.5 43 27 23.63 27 13.5C27 6.04 20.96 0 13.5 0Z"
-            fill="url(#hotelPinGrad)"
-          />
-        </svg>
-      `;
-
-      return {
-        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-        scaledSize: new google.maps.Size(24, 38),
-        anchor: new google.maps.Point(12, 38),
-        labelOrigin: new google.maps.Point(12, 13)
-      };
-    };
+    const { normalizeHexColor, shadeHexColor, makeMapPinIcon, makeHotelMapPinIcon } = TravelMaps;
 
     const updateMapMarkers = () => {
       if (!mapInstance || !window.google) return;
