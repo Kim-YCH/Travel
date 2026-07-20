@@ -142,4 +142,15 @@ repo 版本的嚴格超集，直接取用。
 
 ### 需要的動作
 
-- **需要重新部署 Apps Script。** repo 的 `.gs` 更新不等於線上生效。
+- ~~需要重新部署 Apps Script。~~ **已完成**：`20260720.2` 時 `API_URL` 已改指向含完整共同錢包的新部署。
+
+  驗證方式（之後要再確認時可重跑）：
+
+  ```bash
+  URL=$(grep -o "https://script.google.com[^']*" config.js)
+  curl -sL "$URL?action=health_check&callback=cb"          # backendVersion 應與 .gs 的 BACKEND_VERSION 相同
+  curl -sL "$URL?action=shared_wallet_edit&callback=cb"     # 應回「missing wallet transaction id」而非「unknown action」
+  ```
+
+  注意 `prep_*` 只走 POST（`prep-checklist.js` 用 `fetch`，不是 JSONP），
+  用 GET 探測會得到「unknown action」，那是正常的，不代表後端缺功能。
