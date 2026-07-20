@@ -26,10 +26,21 @@ inline fallback copies to keep in sync.
 - `js/itinerary.js` (`TravelItinerary`): itinerary record model, type/tone/icon resolution, and the transport `message` envelope.
 - `js/hotels.js` (`TravelHotels`): hotel record model and day-range logic. `hasHotelOverlap` takes the list as its first argument; the module holds no state.
 - `js/expenses.js` (`TravelExpenses`): expense and shared-wallet record models, person normalisation, and legacy `公帳` detection.
-- `js/weather.js` (`TravelWeather`): weather code and UV level display mapping.
+- `js/weather.js` (`TravelWeather`): weather code and UV level display mapping, plus `create()` for forecast loading.
+- `js/export.js` (`TravelExport`): itinerary text and backup HTML builders. Pure — they receive a context object and touch no ref, DOM or clipboard.
+- `js/probe-search.js` (`TravelProbeSearch`): the `探點搜尋` subsystem, via `create()`.
 
-Modules must stay free of Vue refs. Anything that needs reactive state stays in `app.js` until it can be
-extracted as a `createXxx({ refs })` factory in the style of `TravelApi.create`.
+Pure helpers are exported directly. Anything that needs reactive state is a `createXxx({ refs })` factory in
+the style of `TravelApi.create`: the factory receives the refs it must write plus read-only inputs, and keeps
+its own private state (timers, caches, markers) inside the module. `TravelWeather.create` owns the forecast
+and geocode caches; `TravelProbeSearch.create` owns the probe marker and its debounce timer.
+
+Two constraints worth knowing before extracting more:
+
+- `mapInstance` and `infoWindow` are reassigned by `initGoogleMap`, so factories take them as getters
+  (`getMap: () => mapInstance`), never as values.
+- A factory called partway through `setup()` cannot receive a direct reference to anything declared below it.
+  Pass a wrapper closure (`getHotelsForDay: (d) => getHotelsForDay(d)`) or the call hits the temporal dead zone.
 
 ## Verification
 

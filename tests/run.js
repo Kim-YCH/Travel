@@ -28,7 +28,8 @@ const section = (t) => console.log('\n' + t);
 // 與 index.html 的載入順序一致
 const MODULE_FILES = [
   'js/utils.js', 'js/api.js', 'js/cache.js', 'js/maps.js', 'js/places.js',
-  'js/itinerary.js', 'js/hotels.js', 'js/expenses.js', 'js/weather.js', 'js/export.js'
+  'js/itinerary.js', 'js/hotels.js', 'js/expenses.js', 'js/weather.js', 'js/export.js',
+  'js/probe-search.js'
 ];
 
 /* ------------------------------------------------------------------ 1. 語法 */
@@ -187,6 +188,55 @@ eq('天氣代碼未知', W.weatherCodeInfo(999).text, '天氣');
 eq('UV 低', W.uvLevelLabel(1), '低');
 eq('UV 危險', W.uvLevelLabel(12), '危險');
 eq('UV 非數字', W.uvLevelLabel('x'), '');
+
+/* ---------------------------------------------------------- 8e. 探點搜尋 */
+section('8e. 探點搜尋');
+{
+  const PS = win.TravelProbeSearch;
+
+  eq('探點正規化取 description', PS.normalizeProbePlace({ description: ' 新宿站 ' }).name, '新宿站');
+  eq('探點正規化預設名稱', PS.normalizeProbePlace({}).name, '探點');
+  eq('探點正規化座標轉數字', PS.normalizeProbePlace({ lat: '35.6', lng: '139.7' }), { name: '探點', address: '', lat: 35.6, lng: 139.7, place_id: '' });
+  eq('探點正規化無座標為 null', PS.normalizeProbePlace({ name: 'x' }).lat, null);
+
+  eq('地圖連結優先用 place_id',
+    PS.getExternalMapLink({ name: '淺草寺', place_id: 'abc' }),
+    'https://www.google.com/maps/search/?api=1&query=%E6%B7%BA%E8%8D%89%E5%AF%BA&query_place_id=abc');
+  eq('地圖連結退回座標',
+    PS.getExternalMapLink({ name: 'x', lat: 35.6, lng: 139.7 }),
+    'https://www.google.com/maps/search/?api=1&query=35.6,139.7');
+  eq('地圖連結最後用名稱',
+    PS.getExternalMapLink({ name: 'a b' }),
+    'https://www.google.com/maps/search/?api=1&query=a%20b');
+
+  // getProbeDisplayName 的中／外文判斷需要 app.js 那組字串工具，這裡直接注入等效實作
+  const ref = (v) => ({ value: v });
+  const FOREIGN = /[ㄱ-ㆎ가-힣぀-ヿ฀-๿]/;
+  const CJK = /[一-鿿]/;
+  const api = PS.create({
+    probeQuery: ref(''), probeResults: ref([]), probeIsSearching: ref(false),
+    probePlace: ref(null), probeSearchOpen: ref(false), mapLocatorOpen: ref(false),
+    currentTrip: ref(null),
+    getMap: () => null, getInfoWindow: () => null,
+    cleanLabelText: (s) => String(s || '').trim(),
+    hasChineseTitle: (s) => CJK.test(s),
+    hasForeignTitle: (s) => FOREIGN.test(s),
+    translateTitleToChinese: async () => '',
+    searchPlacesWithTranslation: async () => ({ predictions: [] }),
+    getPlaceDetails: async () => null,
+    loadGoogleMaps: async () => {}, initGoogleMap: () => {},
+    isDayMapView: () => false, nextTick: async () => {}
+  });
+
+  eq('無譯名時只顯示原名', api.getProbeDisplayName('東京駅', ''), '東京駅');
+  eq('譯名與原名相同不重複', api.getProbeDisplayName('新宿', '新宿'), '新宿');
+  eq('純中文標題不加註', api.getProbeDisplayName('淺草寺', '淺草寺廟'), '淺草寺');
+  eq('外文標題加中文註記', api.getProbeDisplayName('명동', '明洞'), '명동（明洞）');
+  eq('結果標題取 main_text', api.getProbeResultTitle({ structured_formatting: { main_text: ' 澀谷 ' } }), '澀谷');
+  eq('結果標題退回 description', api.getProbeResultTitle({ description: '池袋' }), '池袋');
+  eq('無地圖時 focus 不丟例外', api.focusProbePlace(), undefined);
+  eq('dispose 不丟例外', api.dispose(), undefined);
+}
 
 /* ------------------------------------------------------- 8d. 天氣載入分支 */
 section('8d. 天氣載入');

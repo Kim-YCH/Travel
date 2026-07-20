@@ -8,7 +8,8 @@ createApp({
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
-      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport'
+      'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport',
+      'TravelProbeSearch'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -22,6 +23,7 @@ createApp({
     const TravelWeather = window.TravelWeather;
     const TravelPlaces = window.TravelPlaces;
     const TravelExport = window.TravelExport;
+    const TravelProbeSearch = window.TravelProbeSearch;
 
     const {
       PUBLIC_ACCOUNT_NAME,
@@ -125,8 +127,6 @@ createApp({
     let mapRouteLine = null;
     let infoWindow = null;
     let autocompleteService = null;
-    let probeMarker = null;
-    let probeSearchTimeout = null;
 
     const newHotel = ref({ start_day: 1, end_day: 1 });
     const hotelSearchQuery = ref('');
@@ -1057,320 +1057,40 @@ createApp({
       if (points.length === 1) mapInstance.setZoom(16);
     };
 
-    const clearProbeMarker = () => {
-      if (probeMarker) {
-        probeMarker.setMap(null);
-        probeMarker = null;
-      }
-    };
-
-    const normalizeProbePlace = (data = {}) => ({
-      name: String(data.name || data.description || data.address || '探點').trim(),
-      address: String(data.address || data.formatted_address || data.description || '').trim(),
-      lat: data.lat != null ? Number(data.lat) : null,
-      lng: data.lng != null ? Number(data.lng) : null,
-      place_id: String(data.place_id || '')
+    const probeSearch = TravelProbeSearch.create({
+      probeQuery,
+      probeResults,
+      probeIsSearching,
+      probePlace,
+      probeSearchOpen,
+      mapLocatorOpen,
+      currentTrip,
+      // mapInstance / infoWindow 會被 initGoogleMap 重新指派，必須用 getter 取。
+      getMap: () => mapInstance,
+      getInfoWindow: () => infoWindow,
+      cleanLabelText,
+      hasChineseTitle,
+      hasForeignTitle,
+      translateTitleToChinese,
+      searchPlacesWithTranslation,
+      // 以下宣告在本行之後，包一層避開 TDZ。
+      getPlaceDetails: (id, lang) => getPlaceDetails(id, lang),
+      loadGoogleMaps: () => loadGoogleMaps(),
+      initGoogleMap: () => initGoogleMap(),
+      isDayMapView,
+      nextTick
     });
 
-    const getProbeResultTitle = (item = {}) => cleanLabelText(
-      item.probe_title
-      || item.structured_formatting?.main_text
-      || item.name
-      || item.description
-      || ''
-    );
-
-    const getProbeDisplayName = (name, zhLabel = '') => {
-      const title = cleanLabelText(name);
-      const translated = cleanLabelText(zhLabel);
-      if (!translated || translated === title) return title;
-      if (hasChineseTitle(title) && !hasForeignTitle(title)) return title;
-      return `${title}（${translated}）`;
-    };
-
-    const enrichProbeResultsWithChinese = async (results, keywordSnapshot) => {
-      const list = Array.isArray(results) ? results : [];
-      const targetItems = list
-        .slice(0, 5)
-        .filter(item => hasForeignTitle(getProbeResultTitle(item)));
-
-      await Promise.all(targetItems.map(async (item) => {
-        const title = getProbeResultTitle(item);
-        const translated = await translateTitleToChinese(title);
-        if (!translated || probeQuery.value.trim() !== keywordSnapshot) return;
-        item.probe_title = title;
-        item.zh_label = translated;
-      }));
-
-      if (probeQuery.value.trim() === keywordSnapshot) {
-        probeResults.value = list.slice();
-      }
-    };
-
-    const getExternalMapLink = ({ name = '', lat = null, lng = null, place_id = '' }) => {
-      if (place_id) {
-        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(place_id)}`;
-      }
-      if (lat != null && lng != null) {
-        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-      }
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
-    };
-
-    const renderProbeMarker = () => {
-      if (!mapInstance || !window.google || !probePlace.value) return;
-
-      const place = probePlace.value;
-      const lat = Number(place.lat);
-      const lng = Number(place.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-      clearProbeMarker();
-
-      probeMarker = new google.maps.Marker({
-        position: { lat, lng },
-        map: mapInstance,
-        title: place.name || '探點',
-        label: { text: '🔎', fontSize: '10px' },
-        icon: makeMapPinIcon('#334155'),
-        zIndex: 1200
-      });
-
-      probeMarker.addListener('click', () => {
-        if (!infoWindow) return;
-        const link = getExternalMapLink(place);
-        infoWindow.setContent(
-          `<div style="padding:8px;color:#111;max-width:240px;">
-            <div style="font-weight:700;margin-bottom:4px;">🔎 ${escapeHtml(place.name || '探點')}</div>
-            <div style="font-size:12px;color:#555;margin-bottom:8px;">${escapeHtml(place.address || '')}</div>
-            <a href="${link}" target="_blank" rel="noopener" style="color:#2563eb;font-weight:700;">Google Maps</a>
-          </div>`
-        );
-        infoWindow.open(mapInstance, probeMarker);
-      });
-    };
-
-    const focusProbePlace = () => {
-      if (!mapInstance || !window.google || !probePlace.value) return;
-      const lat = Number(probePlace.value.lat);
-      const lng = Number(probePlace.value.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-      renderProbeMarker();
-      mapInstance.panTo({ lat, lng });
-      if ((mapInstance.getZoom() || 0) < 15) mapInstance.setZoom(15);
-    };
-
-    const clearProbeSearch = () => {
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      probeQuery.value = '';
-      probeResults.value = [];
-      probeIsSearching.value = false;
-      probePlace.value = null;
-      clearProbeMarker();
-      if (infoWindow) infoWindow.close();
-    };
-
-    const closeProbeSearchPanel = () => {
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      probeSearchOpen.value = false;
-      probeResults.value = [];
-      probeIsSearching.value = false;
-    };
-
-    const toggleProbeSearch = async () => {
-      const willOpen = !probeSearchOpen.value;
-      probeSearchOpen.value = willOpen;
-      if (!willOpen) return;
-
-      mapLocatorOpen.value = false;
-      await nextTick();
-      if (!mapInstance && isDayMapView()) {
-        await loadGoogleMaps();
-        initGoogleMap();
-      }
-    };
-
-    const setProbePlaceFromDetails = async (item, fallbackName = '') => {
-      if (!item) return false;
-
-      if (item.place_id) {
-        const place = await getPlaceDetails(item.place_id, 'zh-TW');
-        if (place?.geometry?.location) {
-          const rawName = place.name || fallbackName || getProbeResultTitle(item);
-          probePlace.value = normalizeProbePlace({
-            name: getProbeDisplayName(rawName, item.zh_label),
-            address: place.formatted_address || item.address || item.description || '',
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-            place_id: item.place_id
-          });
-          return true;
-        }
-      }
-
-      if (item.lat != null && item.lng != null) {
-        const rawName = getProbeResultTitle(item) || fallbackName;
-        probePlace.value = normalizeProbePlace({
-          name: getProbeDisplayName(rawName, item.zh_label),
-          address: item.address || item.description || '',
-          lat: item.lat,
-          lng: item.lng,
-          place_id: item.place_id || ''
-        });
-        return true;
-      }
-
-      return false;
-    };
-
-    const geocodeProbeQuery = async (q) => {
-      if (!window.google || !window.google.maps) await loadGoogleMaps();
-      if (!mapInstance) initGoogleMap();
-      if (!window.google || !mapInstance) return false;
-
-      const city = String(currentTrip.value?.city || '').trim();
-      const query = city && !q.includes(city) ? `${q} ${city}` : q;
-      const geocoder = new google.maps.Geocoder();
-      const geocoded = await new Promise((resolve) => {
-        geocoder.geocode({ address: query }, (results, status) => {
-          resolve(status === 'OK' && results?.[0] ? results[0] : null);
-        });
-      });
-
-      if (!geocoded?.geometry?.location) return false;
-
-      const rawName = geocoded.address_components?.[0]?.long_name || q;
-      const zhLabel = await translateTitleToChinese(rawName);
-      probePlace.value = normalizeProbePlace({
-        name: getProbeDisplayName(rawName, zhLabel),
-        address: geocoded.formatted_address || query,
-        lat: geocoded.geometry.location.lat(),
-        lng: geocoded.geometry.location.lng(),
-        place_id: geocoded.place_id || ''
-      });
-      return true;
-    };
-
-    const searchProbePlacesInput = () => {
-      const q = probeQuery.value.trim();
-
-      if (probeSearchTimeout) clearTimeout(probeSearchTimeout);
-
-      if (!q) {
-        clearProbeSearch();
-        probeSearchOpen.value = true;
-        return;
-      }
-
-      const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
-      if (coordRegex.test(q)) {
-        const parts = q.split(',');
-        probeResults.value = [];
-        probeIsSearching.value = false;
-        probePlace.value = normalizeProbePlace({
-          name: '座標探點',
-          address: `${parts[0].trim()}, ${parts[1].trim()}`,
-          lat: parseFloat(parts[0]),
-          lng: parseFloat(parts[1])
-        });
-        focusProbePlace();
-        return;
-      }
-
-      probeIsSearching.value = true;
-      probeSearchTimeout = setTimeout(async () => {
-        try {
-          const opts = {};
-          if (mapInstance && typeof mapInstance.getBounds === 'function') {
-            const bounds = mapInstance.getBounds();
-            if (bounds) opts.bounds = bounds;
-          }
-          const out = await searchPlacesWithTranslation(q, opts);
-          if (probeQuery.value.trim() !== q) return;
-          const results = (out.predictions || []).map(item => ({
-            ...item,
-            probe_title: getProbeResultTitle(item)
-          }));
-          probeResults.value = results;
-          enrichProbeResultsWithChinese(results, q).catch(err => console.warn('probe zh labels failed:', err));
-        } catch (err) {
-          console.error(err);
-          if (probeQuery.value.trim() === q) probeResults.value = [];
-        } finally {
-          if (probeQuery.value.trim() === q) probeIsSearching.value = false;
-        }
-      }, 350);
-    };
-
-    const selectProbePlace = async (item) => {
-      if (!item) return;
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      probeQuery.value = getProbeDisplayName(getProbeResultTitle(item), item.zh_label) || probeQuery.value;
-      probeResults.value = [];
-      probeIsSearching.value = true;
-
-      try {
-        const ok = await setProbePlaceFromDetails(item, probeQuery.value);
-        if (ok) {
-          focusProbePlace();
-        } else {
-          await searchProbeByQuery();
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        probeIsSearching.value = false;
-      }
-    };
-
-    const searchProbeByQuery = async () => {
-      const q = probeQuery.value.trim();
-      if (probeSearchTimeout) {
-        clearTimeout(probeSearchTimeout);
-        probeSearchTimeout = null;
-      }
-      if (!q) {
-        clearProbeSearch();
-        probeSearchOpen.value = true;
-        return;
-      }
-
-      probeIsSearching.value = true;
-      try {
-        if (probeResults.value.length) {
-          const first = probeResults.value[0];
-          probeResults.value = [];
-          const ok = await setProbePlaceFromDetails(first, q);
-          if (ok) {
-            probeQuery.value = getProbeDisplayName(getProbeResultTitle(first), first.zh_label) || q;
-            focusProbePlace();
-            return;
-          }
-        }
-
-        const ok = await geocodeProbeQuery(q);
-        if (ok) {
-          probeResults.value = [];
-          focusProbePlace();
-        } else {
-          alert('找不到這個探點');
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        probeIsSearching.value = false;
-      }
-    };
+    const {
+      clearProbeMarker,
+      focusProbePlace,
+      clearProbeSearch,
+      closeProbeSearchPanel,
+      toggleProbeSearch,
+      searchProbePlacesInput,
+      selectProbePlace,
+      searchProbeByQuery
+    } = probeSearch;
 
     const getMapExportLinks = (place = {}) => {
       // 匯出文字改用與行程/住宿卡片點擊相同的地圖 App 邏輯。
@@ -3971,8 +3691,7 @@ createApp({
       if (todayRefreshTimer) clearInterval(todayRefreshTimer);
       stopMoneyAutoRefresh();
       if (mapBounceTimer) clearTimeout(mapBounceTimer);
-      if (probeSearchTimeout) clearTimeout(probeSearchTimeout);
-      clearProbeMarker();
+      probeSearch.dispose();
     });
 
     return {
