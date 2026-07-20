@@ -1,12 +1,28 @@
-// version: 20260708.11 complete backend; legacy itinerary image columns are left untouched.
+
+// version: 20260718.2 complete backend; legacy itinerary image columns are left untouched.
 /************ CONFIG ************/
-const BACKEND_VERSION = '20260708.11';
-const SPREADSHEET_ID = '11H-wsAJRRBbiGxCIbovY_o4bvEB7m6eayT27Wafmtkw';
+const BACKEND_VERSION = '20260718.2';
+const SPREADSHEET_ID = '17vcfTf5pSMf3rGAy-bEnNLYJDR0N6sEICCI-Jqm-Xw4';
 const ALLOWED_TYPES = ['trips', 'itinerary', 'expenses', 'people', 'hotels', 'prep_checklist', 'tripData'];
 const TRIPDATA_CACHE_TTL_SEC = 300; // 5 分鐘
 const REQUIRED_TYPE_HEADERS = {
-  itinerary: ['type']
+  itinerary: ['type'],
+  trips: ['shared_wallet_enabled']
 };
+const SHARED_WALLET_SHEET_NAME = 'SharedWalletTransactions';
+const SHARED_WALLET_HEADERS = [
+  'id',
+  'trip_id',
+  'type',
+  'date',
+  'title',
+  'person',
+  'amount',
+  'category',
+  'note',
+  'created_at',
+  'updated_at'
+];
 const TRANSLATION_DICTIONARY_SHEET_NAME = 'TranslationDictionary';
 const TRANSLATION_DICTIONARY_HEADERS = [
   'langA',
@@ -26,6 +42,9 @@ const BUILTIN_TRANSLATION_DICTIONARY = [
 
 function ensureBackendSupportSheets_(ss) {
   getOrCreateTranslationDictionarySheet_(ss);
+  getOrCreateSharedWalletSheet_(ss);
+  const tripsSheet = ss.getSheetByName('trips');
+  if (tripsSheet) ensureTypeHeaders_(tripsSheet, 'trips');
 }
 
 /************ ENTRY ************/
@@ -121,6 +140,11 @@ function doPost(e) {
       return createJSONPOutput(out, '');
     }
 
+    if (String(action || '').indexOf('shared_wallet_') === 0) {
+      const out = handleSharedWalletMutation_(ss, contents);
+      return createJSONPOutput(out, '');
+    }
+
     if (!type) {
       return createJSONPOutput({ status: 'error', message: 'missing type' }, '');
     }
@@ -194,7 +218,7 @@ function findRowById_(sheet, id) {
 /************ MERGED tripData + CACHE ************/
 function getTripDataCached_(ss, tripId, force) {
   const cache = CacheService.getScriptCache();
-  const key = 'tripData_' + String(tripId);
+  const key = 'tripData_' + BACKEND_VERSION + '_' + String(tripId);
 
   if (!force) {
     const hit = cache.get(key);
@@ -219,7 +243,7 @@ function getTripDataCached_(ss, tripId, force) {
 
 function clearTripDataCache_(tripId) {
   try {
-    CacheService.getScriptCache().remove('tripData_' + String(tripId));
+    CacheService.getScriptCache().remove('tripData_' + BACKEND_VERSION + '_' + String(tripId));
   } catch (e) {}
 }
 
@@ -229,17 +253,19 @@ function getTripDataFast_(ss, tripId) {
   const expSheet   = ss.getSheetByName('expenses');
   const pplSheet   = ss.getSheetByName('people');
   const hotelSheet = ss.getSheetByName('hotels');
+  const walletSheet = getOrCreateSharedWalletSheet_(ss);
 
   const trip = tripsSheet ? findRowById_(tripsSheet, tripId) : null;
   let itinerary = itinSheet ? readSheetAsObjects_(itinSheet, 'itinerary', tripId) : [];
   const expenses = expSheet ? readSheetAsObjects_(expSheet, 'expenses', tripId) : [];
   const people   = pplSheet ? readSheetAsObjects_(pplSheet, 'people', tripId) : [];
   const hotels   = hotelSheet ? readSheetAsObjects_(hotelSheet, 'hotels', tripId) : [];
+  const sharedWalletTransactions = readSharedWalletTransactions_(walletSheet, tripId);
 
   itinerary = sortItineraryForResponse_(itinerary);
   hotels.sort((a, b) => (parseInt(a.start_day, 10) || 1) - (parseInt(b.start_day, 10) || 1));
 
-  return { trip, itinerary, expenses, people, hotels };
+  return { trip, itinerary, expenses, people, hotels, sharedWalletTransactions };
 }
 
 /************ ACTIONS (GET) ************/
@@ -270,6 +296,27 @@ function handleActionGET(ss, action, type, e) {
     const tripName = getParam(e, 'tripName', '');
     const owner = getParam(e, 'owner', getParam(e, 'assignee', getParam(e, 'member', '')));
     return getPrepChecklist_(ss, tripId, tripName, owner);
+  }
+
+  if (action === 'shared_wallet_get') {
+    const tripId = getParam(e, 'tripId', '');
+    if (!tripId) throw new Error('missing tripId');
+    return {
+      status: 'success',
+      transactions: readSharedWalletTransactions_(getOrCreateSharedWalletSheet_(ss), tripId)
+    };
+  }
+
+  if (String(action || '').indexOf('shared_wallet_') === 0) {
+    const dataStr = getParam(e, 'data', '');
+    const contents = {
+      action: action,
+      tripId: getParam(e, 'tripId', ''),
+      id: getParam(e, 'id', ''),
+      enabled: getParam(e, 'enabled', ''),
+      data: dataStr ? JSON.parse(dataStr) : {}
+    };
+    return handleSharedWalletMutation_(ss, contents);
   }
 
   if (action === 'translate_place_keyword') {
@@ -448,6 +495,256 @@ function handleActionPOST(ss, action, type, contents) {
   }
 
   throw new Error('unknown action: ' + action);
+}
+
+/************ SHARED WALLET ************/
+function getOrCreateSharedWalletSheet_(ss) {
+  let sheet = ss.getSheetByName(SHARED_WALLET_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHARED_WALLET_SHEET_NAME);
+    sheet.getRange(1, 1, 1, SHARED_WALLET_HEADERS.length).setValues([SHARED_WALLET_HEADERS]);
+    sheet.setFrozenRows(1);
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const currentHeaders = lastCol > 0
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).toLowerCase().trim())
+    : [];
+  const missing = SHARED_WALLET_HEADERS.filter(header => currentHeaders.indexOf(header) === -1);
+  if (missing.length) {
+    sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+  }
+  return sheet;
+}
+
+function normalizeSharedWalletBoolean_(value) {
+  if (value === true || value === 1) return true;
+  const text = String(value || '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on', 'v'].indexOf(text) !== -1;
+}
+
+function normalizeSharedWalletDate_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone() || 'Asia/Taipei', 'yyyy-MM-dd');
+  }
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!match) throw new Error('invalid wallet date');
+  return match[1];
+}
+
+function normalizeSharedWalletPeople_(value) {
+  let source = value;
+  if (!Array.isArray(source)) {
+    const text = String(source || '').trim();
+    if (!text) return [];
+    if (text.indexOf('[') === 0) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) source = parsed;
+      } catch (err) {}
+    }
+    if (!Array.isArray(source)) source = text.split(',');
+  }
+
+  const seen = {};
+  return source
+    .map(person => String(person || '').trim())
+    .filter(person => {
+      if (!person || seen[person]) return false;
+      seen[person] = true;
+      return true;
+    });
+}
+
+function normalizeSharedWalletTransaction_(value, existing) {
+  const source = value || {};
+  const previous = existing || {};
+  const type = String(source.type || previous.type || '').trim().toLowerCase();
+  if (type !== 'deposit' && type !== 'payment') throw new Error('invalid wallet transaction type');
+
+  const amount = Number(source.amount != null ? source.amount : previous.amount);
+  if (!isFinite(amount) || amount <= 0) throw new Error('invalid wallet amount');
+
+  const rawPerson = source.persons != null
+    ? source.persons
+    : (source.person != null ? source.person : previous.person);
+  const paymentPeople = normalizeSharedWalletPeople_(rawPerson);
+  const person = type === 'payment'
+    ? paymentPeople.join(',')
+    : String(rawPerson || '').trim();
+  const category = type === 'payment'
+    ? (String(source.category != null ? source.category : (previous.category || '其他')).trim() || '其他')
+    : '';
+
+  const now = new Date().toISOString();
+  const transaction = {
+    id: String(source.id || previous.id || ('wallet_' + Date.now() + '_' + Math.floor(Math.random() * 10000))),
+    trip_id: String(source.trip_id || source.tripId || previous.trip_id || ''),
+    type: type,
+    date: normalizeSharedWalletDate_(source.date || previous.date),
+    title: String(source.title != null ? source.title : (previous.title || '')).trim(),
+    person: person,
+    amount: amount,
+    category: category,
+    note: String(source.note != null ? source.note : (previous.note || '')).trim(),
+    created_at: String(previous.created_at || source.created_at || source.createdAt || now),
+    updated_at: now
+  };
+
+  if (!transaction.trip_id) throw new Error('missing tripId');
+  if (type === 'deposit') {
+    if (!transaction.person) throw new Error('missing deposit person');
+    if (!transaction.title) transaction.title = '存入';
+  } else {
+    if (!transaction.title) throw new Error('missing payment title');
+  }
+  return transaction;
+}
+
+function readSharedWalletTransactions_(sheet, tripId) {
+  if (!sheet || !tripId) return [];
+  return readSheetAsObjects_(sheet, SHARED_WALLET_SHEET_NAME, tripId)
+    .map(item => {
+      try {
+        return {
+          id: String(item.id || ''),
+          trip_id: String(item.trip_id || ''),
+          type: String(item.type || '').trim().toLowerCase(),
+          date: normalizeSharedWalletDate_(item.date),
+          title: String(item.title || '').trim(),
+          person: String(item.person || '').trim(),
+          amount: Number(item.amount) || 0,
+          category: String(item.category || '其他').trim() || '其他',
+          note: String(item.note || '').trim(),
+          created_at: String(item.created_at || ''),
+          updated_at: String(item.updated_at || '')
+        };
+      } catch (err) {
+        return null;
+      }
+    })
+    .filter(item => item && item.id && (item.type === 'deposit' || item.type === 'payment') && item.amount > 0)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+
+function findSharedWalletRow_(sheet, id) {
+  const data = sheet.getDataRange().getValues();
+  if (!data.length) return null;
+  const headers = data[0].map(header => String(header).toLowerCase().trim());
+  const idCol = headers.indexOf('id');
+  if (idCol < 0) throw new Error('wallet sheet missing id column');
+
+  for (let row = 1; row < data.length; row++) {
+    if (String(data[row][idCol]) !== String(id)) continue;
+    const item = {};
+    headers.forEach((header, index) => item[header] = data[row][index]);
+    return { rowIndex: row + 1, item: item };
+  }
+  return null;
+}
+
+function writeSharedWalletRow_(sheet, rowIndex, transaction) {
+  const map = getHeaderMap_(sheet);
+  const row = rowIndex
+    ? sheet.getRange(rowIndex, 1, 1, map.headers.length).getValues()[0]
+    : new Array(map.headers.length).fill('');
+
+  Object.keys(transaction).forEach(key => {
+    const column = map.headerMap[String(key).toLowerCase()];
+    if (column !== undefined) row[column] = transaction[key];
+  });
+
+  if (rowIndex) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+}
+
+function sharedWalletSignedAmount_(transaction) {
+  const amount = Number(transaction && transaction.amount) || 0;
+  return String(transaction && transaction.type) === 'deposit' ? amount : -amount;
+}
+
+function updateTripSharedWalletSetting_(ss, tripId, enabled) {
+  const sheet = ss.getSheetByName('trips');
+  if (!sheet) throw new Error('sheet not found: trips');
+  ensureTypeHeaders_(sheet, 'trips');
+
+  const map = getHeaderMap_(sheet);
+  const idCol = map.headerMap.id;
+  const settingCol = map.headerMap.shared_wallet_enabled;
+  if (idCol === undefined || settingCol === undefined) throw new Error('trips missing wallet setting column');
+
+  const values = sheet.getDataRange().getValues();
+  for (let row = 1; row < values.length; row++) {
+    if (String(values[row][idCol]) !== String(tripId)) continue;
+    sheet.getRange(row + 1, settingCol + 1).setValue(Boolean(enabled));
+    return;
+  }
+  throw new Error('trip not found');
+}
+
+function handleSharedWalletMutation_(ss, contents) {
+  const action = String(contents && contents.action || '');
+  const requestData = Object.assign({}, contents || {}, contents && typeof contents.data === 'object' ? contents.data : {});
+  const tripId = String(requestData.trip_id || requestData.tripId || '').trim();
+
+  if (action === 'shared_wallet_setting_update') {
+    if (!tripId) throw new Error('missing tripId');
+    const enabled = normalizeSharedWalletBoolean_(requestData.enabled);
+    updateTripSharedWalletSetting_(ss, tripId, enabled);
+    clearTripDataCache_(tripId);
+    return { status: 'success', shared_wallet_enabled: enabled };
+  }
+
+  const sheet = getOrCreateSharedWalletSheet_(ss);
+  if (action === 'shared_wallet_get') {
+    if (!tripId) throw new Error('missing tripId');
+    return { status: 'success', transactions: readSharedWalletTransactions_(sheet, tripId) };
+  }
+
+  if (action === 'shared_wallet_add') {
+    const transaction = normalizeSharedWalletTransaction_(requestData, null);
+    const currentBalance = readSharedWalletTransactions_(sheet, transaction.trip_id)
+      .reduce((sum, item) => sum + sharedWalletSignedAmount_(item), 0);
+    if (currentBalance + sharedWalletSignedAmount_(transaction) < 0) throw new Error('insufficient wallet balance');
+    writeSharedWalletRow_(sheet, null, transaction);
+    clearTripDataCache_(transaction.trip_id);
+    return { status: 'success', transaction: transaction };
+  }
+
+  if (action === 'shared_wallet_edit') {
+    const id = String(requestData.id || '').trim();
+    if (!id) throw new Error('missing wallet transaction id');
+    const found = findSharedWalletRow_(sheet, id);
+    if (!found) throw new Error('wallet transaction not found');
+    const transaction = normalizeSharedWalletTransaction_(requestData, found.item);
+    const currentBalance = readSharedWalletTransactions_(sheet, transaction.trip_id)
+      .reduce((sum, item) => sum + sharedWalletSignedAmount_(item), 0);
+    const projectedBalance = currentBalance - sharedWalletSignedAmount_(found.item) + sharedWalletSignedAmount_(transaction);
+    if (projectedBalance < 0) throw new Error('insufficient wallet balance');
+    writeSharedWalletRow_(sheet, found.rowIndex, transaction);
+    clearTripDataCache_(transaction.trip_id);
+    return { status: 'success', transaction: transaction };
+  }
+
+  if (action === 'shared_wallet_delete') {
+    const id = String(requestData.id || '').trim();
+    if (!id) throw new Error('missing wallet transaction id');
+    const found = findSharedWalletRow_(sheet, id);
+    if (!found) throw new Error('wallet transaction not found');
+    const existingTripId = String(found.item.trip_id || tripId || '');
+    const projectedBalance = readSharedWalletTransactions_(sheet, existingTripId)
+      .reduce((sum, item) => sum + sharedWalletSignedAmount_(item), 0) - sharedWalletSignedAmount_(found.item);
+    if (projectedBalance < 0) throw new Error('insufficient wallet balance');
+    sheet.deleteRow(found.rowIndex);
+    if (existingTripId) clearTripDataCache_(existingTripId);
+    return { status: 'success' };
+  }
+
+  throw new Error('unknown shared wallet action: ' + action);
 }
 
 /************ CORE DB OPS ************/
