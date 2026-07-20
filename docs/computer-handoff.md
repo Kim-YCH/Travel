@@ -145,7 +145,7 @@ git merge --ff-only transfer/20260716.1
 git push origin main
 ```
 
-推送 `main` 可能觸發 GitHub Pages 發布。共同旅費錢包需要先把 `apps-script-backend.gs` 建立為新的 Apps Script 部署版本。
+推送 `main` 可能觸發 GitHub Pages 發布。Apps Script 後端原始碼僅保留在本機，需由本機檔案建立新的部署版本。
 
 ## 給新 Codex 對話的開場指令
 

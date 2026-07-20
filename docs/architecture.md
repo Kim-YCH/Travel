@@ -8,7 +8,7 @@ Travel intentionally remains a static GitHub Pages application:
 - Apps Script handles CRUD, translation, weather support, and Google Sheets access.
 - Google Sheets remains the lightweight database.
 - `app.js` is still the primary Vue application while helpers move out gradually.
-- `apps-script-backend.gs` is the deployable Apps Script source kept in this repository.
+- Apps Script backend source is maintained locally and deployed separately; it is not stored in this repository.
 
 See [workflow.md](./workflow.md) for the change, verification, versioning, and release process.
 
