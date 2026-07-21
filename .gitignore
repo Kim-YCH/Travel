@@ -1,3 +1,11 @@
 # Google Apps Script backend sources are local-only.
 app.gs
 apps-script-backend.gs
+
+# This repository is the published site only: it holds exactly the files the
+# browser loads. Development notes, planning and the test harness live in the
+# private repository. Ignoring them here means a careless copy of the whole
+# project folder cannot quietly republish them.
+docs/
+tests/
+keyword-map-reference.md
