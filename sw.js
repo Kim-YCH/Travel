@@ -1,19 +1,14 @@
 /* Travel Service Worker
  *
- * 目的很單一：讓已加到主畫面的 App 在完全沒有網路時仍然開得起來。
- * 原本的離線機制（pendingSyncQueue 與 localStorage 快取）只在分頁已經開著時有用；
- * 出國後重新開啟 App 才是最常見的情境，那需要 App Shell 被快取。
- *
- * 版本號要與 config.js 的 APP_VERSION 一致，tests/run.js 會檢查。
- * 靜態資源都帶 ?v= 版本，換版即換 URL，所以本地資源用 cache-first 是安全的。
+ * Keep this VERSION in sync with config.js APP_VERSION. tests/run.js verifies
+ * the local assets and CDN scripts listed in index.html are covered here.
  */
 'use strict';
 
-const VERSION = '20260720.4';
+const VERSION = '20260723.1';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const CDN_CACHE = `travel-cdn-${VERSION}`;
 
-// 本地 App Shell。必須快取成功，否則離線就開不起來。
 const SHELL_ASSETS = [
   './',
   `./index.html?v=${VERSION}`,
@@ -44,14 +39,12 @@ const SHELL_ASSETS = [
   './icon-512.png'
 ];
 
-// 第三方框架。抓不到不該讓整個安裝失敗，所以逐一嘗試。
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js',
   'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'
 ];
 
-// 這些一律走網路：資料要最新，而且 JSONP 回應帶著一次性 callback 名稱，快取了只會拿到過期資料。
 const NETWORK_ONLY_HOSTS = [
   'script.google.com',
   'script.googleusercontent.com',
@@ -59,7 +52,8 @@ const NETWORK_ONLY_HOSTS = [
   'api.open-meteo.com'
 ];
 
-const isNetworkOnly = (url) => NETWORK_ONLY_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith('.' + host));
+const isNetworkOnly = (url) =>
+  NETWORK_ONLY_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith('.' + host));
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -68,10 +62,6 @@ self.addEventListener('install', (event) => {
 
     const cdn = await caches.open(CDN_CACHE);
     await Promise.all(CDN_ASSETS.map(async (url) => {
-      // 先試 CORS。帶 crossorigin 屬性的 <script>（例如 Vue）發出的是 CORS 請求，
-      // 而 opaque response 無法滿足 CORS 請求 —— 硬塞會讓該 script 載入失敗。
-      // 沒有 CORS 標頭的來源（Tailwind）才退回 no-cors 存成 opaque，
-      // 它的標籤沒有 crossorigin，opaque 對它是安全的。
       try {
         const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'reload' });
         if (res.ok) {
@@ -79,7 +69,7 @@ self.addEventListener('install', (event) => {
           return;
         }
       } catch (err) {
-        // 落到下面的 no-cors
+        // Some CDN assets do not allow CORS. Fall back to an opaque response.
       }
 
       try {
@@ -98,14 +88,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(
-      keys.filter((key) => key.startsWith('travel-') && key !== SHELL_CACHE && key !== CDN_CACHE)
+      keys
+        .filter((key) => key.startsWith('travel-') && key !== SHELL_CACHE && key !== CDN_CACHE)
         .map((key) => caches.delete(key))
     );
     await self.clients.claim();
   })());
 });
 
-// 「刷新版本 / 重新載入」按鈕會送這個訊息，讓等待中的新 SW 立刻接手。
 self.addEventListener('message', (event) => {
   if (event.data === 'TRAVEL_SKIP_WAITING') self.skipWaiting();
 });
@@ -117,7 +107,6 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (isNetworkOnly(url)) return;
 
-  // 導覽請求走 network-first，這樣重新部署後能拿到新版；離線時退回快取的 index.html。
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
@@ -133,10 +122,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin === self.location.origin) {
-    // 本地資源帶版本 query string，換版就是換 URL，cache-first 不會拿到舊檔。
     event.respondWith((async () => {
       const cached = await caches.match(req);
       if (cached) return cached;
+
       try {
         const res = await fetch(req);
         if (res && res.ok) {
@@ -154,8 +143,6 @@ self.addEventListener('fetch', (event) => {
   if (CDN_ASSETS.some((asset) => req.url.startsWith(asset))) {
     event.respondWith((async () => {
       const cached = await caches.match(req);
-      // opaque response 不能拿來回應 CORS 請求，瀏覽器會判定失敗。
-      // 這種情況一律改走網路，寧可離線時少一個 CDN，也不要讓整頁掛掉。
       const usable = cached && !(cached.type === 'opaque' && req.mode === 'cors');
       if (usable) return cached;
 
@@ -167,7 +154,6 @@ self.addEventListener('fetch', (event) => {
         }
         return res;
       } catch (err) {
-        // 網路也拿不到時，opaque 至少比什麼都沒有好。
         return cached || Response.error();
       }
     })());

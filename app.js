@@ -124,7 +124,6 @@ createApp({
     let markers = [];
     let mapMarkerByPointKey = new Map();
     let mapBounceTimer = null;
-    let mapRouteLine = null;
     let infoWindow = null;
     let autocompleteService = null;
 
@@ -957,13 +956,6 @@ createApp({
       updateMapMarkers();
     };
 
-    const clearMapRouteLine = () => {
-      if (mapRouteLine) {
-        mapRouteLine.setMap(null);
-        mapRouteLine = null;
-      }
-    };
-
     const hasMapCoordinates = (item) => {
       const lat = Number(item?.lat);
       const lng = Number(item?.lng);
@@ -1233,8 +1225,6 @@ createApp({
         clearTimeout(mapBounceTimer);
         mapBounceTimer = null;
       }
-      clearMapRouteLine();
-
       const displayDay = getMapDisplayDay();
       let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
 
@@ -1385,8 +1375,7 @@ createApp({
         hasPoint = true;
       });
 
-      // 地圖改為純 marker 檢視：不再繪製路線，避免畫面過亂。
-      // 保留 clearMapRouteLine()，讓切換 Day 或更新 marker 時會清除舊線段。
+      // 地圖維持純 marker 檢視，避免路線線段讓小螢幕過亂。
 
       if (hasPoint) {
         mapInstance.fitBounds(bounds);
@@ -2271,15 +2260,17 @@ createApp({
         day: d,
         name,
         type: '景點',
+        order: null,
         lat: null,
         lng: null,
         place_id: selectedPlaceSnapshot?.place_id || '',
         address: '',
         message: messageSnapshot,
+        is_alternative: 'v',
         created_at: new Date().toISOString()
       };
 
-      alternatives.value.unshift(alt);
+      itinerary.value.unshift(normalizeItineraryRecord(alt));
 
       alternativeSearchQuery.value = '';
       alternativeSearchResults.value = [];
@@ -2326,21 +2317,22 @@ createApp({
           });
         }
 
-        const updatedAlt = normalizeAlternativeRecord({
+        const updatedAlt = normalizeItineraryRecord({
           ...alt,
           name: displayName || name,
           lat,
           lng,
           place_id: placeId,
-          address
+          address,
+          is_alternative: 'v'
         });
 
-        const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
         if (idx !== -1) {
-          alternatives.value.splice(idx, 1, updatedAlt);
+          itinerary.value.splice(idx, 1, updatedAlt);
         }
 
-        const res = await postJSON({ action:'add', type:'alternatives', data: updatedAlt });
+        const res = await postJSON({ action:'add', type:'itinerary', data: updatedAlt });
         if (res && res.status === 'error') {
           throw new Error(res.message || 'add alternative failed');
         }
@@ -2349,8 +2341,8 @@ createApp({
       } catch (err) {
         console.error('addAlternative sync failed:', err);
 
-        const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
-        if (idx !== -1) alternatives.value.splice(idx, 1);
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) itinerary.value.splice(idx, 1);
 
         scheduleTripCacheSave();
         alert('備案新增失敗，已取消剛剛新增的資料，請稍後再試。');
@@ -2363,19 +2355,19 @@ createApp({
 
       isDeletingAlternative.value = true;
 
-      const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
-      const backup = idx !== -1 ? { ...alternatives.value[idx] } : null;
-      if (idx !== -1) alternatives.value.splice(idx, 1);
+      const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+      const backup = idx !== -1 ? { ...itinerary.value[idx] } : null;
+      if (idx !== -1) itinerary.value.splice(idx, 1);
       scheduleTripCacheSave();
 
       try {
-        const res = await postJSON({ action:'del', type:'alternatives', id });
+        const res = await postJSON({ action:'del', type:'itinerary', id });
         if (res && res.status === 'error') {
           throw new Error(res.message || 'delete alternative failed');
         }
       } catch (err) {
         console.error('removeAlternative failed:', err);
-        if (backup) alternatives.value.splice(idx < 0 ? alternatives.value.length : idx, 0, backup);
+        if (backup) itinerary.value.splice(idx < 0 ? itinerary.value.length : idx, 0, backup);
         scheduleTripCacheSave();
         alert('備案刪除失敗，請稍後再試。');
       } finally {

@@ -1,11 +1,12 @@
-// version: 20260718.6
+// version: 20260723.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260718.6';
+  const VERSION = '20260723.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
+  const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
   let currentTripKey = '';
@@ -16,6 +17,8 @@
   let panelOpen = false;
   let isLoadingRemote = false;
   let pendingWrites = 0;
+  let pendingMutations = [];
+  let isFlushingPendingMutations = false;
   let writeQueue = Promise.resolve();
   let syncStatus = '';
   let lastSyncedAt = '';
@@ -117,6 +120,10 @@
 
   function getStorageKey(owner = selectedOwner) {
     return STORAGE_PREFIX + getTripIdentity() + '::owner::' + String(owner || '').trim();
+  }
+
+  function getPendingQueueKey(owner = selectedOwner) {
+    return PREP_PENDING_QUEUE_PREFIX + getTripIdentity() + '::owner::' + String(owner || '').trim();
   }
 
   function makeId(prefix) {
@@ -251,6 +258,7 @@
     currentTripKey = getStorageKey(selectedOwner);
     if (!selectedOwner) {
       state = buildEmptyState('');
+      loadPendingQueue();
       return;
     }
 
@@ -258,9 +266,11 @@
     const savedOwner = String(saved && saved.owner || '').trim();
     if (savedOwner && savedOwner !== selectedOwner) {
       state = buildEmptyState(selectedOwner);
+      loadPendingQueue();
       return;
     }
     state = normalizeState(saved || null, selectedOwner);
+    loadPendingQueue();
   }
 
   function saveLocal(updateTime = false) {
@@ -269,6 +279,39 @@
     state.sections.forEach(section => { section.owner = selectedOwner; });
     if (updateTime) state.updatedAt = new Date().toISOString();
     try { localStorage.setItem(currentTripKey, JSON.stringify(state)); } catch (_) {}
+  }
+
+  function loadPendingQueue() {
+    if (!selectedOwner) {
+      pendingMutations = [];
+      return;
+    }
+    const saved = safeJsonParse(localStorage.getItem(getPendingQueueKey()), []);
+    pendingMutations = Array.isArray(saved)
+      ? saved.filter(job => job && job.action).map(job => ({
+          id: String(job.id || makeId('prepjob')),
+          action: String(job.action || ''),
+          payload: job.payload && typeof job.payload === 'object' ? job.payload : {},
+          createdAt: job.createdAt || new Date().toISOString()
+        }))
+      : [];
+  }
+
+  function savePendingQueue() {
+    if (!selectedOwner) return;
+    try { localStorage.setItem(getPendingQueueKey(), JSON.stringify(pendingMutations)); } catch (_) {}
+  }
+
+  function enqueuePrepPendingMutation(action, payload) {
+    pendingMutations.push({
+      id: makeId('prepjob'),
+      action,
+      payload: payload || {},
+      createdAt: new Date().toISOString()
+    });
+    savePendingQueue();
+    syncStatus = pendingMutations.length + ' 筆待同步';
+    updateSyncUI();
   }
 
   async function apiPost(body) {
@@ -309,7 +352,7 @@
 
   function refreshChecklistFromDatabase() {
     if (!selectedOwner) return;
-    if (pendingWrites > 0) {
+    if (pendingWrites > 0 || pendingMutations.length > 0) {
       syncStatus = '儲存中，稍後更新';
       updateSyncUI();
       return;
@@ -318,7 +361,7 @@
   }
 
   async function loadFromSheet(options = {}) {
-    if (!API_URL || pendingWrites > 0 || !selectedOwner) return;
+    if (!API_URL || pendingWrites > 0 || pendingMutations.length > 0 || !selectedOwner) return;
     if (isLoadingRemote && !options.replacePending) return;
     const trip = getCurrentTripInfo();
     if (!trip.name || trip.name === '共用清單') return;
@@ -384,6 +427,46 @@
     };
   }
 
+  async function flushPrepPendingQueue() {
+    if (isFlushingPendingMutations || !pendingMutations.length || !isBrowserOnline() || !API_URL || !selectedOwner) return;
+
+    isFlushingPendingMutations = true;
+    pendingWrites += 1;
+    syncStatus = pendingMutations.length + ' 筆同步中';
+    updateSyncUI();
+
+    const queue = pendingMutations.slice();
+    let failedAt = -1;
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const job = queue[index];
+      try {
+        const out = await apiPost({ ...buildBasePayload(job.action), ...(job.payload || {}) });
+        if (!out || out.status !== 'success') throw new Error((out && out.message) || 'write failed');
+        lastRemoteUpdatedAt = out.updatedAt || lastRemoteUpdatedAt;
+        lastSyncedAt = new Date().toISOString();
+        if (state && out.updatedAt) state.updatedAt = out.updatedAt;
+      } catch (err) {
+        console.warn('prep checklist queued mutation failed:', job.action, err);
+        failedAt = index;
+        break;
+      }
+    }
+
+    const sentCount = failedAt === -1 ? queue.length : failedAt;
+    const remain = failedAt === -1 ? [] : queue.slice(failedAt);
+    const sentIds = new Set(queue.slice(0, sentCount).map(job => job.id));
+    pendingMutations = pendingMutations.filter(job => !sentIds.has(job.id));
+    pendingMutations = remain.concat(pendingMutations.filter(job => !queue.some(queued => queued.id === job.id)));
+    savePendingQueue();
+    saveLocal(false);
+
+    pendingWrites = Math.max(0, pendingWrites - 1);
+    isFlushingPendingMutations = false;
+    syncStatus = pendingMutations.length ? pendingMutations.length + ' 筆待同步' : '已同步';
+    updateSyncUI();
+  }
+
   function canWrite() {
     if (!API_URL || !selectedOwner || !state) return false;
     if (isLoadingRemote) {
@@ -393,10 +476,9 @@
       return false;
     }
     if (!isBrowserOnline()) {
-      syncStatus = '離線，只可查看';
+      syncStatus = '離線，變更待同步';
       updateSyncUI();
-      alert('目前離線。為了避免資料不一致，準備清單離線時只能查看，不能新增、編輯、刪除或勾選。');
-      return false;
+      return true;
     }
     return true;
   }
@@ -406,6 +488,11 @@
     if (!options.skipCanWrite && !canWrite()) return Promise.resolve(null);
     const trip = getCurrentTripInfo();
     if (!trip.name || trip.name === '共用清單') return Promise.resolve(null);
+
+    if (!isBrowserOnline()) {
+      enqueuePrepPendingMutation(action, payload);
+      return Promise.resolve({ status: 'queued', queued: true });
+    }
 
     pendingWrites += 1;
     syncStatus = options.status || '儲存中';
@@ -432,6 +519,11 @@
     }).catch(err => {
       console.warn('prep checklist mutation failed:', action, err);
 
+      if (!isBrowserOnline()) {
+        enqueuePrepPendingMutation(action, payload);
+        return { status: 'queued', queued: true };
+      }
+
       if (typeof options.onError === 'function') {
         try { options.onError(err); } catch (rollbackErr) { console.warn('prep rollback failed:', rollbackErr); }
       } else if (isBrowserOnline()) {
@@ -446,7 +538,7 @@
       return null;
     }).finally(() => {
       pendingWrites = Math.max(0, pendingWrites - 1);
-      if (pendingWrites === 0 && isBrowserOnline() && syncStatus !== '儲存失敗') {
+      if (pendingWrites === 0 && pendingMutations.length === 0 && isBrowserOnline() && syncStatus !== '儲存失敗') {
         syncStatus = '已儲存';
         updateSyncUI();
       }
@@ -568,7 +660,7 @@
   function renderSelectedOwnerBody() {
     if (!selectedOwner) return '<div class="prep-blank"></div>';
     const hasSections = state && state.sections && state.sections.length > 0;
-    const offlineNote = !isBrowserOnline() ? '<div class="prep-offline-note">目前離線，只可查看。新增、編輯、刪除與勾選都會被阻擋。</div>' : '';
+    const offlineNote = !isBrowserOnline() ? '<div class="prep-offline-note">目前離線，變更會先存在本機，恢復連線後同步。</div>' : '';
     return `
       ${offlineNote}
       <div class="prep-add-box">
@@ -597,7 +689,7 @@
         <div class="prep-status-line">
           <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
           <span class="prep-status-right">
-            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0) ? 'disabled' : ''}>↻ 更新資料</button>
+            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0) ? 'disabled' : ''}>↻ 更新資料</button>
             <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
           </span>
         </div>
@@ -629,7 +721,7 @@
             <div class="prep-status-line">
               <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
               <span class="prep-status-right">
-                <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0) ? 'disabled' : ''}>↻ 更新資料</button>
+                <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0) ? 'disabled' : ''}>↻ 更新資料</button>
                 <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
               </span>
             </div>
@@ -670,7 +762,7 @@
     const refreshBtn = root.querySelector('.prep-refresh-btn');
     if (refreshBtn) {
       refreshBtn.style.display = selectedOwner ? '' : 'none';
-      refreshBtn.disabled = !selectedOwner || !isBrowserOnline() || pendingWrites > 0 || isLoadingRemote;
+      refreshBtn.disabled = !selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0 || isLoadingRemote;
     }
     if (pill) {
       pill.textContent = syncText;
@@ -1129,7 +1221,7 @@
       return;
     }
 
-    if (pendingWrites > 0 || isLoadingRemote) return;
+    if (pendingWrites > 0 || pendingMutations.length > 0 || isLoadingRemote) return;
     const now = Date.now();
     if (now - lastAutoRefreshAt >= AUTO_REFRESH_MS && !isEditingChecklistInput()) {
       lastAutoRefreshAt = now;
@@ -1141,10 +1233,10 @@
     window.addEventListener('online', () => {
       syncStatus = '重新讀取資料庫';
       updateSyncUI();
-      loadFromSheet();
+      flushPrepPendingQueue().then(() => loadFromSheet());
     });
     window.addEventListener('offline', () => {
-      syncStatus = '離線，只可查看';
+      syncStatus = '離線，變更待同步';
       updateSyncUI();
       render();
     });

@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260720.4 -->
+<!-- version: 20260723.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260720.4" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260720.4" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260720.4" />
-  <link rel="manifest" href="./site.webmanifest?v=20260720.4" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260723.1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260723.1" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260723.1" />
+  <link rel="manifest" href="./site.webmanifest?v=20260723.1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260720.4" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260720.4" />
+  <link rel="stylesheet" href="./style.css?v=20260723.1" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260723.1" />
 </head>
 <body>
 
@@ -740,6 +740,44 @@
         </div>
 
         <template v-if="moneyDisplayMode === 'personal'">
+          <div class="card money-filter-card">
+            <div class="money-filter-header">
+              <strong>篩選</strong>
+              <span>${{ Math.round(filteredExpenseTotal) }}</span>
+            </div>
+            <div class="money-filter-grid">
+              <label class="money-field">
+                <span>Day</span>
+                <select v-model="expenseFilter.day">
+                  <option value="all">全部</option>
+                  <option v-for="day in moneyDays" :key="'expense-filter-day-' + day" :value="String(day)">Day {{ day }}</option>
+                </select>
+              </label>
+              <label class="money-field">
+                <span>分類</span>
+                <select v-model="expenseFilter.category">
+                  <option value="all">全部</option>
+                  <option v-for="cat in categories" :key="'expense-filter-cat-' + cat" :value="cat">{{ cat }}</option>
+                </select>
+              </label>
+              <label class="money-field">
+                <span>付款人</span>
+                <select v-model="expenseFilter.payer">
+                  <option value="all">全部</option>
+                  <option v-for="(p, index) in people" :key="'expense-filter-payer-' + p.id" :value="p.name">
+                    {{ p.name || '成員 ' + (index+1) }}
+                  </option>
+                </select>
+              </label>
+            </div>
+            <button
+              v-if="hasExpenseFilters"
+              type="button"
+              class="money-filter-reset"
+              @click="expenseFilter.day = 'all'; expenseFilter.category = 'all'; expenseFilter.payer = 'all'"
+            >清除篩選</button>
+          </div>
+
           <div class="card money-entry-card personal-expense-card">
             <h2 class="money-entry-title">個人分帳</h2>
 
@@ -985,8 +1023,8 @@
   </div>
 
   <!-- Day modal -->
-  <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal">
-    <div class="modal-card space-y-3">
+  <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal" @keydown.esc="closeDayModal">
+    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">Day{{ modalDay }} 設定</div>
 
       <template v-if="modalDay === 1">
@@ -1011,8 +1049,8 @@
   </div>
 
   <!-- Edit itinerary modal -->
-  <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal">
-    <div class="modal-card space-y-3">
+  <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal" @keydown.esc="closeEditModal">
+    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">編輯行程</div>
 
       <div class="space-y-2">
@@ -1066,8 +1104,8 @@
   </div>
 
   <!-- Edit hotel modal -->
-  <div v-if="showEditHotelModal" class="modal-mask" @click.self="closeEditHotelModal">
-    <div class="modal-card space-y-3">
+  <div v-if="showEditHotelModal" class="modal-mask" @click.self="closeEditHotelModal" @keydown.esc="closeEditHotelModal">
+    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">編輯住宿</div>
 
       <div class="space-y-2">
@@ -1130,8 +1168,8 @@
   </div>
 
   <!-- Edit expense modal -->
-  <div v-if="showEditExpenseModal" class="modal-mask" @click.self="closeEditExpenseModal">
-    <div class="modal-card space-y-3">
+  <div v-if="showEditExpenseModal" class="modal-mask" @click.self="closeEditExpenseModal" @keydown.esc="closeEditExpenseModal">
+    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">編輯記帳</div>
 
       <div class="space-y-2">
@@ -1188,8 +1226,8 @@
   </div>
 
   <!-- Edit shared wallet transaction modal -->
-  <div v-if="showEditWalletModal" class="modal-mask" @click.self="closeEditWalletModal">
-    <div class="modal-card space-y-3">
+  <div v-if="showEditWalletModal" class="modal-mask" @click.self="closeEditWalletModal" @keydown.esc="closeEditWalletModal">
+    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">{{ editWallet.type === 'deposit' ? '編輯存入' : '編輯公費支出' }}</div>
 
       <div class="space-y-2">
@@ -1261,23 +1299,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260720.4"></script>
-<script src="./cache-refresh.js?v=20260720.4"></script>
-<script src="./keyword-map.js?v=20260720.4"></script>
-<script src="./js/utils.js?v=20260720.4"></script>
-<script src="./js/api.js?v=20260720.4"></script>
-<script src="./js/cache.js?v=20260720.4"></script>
-<script src="./js/maps.js?v=20260720.4"></script>
-<script src="./js/places.js?v=20260720.4"></script>
-<script src="./js/itinerary.js?v=20260720.4"></script>
-<script src="./js/hotels.js?v=20260720.4"></script>
-<script src="./js/expenses.js?v=20260720.4"></script>
-<script src="./js/weather.js?v=20260720.4"></script>
-<script src="./js/export.js?v=20260720.4"></script>
-<script src="./js/probe-search.js?v=20260720.4"></script>
-<script src="./app.js?v=20260720.4"></script>
-<script src="./search-zh-label.js?v=20260720.4"></script>
-<script src="./prep-checklist.js?v=20260720.4"></script>
+<script src="./config.js?v=20260723.1"></script>
+<script src="./cache-refresh.js?v=20260723.1"></script>
+<script src="./keyword-map.js?v=20260723.1"></script>
+<script src="./js/utils.js?v=20260723.1"></script>
+<script src="./js/api.js?v=20260723.1"></script>
+<script src="./js/cache.js?v=20260723.1"></script>
+<script src="./js/maps.js?v=20260723.1"></script>
+<script src="./js/places.js?v=20260723.1"></script>
+<script src="./js/itinerary.js?v=20260723.1"></script>
+<script src="./js/hotels.js?v=20260723.1"></script>
+<script src="./js/expenses.js?v=20260723.1"></script>
+<script src="./js/weather.js?v=20260723.1"></script>
+<script src="./js/export.js?v=20260723.1"></script>
+<script src="./js/probe-search.js?v=20260723.1"></script>
+<script src="./app.js?v=20260723.1"></script>
+<script src="./search-zh-label.js?v=20260723.1"></script>
+<script src="./prep-checklist.js?v=20260723.1"></script>
 
 </body>
 </html>
