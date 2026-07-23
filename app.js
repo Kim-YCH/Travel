@@ -96,7 +96,6 @@ createApp({
     };
     const newSharedWalletDeposit = ref({ person: '', amount: '', note: '' });
     const newSharedWalletPayment = ref({ title: '', amount: '', persons: [], category: '飲食', note: '' });
-    const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = window.TravelExpenses.EXPENSE_CATEGORIES;
     const itineraryTypes = window.TravelItinerary.ITINERARY_TYPES;
 
@@ -2737,29 +2736,7 @@ createApp({
       return names.map(name => ({ name, balance: balances[name] }));
     });
 
-    const hasExpenseFilters = computed(() =>
-      expenseFilter.value.day !== 'all' ||
-      expenseFilter.value.category !== 'all' ||
-      expenseFilter.value.payer !== 'all'
-    );
-
-    const moneyDays = computed(() => {
-      const set = new Set();
-      for (let d = 1; d <= totalDays.value; d++) set.add(d);
-      normalExpenseRecords.value.forEach(e => set.add(e.day ? parseInt(e.day, 10) || 1 : 1));
-      return Array.from(set).sort((a, b) => a - b);
-    });
-
-    const filteredExpenses = computed(() => {
-      return normalExpenseRecords.value.filter(e => {
-        const dayOk = expenseFilter.value.day === 'all' || String(e.day || 1) === String(expenseFilter.value.day);
-        const catOk = expenseFilter.value.category === 'all' || (e.category || '其他') === expenseFilter.value.category;
-        const payerOk = expenseFilter.value.payer === 'all' || e.payer === expenseFilter.value.payer;
-        return dayOk && catOk && payerOk;
-      });
-    });
-
-    const filteredExpenseTotal = computed(() => filteredExpenses.value.reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+    const filteredExpenses = computed(() => normalExpenseRecords.value);
 
     const filteredCategoryAnalysis = computed(() => {
       const stats = {};
@@ -3808,7 +3785,7 @@ createApp({
       people, itinerary, expenses, sharedWalletTransactions, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
       walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
-      expenseFilter, categories, itineraryTypes,
+      categories, itineraryTypes,
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
       isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
@@ -3847,8 +3824,8 @@ createApp({
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
       sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
-      filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
-      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
+      filteredExpenses, filteredCategoryAnalysis,
+      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis,
 
       exportItinerary, downloadBackupHtml, isKoreaTrip,
 

@@ -1360,56 +1360,6 @@ html, body {
       font-weight: 800;
     }
 
-    .money-filter-card {
-      border: 1px solid #bfdbfe !important;
-      background: #ffffff;
-    }
-
-    .money-filter-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-
-    .money-filter-header strong {
-      color: #1e3a8a;
-      font-size: 13px;
-      font-weight: 900;
-    }
-
-    .money-filter-header span {
-      color: #1d4ed8;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 18px;
-      font-weight: 900;
-    }
-
-    .money-filter-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-    }
-
-    .money-filter-reset {
-      width: 100%;
-      min-height: 38px;
-      margin-top: 10px;
-      border: 0;
-      border-radius: 8px;
-      background: #eff6ff;
-      color: #1d4ed8;
-      font-size: 12px;
-      font-weight: 900;
-    }
-
-    @media (max-width: 420px) {
-      .money-filter-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .legacy-wallet-warning {
       padding: 10px 12px;
       border: 1px solid #fde68a;
