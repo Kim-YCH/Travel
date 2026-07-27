@@ -96,7 +96,6 @@ createApp({
     };
     const newSharedWalletDeposit = ref({ person: '', amount: '', note: '' });
     const newSharedWalletPayment = ref({ title: '', amount: '', persons: [], category: '飲食', note: '' });
-    const expenseFilter = ref({ day: 'all', category: 'all', payer: 'all' });
     const categories = window.TravelExpenses.EXPENSE_CATEGORIES;
     const itineraryTypes = window.TravelItinerary.ITINERARY_TYPES;
 
@@ -124,7 +123,6 @@ createApp({
     let markers = [];
     let mapMarkerByPointKey = new Map();
     let mapBounceTimer = null;
-    let mapRouteLine = null;
     let infoWindow = null;
     let autocompleteService = null;
 
@@ -288,17 +286,7 @@ createApp({
       });
     };
 
-    const mergePredictions = (...groups) => {
-      const seen = new Set();
-      const out = [];
-      groups.flat().forEach((item) => {
-        const key = item?.place_id || item?.description;
-        if (!key || seen.has(key)) return;
-        seen.add(key);
-        out.push(item);
-      });
-      return out;
-    };
+    const mergePredictions = TravelPlaces.mergePredictions;
 
     const geocodePlaceCandidates = async (keyword, options = {}) => {
       const q = String(keyword || '').trim();
@@ -347,6 +335,50 @@ createApp({
       });
     };
 
+    // Naver 在地搜尋：韓國店家的涵蓋率與座標準確度都優於 Google，但只有韓國有資料。
+    // openapi.naver.com 不回 CORS 標頭，一律經 Apps Script 的 naver_local_search 代打。
+    const naverPlaceCandidates = async (keyword) => {
+      if (!isKoreaTrip.value) return [];
+      const q = String(keyword || '').trim();
+      if (!q) return [];
+
+      try {
+        const res = await apiGet({ action: 'naver_local_search', keyword: q });
+        const items = Array.isArray(res?.items) ? res.items : [];
+        // 沒有 place_id 或座標的候選對後續流程沒有用，先濾掉。
+        return items.filter(it => it?.place_id && it.lat != null && it.lng != null);
+      } catch (err) {
+        // Naver 掛掉只是少一組候選，不能讓整個搜尋失敗。
+        console.warn('naverPlaceCandidates failed:', err);
+        return [];
+      }
+    };
+
+    // 備案與住宿搜尋沒有走翻譯流程，這裡先翻一次，Naver 吃韓文關鍵字命中率最高。
+    const naverTranslatedCandidates = async (keyword) => {
+      if (!isKoreaTrip.value) return [];
+      const info = await translatePlaceKeyword(keyword);
+      return await naverPlaceCandidates(String(info?.keyword || keyword || '').trim());
+    };
+
+    const isNaverPlace = (item) => String(item?.source || '') === 'naver'
+      || /^naver_/.test(String(item?.place_id || ''));
+
+    // Naver 已直接給韓文店名、道路名地址與 WGS84 座標，不必也不能再問 Google Place Details。
+    // 卡片標題仍要中文，所以沿用既有的譯名快取把韓文店名翻成中文。
+    const resolveNaverPlace = async (item) => {
+      const nameKo = cleanLabelText(item?.name || item?.structured_formatting?.main_text || '');
+      const zhName = await translateTitleToChinese(nameKo);
+      return {
+        placeId: String(item?.place_id || ''),
+        displayName: zhName || nameKo,
+        nameKo,
+        address: item?.roadAddress || item?.address || '',
+        lat: item?.lat != null ? Number(item.lat) : null,
+        lng: item?.lng != null ? Number(item.lng) : null
+      };
+    };
+
     const searchPlacesWithTranslation = async (q, options = {}) => {
       const target = getTripTranslateTarget();
       const baseReq = {
@@ -365,8 +397,14 @@ createApp({
 
       const translatedInfo = await translatePlaceKeyword(q);
       const translatedKeyword = String(translatedInfo.keyword || '').trim();
+      // Naver 只有韓國資料，關鍵字用翻譯後的韓文命中率最高。
+      const naverPredictions = await naverPlaceCandidates(translatedKeyword || q);
+
       if (!translatedKeyword || translatedKeyword === q) {
-        return { predictions: mergePredictions(originalPredictions, geocodePredictions), hint: '' };
+        return {
+          predictions: mergePredictions(naverPredictions, originalPredictions, geocodePredictions),
+          hint: ''
+        };
       }
 
       const translatedReq = {
@@ -379,7 +417,8 @@ createApp({
       const translatedPredictions = await getPlacePredictionsAsync(translatedReq);
       const translatedGeocodePredictions = await geocodePlaceCandidates(translatedKeyword, options);
       return {
-        predictions: mergePredictions(translatedPredictions, originalPredictions, translatedGeocodePredictions, geocodePredictions),
+        // 在地結果排最前面。
+        predictions: mergePredictions(naverPredictions, translatedPredictions, originalPredictions, translatedGeocodePredictions, geocodePredictions),
         hint: translatedInfo.translated ? `翻譯搜尋：${translatedInfo.translated}` : ''
       };
     };
@@ -873,6 +912,13 @@ createApp({
 
     const getPlaceDetails = (placeId, language = 'zh-TW') => {
       return new Promise(async (resolve) => {
+        // Naver 的 place_id 不是 Google 的識別碼，送出去只會換到 INVALID_REQUEST。
+        // 這裡直接擋掉，呼叫端既有的 null fallback 就會接手。
+        if (/^naver_/.test(String(placeId || ''))) {
+          resolve(null);
+          return;
+        }
+
         if (!window.google || !window.google.maps) {
           await loadGoogleMaps();
         }
@@ -907,16 +953,20 @@ createApp({
       window.open(url, '_blank', 'noopener,noreferrer');
     };
 
+    // appname 是 Naver URL scheme 的必填參數，網頁要填頁面網址；
+    // Naver Map 用它做「返回原 App」，填非網址的字串會讓那條路徑失效。
+    const naverAppName = () => encodeURIComponent(String(window.location?.host || 'travel'));
+
     const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
       const title = String(nameKo || name || '地點').trim();
       const encodedTitle = encodeURIComponent(title);
 
       if (lat != null && lng != null) {
-        window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${encodedTitle}&appname=tripplanner`;
+        window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${encodedTitle}&appname=${naverAppName()}`;
         return;
       }
 
-      window.location.href = `nmap://search?query=${encodedTitle}&appname=tripplanner`;
+      window.location.href = `nmap://search?query=${encodedTitle}&appname=${naverAppName()}`;
     };
 
     const { resolveWeatherLocation, loadTripWeather, scheduleTripWeatherLoad } = TravelWeather.create({
@@ -955,13 +1005,6 @@ createApp({
       }
 
       updateMapMarkers();
-    };
-
-    const clearMapRouteLine = () => {
-      if (mapRouteLine) {
-        mapRouteLine.setMap(null);
-        mapRouteLine = null;
-      }
     };
 
     const hasMapCoordinates = (item) => {
@@ -1233,8 +1276,6 @@ createApp({
         clearTimeout(mapBounceTimer);
         mapBounceTimer = null;
       }
-      clearMapRouteLine();
-
       const displayDay = getMapDisplayDay();
       let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
 
@@ -1281,7 +1322,9 @@ createApp({
             return;
           }
 
-          const link = item.place_id
+          // Naver 的 place_id 對 Google 沒有意義，退回用座標開圖。
+          // 正常情況韓國行程走上面的 Naver 分支，這裡是旅程城市被改掉後的殘留資料。
+          const link = item.place_id && !isNaverPlace(item)
             ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
             : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
 
@@ -1338,7 +1381,9 @@ createApp({
             return;
           }
 
-          const link = item.place_id
+          // Naver 的 place_id 對 Google 沒有意義，退回用座標開圖。
+          // 正常情況韓國行程走上面的 Naver 分支，這裡是旅程城市被改掉後的殘留資料。
+          const link = item.place_id && !isNaverPlace(item)
             ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}&query_place_id=${item.place_id}`
             : `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
 
@@ -1385,8 +1430,7 @@ createApp({
         hasPoint = true;
       });
 
-      // 地圖改為純 marker 檢視：不再繪製路線，避免畫面過亂。
-      // 保留 clearMapRouteLine()，讓切換 Day 或更新 marker 時會清除舊線段。
+      // 地圖維持純 marker 檢視，避免路線線段讓小螢幕過亂。
 
       if (hasPoint) {
         mapInstance.fitBounds(bounds);
@@ -1982,6 +2026,81 @@ createApp({
 
     const currentDayHotels = computed(() => getHotelsForDay(currentDay.value));
 
+    /* ------------------------------------------------------------ 路線查詢 */
+    // 沒有大眾運輸的路線 API 可用（Naver 沒開放、NCP Maps 只有開車），
+    // 所以這裡只負責把兩個點組成深層連結，時間與班次由地圖 App 自己算。
+
+    const routePanelOpen = ref(false);
+    const routeMode = ref('transit');
+    const routeStartKey = ref('');
+    const routeGoalKey = ref('');
+
+    const ROUTE_MODES = Object.freeze([
+      { key: 'transit', label: '大眾運輸' },
+      { key: 'car', label: '開車' },
+      { key: 'walk', label: '步行' }
+    ]);
+
+    const toRoutePoint = (source, key, label) => {
+      const lat = source?.lat === '' || source?.lat == null ? null : Number(source.lat);
+      const lng = source?.lng === '' || source?.lng == null ? null : Number(source.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { key, label, name: source.name || '', nameKo: source.name_ko || source.nameKo || '', lat, lng };
+    };
+
+    // 當天可以直接選的點：行程點（依排序）在前，住宿在後。沒有座標的不列入。
+    const routePointOptions = computed(() => {
+      const day = currentDay.value;
+      const items = getDayOrderedItems(day, false)
+        .map(it => toRoutePoint(it, `item:${it.id}`, `${it.time ? formatTime(it.time) + ' ' : ''}${it.name || ''}`.trim()))
+        .filter(Boolean);
+      const hotels = getHotelsForDay(day)
+        .map(h => toRoutePoint(h, `hotel:${h.id}`, `🏠 ${h.name || ''}`.trim()))
+        .filter(Boolean);
+      return [...items, ...hotels];
+    });
+
+    const resolveRoutePoint = (key) => (key ? routePointOptions.value.find(o => o.key === key) || null : null);
+
+    const routeStartPoint = computed(() => resolveRoutePoint(routeStartKey.value));
+    const routeGoalPoint = computed(() => resolveRoutePoint(routeGoalKey.value));
+    const canOpenRoute = computed(() => !!routeStartPoint.value && !!routeGoalPoint.value
+      && routeStartKey.value !== routeGoalKey.value);
+
+    const routeMapLabel = computed(() => (isKoreaTrip.value ? 'Naver Map' : 'Google Maps'));
+
+    const openRouteUrl = (url) => {
+      if (!url) return;
+      // nmap:// 不能用 window.open，會被當成無效網址；https 則照舊開新分頁。
+      if (url.indexOf('nmap://') === 0) window.location.href = url;
+      else openMapWindow(url);
+    };
+
+    const isMobileDevice = () => /android|iphone|ipad|ipod/i.test(String(navigator.userAgent || ''));
+
+    const buildRouteUrl = ({ start, goal }) => {
+      const payload = { mode: routeMode.value, start, goal };
+      if (!isKoreaTrip.value) return TravelMaps.buildGoogleRouteUrl(payload);
+      return TravelMaps.buildNaverRouteUrl({
+        ...payload,
+        appname: String(window.location?.host || 'travel'),
+        // 桌機沒有 nmap:// 可以接，改用網頁版。
+        useApp: isMobileDevice()
+      });
+    };
+
+    const openRoute = () => {
+      if (!routeStartPoint.value) { alert('請先選擇起點'); return; }
+      if (!routeGoalPoint.value) { alert('請先選擇終點'); return; }
+      if (!canOpenRoute.value) { alert('起點與終點不能是同一個地點'); return; }
+
+      openRouteUrl(buildRouteUrl({ start: routeStartPoint.value, goal: routeGoalPoint.value }));
+    };
+
+    const toggleRoutePanel = () => {
+      routePanelOpen.value = !routePanelOpen.value;
+    };
+
     let searchTimeout = null;
 
     const searchPlacesInput = async () => {
@@ -2113,7 +2232,15 @@ createApp({
         let nameKo = '';
         let address = selectedPlaceSnapshot?.address || selectedPlaceSnapshot?.description || '';
 
-        if (selectedPlaceSnapshot?.place_id) {
+        if (isNaverPlace(selectedPlaceSnapshot)) {
+          const naver = await resolveNaverPlace(selectedPlaceSnapshot);
+          placeId = naver.placeId;
+          displayName = naver.displayName || placeName;
+          nameKo = naver.nameKo;
+          address = naver.address;
+          if (naver.lat != null) lat = naver.lat;
+          if (naver.lng != null) lng = naver.lng;
+        } else if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
 
           const normalPlace = await getPlaceDetails(placeId, 'zh-TW');
@@ -2238,7 +2365,8 @@ createApp({
       isSearching: alternativeIsSearching,
       selectedPlaceData: alternativeSelectedPlaceData,
       ensureService: ensureAutocompleteService,
-      clearSelectionOnType: true
+      clearSelectionOnType: true,
+      extraCandidates: naverTranslatedCandidates
     });
 
     const selectAlternativePlace = (item) => {
@@ -2271,15 +2399,17 @@ createApp({
         day: d,
         name,
         type: '景點',
+        order: null,
         lat: null,
         lng: null,
         place_id: selectedPlaceSnapshot?.place_id || '',
         address: '',
         message: messageSnapshot,
+        is_alternative: 'v',
         created_at: new Date().toISOString()
       };
 
-      alternatives.value.unshift(alt);
+      itinerary.value.unshift(normalizeItineraryRecord(alt));
 
       alternativeSearchQuery.value = '';
       alternativeSearchResults.value = [];
@@ -2296,7 +2426,14 @@ createApp({
         let displayName = name;
         let address = '';
 
-        if (selectedPlaceSnapshot?.place_id) {
+        if (isNaverPlace(selectedPlaceSnapshot)) {
+          const naver = await resolveNaverPlace(selectedPlaceSnapshot);
+          placeId = naver.placeId;
+          displayName = naver.displayName || name;
+          address = naver.address;
+          lat = naver.lat;
+          lng = naver.lng;
+        } else if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
 
           const place = await getPlaceDetails(placeId, 'zh-TW');
@@ -2326,21 +2463,22 @@ createApp({
           });
         }
 
-        const updatedAlt = normalizeAlternativeRecord({
+        const updatedAlt = normalizeItineraryRecord({
           ...alt,
           name: displayName || name,
           lat,
           lng,
           place_id: placeId,
-          address
+          address,
+          is_alternative: 'v'
         });
 
-        const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
         if (idx !== -1) {
-          alternatives.value.splice(idx, 1, updatedAlt);
+          itinerary.value.splice(idx, 1, updatedAlt);
         }
 
-        const res = await postJSON({ action:'add', type:'alternatives', data: updatedAlt });
+        const res = await postJSON({ action:'add', type:'itinerary', data: updatedAlt });
         if (res && res.status === 'error') {
           throw new Error(res.message || 'add alternative failed');
         }
@@ -2349,8 +2487,8 @@ createApp({
       } catch (err) {
         console.error('addAlternative sync failed:', err);
 
-        const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
-        if (idx !== -1) alternatives.value.splice(idx, 1);
+        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) itinerary.value.splice(idx, 1);
 
         scheduleTripCacheSave();
         alert('備案新增失敗，已取消剛剛新增的資料，請稍後再試。');
@@ -2363,19 +2501,19 @@ createApp({
 
       isDeletingAlternative.value = true;
 
-      const idx = alternatives.value.findIndex(x => String(x.id) === String(id));
-      const backup = idx !== -1 ? { ...alternatives.value[idx] } : null;
-      if (idx !== -1) alternatives.value.splice(idx, 1);
+      const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
+      const backup = idx !== -1 ? { ...itinerary.value[idx] } : null;
+      if (idx !== -1) itinerary.value.splice(idx, 1);
       scheduleTripCacheSave();
 
       try {
-        const res = await postJSON({ action:'del', type:'alternatives', id });
+        const res = await postJSON({ action:'del', type:'itinerary', id });
         if (res && res.status === 'error') {
           throw new Error(res.message || 'delete alternative failed');
         }
       } catch (err) {
         console.error('removeAlternative failed:', err);
-        if (backup) alternatives.value.splice(idx < 0 ? alternatives.value.length : idx, 0, backup);
+        if (backup) itinerary.value.splice(idx < 0 ? itinerary.value.length : idx, 0, backup);
         scheduleTripCacheSave();
         alert('備案刪除失敗，請稍後再試。');
       } finally {
@@ -2555,7 +2693,7 @@ createApp({
         return;
       }
 
-      if (p.place_id) {
+      if (p.place_id && !isNaverPlace(p)) {
         openMapWindow(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=${p.place_id}`);
         return;
       }
@@ -2745,29 +2883,7 @@ createApp({
       return names.map(name => ({ name, balance: balances[name] }));
     });
 
-    const hasExpenseFilters = computed(() =>
-      expenseFilter.value.day !== 'all' ||
-      expenseFilter.value.category !== 'all' ||
-      expenseFilter.value.payer !== 'all'
-    );
-
-    const moneyDays = computed(() => {
-      const set = new Set();
-      for (let d = 1; d <= totalDays.value; d++) set.add(d);
-      normalExpenseRecords.value.forEach(e => set.add(e.day ? parseInt(e.day, 10) || 1 : 1));
-      return Array.from(set).sort((a, b) => a - b);
-    });
-
-    const filteredExpenses = computed(() => {
-      return normalExpenseRecords.value.filter(e => {
-        const dayOk = expenseFilter.value.day === 'all' || String(e.day || 1) === String(expenseFilter.value.day);
-        const catOk = expenseFilter.value.category === 'all' || (e.category || '其他') === expenseFilter.value.category;
-        const payerOk = expenseFilter.value.payer === 'all' || e.payer === expenseFilter.value.payer;
-        return dayOk && catOk && payerOk;
-      });
-    });
-
-    const filteredExpenseTotal = computed(() => filteredExpenses.value.reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+    const filteredExpenses = computed(() => normalExpenseRecords.value);
 
     const filteredCategoryAnalysis = computed(() => {
       const stats = {};
@@ -2806,7 +2922,8 @@ createApp({
       isSearching: hotelIsSearching,
       selectedPlaceData: hotelSelectedPlaceData,
       ensureService: ensureAutocompleteService,
-      types: ['establishment']
+      types: ['establishment'],
+      extraCandidates: naverTranslatedCandidates
     });
 
     const selectHotelPlace = (item) => {
@@ -2825,7 +2942,8 @@ createApp({
       selectedPlaceData: editHotelSelectedPlaceData,
       ensureService: ensureAutocompleteService,
       types: ['establishment'],
-      clearSelectionOnType: true
+      clearSelectionOnType: true,
+      extraCandidates: naverTranslatedCandidates
     });
 
     const selectEditHotelPlace = async (item) => {
@@ -2844,7 +2962,13 @@ createApp({
       editHotelSelectedPlaceData.value = selected;
 
       try {
-        if (item.place_id) {
+        if (isNaverPlace(item)) {
+          const naver = await resolveNaverPlace(item);
+          selected.name = naver.displayName || selected.name;
+          selected.address = naver.address || selected.address;
+          selected.lat = naver.lat;
+          selected.lng = naver.lng;
+        } else if (item.place_id) {
           const place = await getPlaceDetails(item.place_id, 'zh-TW');
           if (place) {
             selected.name = place.name || selected.name;
@@ -2893,7 +3017,14 @@ createApp({
         let lat = null;
         let lng = null;
 
-        if (placeId) {
+        if (isNaverPlace(hotelSelectedPlaceData.value)) {
+          const naver = await resolveNaverPlace(hotelSelectedPlaceData.value);
+          placeId = naver.placeId;
+          displayName = naver.displayName || displayName;
+          address = naver.address;
+          lat = naver.lat;
+          lng = naver.lng;
+        } else if (placeId) {
           const place = await getPlaceDetails(placeId, 'zh-TW');
           if (place) {
             displayName = place.name || displayName;
@@ -3816,7 +3947,7 @@ createApp({
       people, itinerary, expenses, sharedWalletTransactions, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
       walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
-      expenseFilter, categories, itineraryTypes,
+      categories, itineraryTypes,
       searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
       isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
@@ -3832,7 +3963,10 @@ createApp({
 
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
-      searchPlacesInput, useCoordinateInput, selectPlace,
+      searchPlacesInput, useCoordinateInput, selectPlace, isNaverPlace,
+      routePanelOpen, toggleRoutePanel, routeMode, routeModes: ROUTE_MODES,
+      routeStartKey, routeGoalKey, routePointOptions,
+      canOpenRoute, openRoute, routeMapLabel,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,
       getItineraryType, getItineraryTypeTone, getItineraryCategoryLabel, getItineraryIcon,
       getItineraryNote, getTransportSummary,
@@ -3855,8 +3989,8 @@ createApp({
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
       sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
-      filteredExpenses, filteredExpenseTotal, filteredCategoryAnalysis,
-      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis, moneyDays, hasExpenseFilters,
+      filteredExpenses, filteredCategoryAnalysis,
+      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis,
 
       exportItinerary, downloadBackupHtml, isKoreaTrip,
 

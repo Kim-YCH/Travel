@@ -672,6 +672,117 @@ html, body {
       background-color: #f0f9ff;
     }
 
+    /* ------------------------------------------------------------ 路線查詢 */
+
+    .itinerary-route-card {
+      padding: 0;
+      overflow: visible;
+    }
+
+    .route-panel-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px 14px;
+      background: none;
+      border: 0;
+      font-weight: 800;
+      font-size: 14px;
+      color: #1e3a8a;
+      cursor: pointer;
+    }
+
+    .route-panel-caret {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .route-panel-body {
+      padding: 0 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .route-field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .route-field-label {
+      flex-shrink: 0;
+      width: 34px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #64748b;
+    }
+
+    .route-select {
+      flex: 1;
+      min-width: 0;
+      height: 42px;
+      padding: 0 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #fff;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .route-mode-switch {
+      display: flex;
+      gap: 0;
+      border: 1px solid #dbeafe;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .route-mode-btn {
+      flex: 1;
+      height: 38px;
+      border: 0;
+      background: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      color: #475569;
+      cursor: pointer;
+    }
+
+    .route-mode-btn + .route-mode-btn {
+      border-left: 1px solid #dbeafe;
+    }
+
+    .route-mode-btn-active {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .route-open-btn {
+      width: 100%;
+      height: 46px;
+      border: 0;
+      border-radius: 10px;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .route-open-btn:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+
+    /* Naver 在地結果的圖釘轉成藍色，和 Google 的紅色圖釘區分。
+       各平台的 📍 emoji 都是紅色系（色相接近 0），hue-rotate 後形狀與大小完全不變。 */
+    .suggestion-pin-naver {
+      filter: hue-rotate(205deg) saturate(1.25);
+    }
+
     .checkbox-wrapper input:checked + div {
       background-color: #dbeafe;
       color: #1e40af;

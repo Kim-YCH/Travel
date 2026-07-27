@@ -51,7 +51,6 @@
       const parsed = JSON.parse(decodeURIComponent(encoded));
       return { transport: normalizeTransportDetails(parsed), note };
     } catch (err) {
-      console.warn('parseItineraryMessage failed:', err);
       return { transport: createEmptyTransportDetails(), note: raw };
     }
   };

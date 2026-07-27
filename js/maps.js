@@ -109,10 +109,69 @@
     };
   };
 
+  /* ------------------------------------------------------------ 路線深層連結 */
+
+  const NAVER_APP_PATH = Object.freeze({ transit: 'public', car: 'car', walk: 'walk' });
+  const NAVER_WEB_MODE = Object.freeze({ transit: 'transit', car: 'car', walk: 'walk' });
+  const GOOGLE_TRAVEL_MODE = Object.freeze({ transit: 'transit', car: 'driving', walk: 'walking' });
+
+  const normalizeRoutePoint = (point) => {
+    if (!point) return null;
+    const lat = point.lat === '' || point.lat == null ? null : Number(point.lat);
+    const lng = point.lng === '' || point.lng == null ? null : Number(point.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    // 韓文名優先：Naver 的標籤用它顯示比較準。
+    const name = String(point.nameKo || point.name || '').trim();
+    return { lat, lng, name };
+  };
+
+  /**
+   * Naver Map 路線連結。起訖點都是必要的，缺一個就回空字串。
+   *
+   * - `useApp` 為真時輸出 `nmap://` scheme（只有裝了 App 的行動裝置能開）；
+   *   為假時輸出 map.naver.com 網址，給桌機用。
+   * - App scheme 是官方文件明列的；**網頁版路徑格式沒有官方文件**，屬盡力而為的退路。
+   * - 注意網頁版是「經度,緯度」，和 App scheme 的 lat/lng 參數順序相反。
+   */
+  const buildNaverRouteUrl = ({ mode = 'transit', start = null, goal = null, appname = '', useApp = true } = {}) => {
+    const origin = normalizeRoutePoint(start);
+    const target = normalizeRoutePoint(goal);
+    if (!origin || !target) return '';
+
+    if (!useApp) {
+      const seg = (p) => `${p.lng},${p.lat},${encodeURIComponent(p.name)}`;
+      return `https://map.naver.com/p/directions/${seg(origin)}/${seg(target)}/-/${NAVER_WEB_MODE[mode] || 'transit'}`;
+    }
+
+    const params = [
+      `slat=${origin.lat}`, `slng=${origin.lng}`, `sname=${encodeURIComponent(origin.name)}`,
+      `dlat=${target.lat}`, `dlng=${target.lng}`, `dname=${encodeURIComponent(target.name)}`,
+      // appname 是必填參數，網頁要填頁面網址，Naver Map 用它做「返回原 App」。
+      `appname=${encodeURIComponent(appname || 'travel')}`
+    ];
+
+    return `nmap://route/${NAVER_APP_PATH[mode] || 'public'}?${params.join('&')}`;
+  };
+
+  /**
+   * Google Maps 路線連結（非韓國行程用）。同一個 https 網址在手機上會直接開 App。
+   */
+  const buildGoogleRouteUrl = ({ mode = 'transit', start = null, goal = null } = {}) => {
+    const origin = normalizeRoutePoint(start);
+    const target = normalizeRoutePoint(goal);
+    if (!origin || !target) return '';
+
+    return 'https://www.google.com/maps/dir/?'
+      + `api=1&origin=${origin.lat},${origin.lng}&destination=${target.lat},${target.lng}`
+      + `&travelmode=${GOOGLE_TRAVEL_MODE[mode] || 'transit'}`;
+  };
+
   window.TravelMaps = Object.freeze({
     normalizeHexColor,
     shadeHexColor,
     makeMapPinIcon,
-    makeHotelMapPinIcon
+    makeHotelMapPinIcon,
+    buildNaverRouteUrl,
+    buildGoogleRouteUrl
   });
 })(window);
