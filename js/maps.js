@@ -88,9 +88,9 @@
 
     return {
       url: svgDataUrl(svg),
-      scaledSize: new g.Size(16, 24),
-      anchor: new g.Point(8, 24),
-      labelOrigin: new g.Point(8, 9)
+      scaledSize: new g.Size(28, 42),
+      anchor: new g.Point(14, 42),
+      labelOrigin: new g.Point(14, 16)
     };
   };
 
@@ -103,9 +103,9 @@
 
     return {
       url: svgDataUrl(svg),
-      scaledSize: new g.Size(24, 38),
-      anchor: new g.Point(12, 38),
-      labelOrigin: new g.Point(12, 13)
+      scaledSize: new g.Size(34, 54),
+      anchor: new g.Point(17, 54),
+      labelOrigin: new g.Point(17, 19)
     };
   };
 

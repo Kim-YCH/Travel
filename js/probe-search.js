@@ -123,7 +123,7 @@
         position: { lat, lng },
         map,
         title: place.name || '探點',
-        label: { text: '🔎', fontSize: '10px' },
+        label: { text: '🔎', fontSize: '13px' },
         icon: makeMapPinIcon(PROBE_MARKER_COLOR),
         zIndex: 1200
       });

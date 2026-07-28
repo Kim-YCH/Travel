@@ -1292,7 +1292,7 @@ createApp({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
           icon: makeMapPinIcon('#ef4444'),
-          label: { text: String(index + 1), color: '#1f2937', fontSize: '7px', fontWeight: '800' },
+          label: { text: String(index + 1), color: '#1f2937', fontSize: '12px', fontWeight: '800' },
           zIndex: 850,
           title: item.name
         });
@@ -1412,7 +1412,7 @@ createApp({
         const marker = new google.maps.Marker({
           position: { lat: Number(hotel.lat), lng: Number(hotel.lng) },
           map: mapInstance,
-          label: { text: '🏠', fontSize: '15px' },
+          label: { text: '🏠', fontSize: '17px' },
           icon: makeHotelMapPinIcon('#0d9488'),
           zIndex: 900,
           title: hotel.name || '住宿'
