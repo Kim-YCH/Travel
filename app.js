@@ -72,6 +72,8 @@ createApp({
     let todayRefreshTimer = null;
     let moneyRefreshTimer = null;
     let syncRetryTimer = null;
+    let mutationWriteChain = Promise.resolve();
+    let pendingMutationWrites = 0;
     let lastMoneyRefreshAt = 0;
     const MONEY_REFRESH_INTERVAL_MS = 60 * 1000;
     const MONEY_REFRESH_THROTTLE_MS = 15 * 1000;
@@ -738,11 +740,22 @@ createApp({
       savePendingQueue();
     };
 
+    const enqueueMutationWrite = (write) => {
+      pendingMutationWrites += 1;
+      const request = mutationWriteChain.then(write, write);
+      mutationWriteChain = request.catch(() => undefined);
+      return request.finally(() => {
+        pendingMutationWrites -= 1;
+      });
+    };
+
     const flushPendingQueue = async () => {
       if (isFlushingQueue.value || !currentTrip.value?.id) return;
       if (!pendingSyncQueue.value.length) {
-        syncStatus.value = 'synced';
-        syncMessage.value = '';
+        if (pendingMutationWrites === 0) {
+          syncStatus.value = 'synced';
+          syncMessage.value = '';
+        }
         return;
       }
 
@@ -752,7 +765,7 @@ createApp({
       const remain = [];
       for (const job of pendingSyncQueue.value) {
         try {
-          const res = await rawPostJSON(job.payload);
+          const res = await enqueueMutationWrite(() => rawPostJSON(job.payload));
           if (res && res.status === 'error') {
             throw new Error(res.message || 'sync failed');
           }
@@ -778,8 +791,9 @@ createApp({
       if (payload?.action) syncStatus.value = 'syncing';
 
       try {
-        const res = await rawPostJSON(payload);
-        if (payload?.action && pendingSyncQueue.value.length === 0) {
+        const res = await enqueueMutationWrite(() => rawPostJSON(payload));
+        if (res && res.status === 'error') throw new Error(res.message || 'sync failed');
+        if (payload?.action && pendingSyncQueue.value.length === 0 && pendingMutationWrites === 0) {
           syncStatus.value = 'synced';
           syncMessage.value = '已同步';
         }
@@ -2174,12 +2188,11 @@ createApp({
       if(!placeName) return;
 
       isAddingPlace.value = true;
-      setTimeout(() => {
-        isAddingPlace.value = false;
-      }, 500);
 
       const id = generateId();
       const d = currentDay.value;
+      const tripId = currentTrip.value.id;
+      const tripCity = currentTrip.value.city || '';
       const selectedPlaceSnapshot = selectedPlaceData.value ? { ...selectedPlaceData.value } : null;
       const selectedLatSnapshot = selectedLat.value;
       const selectedLngSnapshot = selectedLng.value;
@@ -2199,7 +2212,7 @@ createApp({
         place_id: selectedPlaceSnapshot?.place_id || '',
         message: noteSnapshot,
         time: timeSnapshot,
-        trip_id: currentTrip.value.id,
+        trip_id: tripId,
         is_alternative: ''
       };
 
@@ -2225,8 +2238,14 @@ createApp({
       scheduleSortableInit();
       updateMapMarkers();
       scheduleTripCacheSave();
+      const initialAddPromise = postJSON({ action:'add', type:'itinerary', data: item });
+      const initialOrderPromise = saveOrderToDB(tripId, d, ids);
+      isAddingPlace.value = false;
 
       try {
+        await initialAddPromise;
+        await initialOrderPromise;
+
         let lat = item.lat;
         let lng = item.lng;
         let placeId = item.place_id || '';
@@ -2277,7 +2296,7 @@ createApp({
           const geocoder = new google.maps.Geocoder();
           await new Promise((resolve) => {
             geocoder.geocode(
-              { address: placeName + (currentTrip.value.city ? " " + currentTrip.value.city : "") },
+              { address: placeName + (tripCity ? " " + tripCity : "") },
               (results, status) => {
                 if (status === 'OK' && results && results[0]) {
                   lat = results[0].geometry.location.lat();
@@ -2303,7 +2322,7 @@ createApp({
           place_id: placeId,
           message: noteSnapshot,
           time: timeSnapshot,
-          trip_id: currentTrip.value.id,
+          trip_id: tripId,
           order: item.order,
           is_alternative: ''
         };
@@ -2313,12 +2332,11 @@ createApp({
           itinerary.value.splice(idx, 1, updatedItem);
         }
 
-        const res = await postJSON({ action:'add', type:'itinerary', data: updatedItem });
+        const res = await postJSON({ action:'edit', type:'itinerary', data: updatedItem });
         if (res && res.status === 'error') {
           throw new Error(res.message || 'add itinerary failed');
         }
 
-        await saveOrderToDB(currentTrip.value.id, d, ids);
         updateMapMarkers();
         scheduleTripCacheSave();
       } catch (err) {
@@ -2337,6 +2355,8 @@ createApp({
         scheduleTripCacheSave();
 
         alert('行程新增失敗，已取消剛剛新增的資料，請稍後再試。');
+      } finally {
+        isAddingPlace.value = false;
       }
     };
 
@@ -3840,7 +3860,9 @@ createApp({
       syncMessage.value = '';
 
       try {
+        await mutationWriteChain;
         await flushPendingQueue();
+        await mutationWriteChain;
         if (pendingSyncQueue.value.length) return false;
 
         const refreshed = await fetchData({
