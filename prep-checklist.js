@@ -1,10 +1,10 @@
-// version: 20260728.1
+// version: 20260728.2
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260728.1';
+  const VERSION = '20260728.2';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
@@ -1310,7 +1310,8 @@
     input.type = 'file';
     input.accept = 'image/*';
     input.multiple = true;
-    input.setAttribute('capture', 'environment'); // 手機優先開相機；桌機忽略。
+    // 不設 capture：capture 會強制開相機、擋掉相簿選項。留空手機才會跳出
+    // 「拍照 / 從相簿選」的原生選單，兩種來源都能用。
     input.style.display = 'none';
     input.addEventListener('change', () => {
       const files = Array.from(input.files || []);
@@ -1344,21 +1345,19 @@
   // 讀檔、修正方向、Canvas 壓成 JPEG，逐步降品質/尺寸直到 <= 1.2MB。
   async function compressImage(file) {
     const bitmap = await fileToBitmap(file);
-    let width = bitmap.width;
-    let height = bitmap.height;
-    const longest = Math.max(width, height);
-    if (longest > IMAGE_MAX_EDGE) {
-      const scale = IMAGE_MAX_EDGE / longest;
-      width = Math.round(width * scale);
-      height = Math.round(height * scale);
-    }
+    const srcW = bitmap.width;
+    const srcH = bitmap.height;
+    const longest = Math.max(srcW, srcH);
+    let scale = longest > IMAGE_MAX_EDGE ? IMAGE_MAX_EDGE / longest : 1;
 
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    if (bitmap.close) bitmap.close();
+    // 每次都從仍開啟的原始 bitmap 重畫到新尺寸，縮圖迴圈才不會畫到已關閉的來源。
+    const drawAt = (s) => {
+      canvas.width = Math.max(1, Math.round(srcW * s));
+      canvas.height = Math.max(1, Math.round(srcH * s));
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    };
+    drawAt(scale);
 
     let quality = IMAGE_INITIAL_QUALITY;
     let dataUrl = canvas.toDataURL('image/jpeg', quality);
@@ -1368,11 +1367,13 @@
       dataUrl = canvas.toDataURL('image/jpeg', quality);
     }
     while (dataUrlBytes(dataUrl) > IMAGE_TARGET_BYTES && canvas.width > 480) {
-      canvas.width = Math.round(canvas.width * 0.85);
-      canvas.height = Math.round(canvas.height * 0.85);
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      scale *= 0.85;
+      drawAt(scale);
       dataUrl = canvas.toDataURL('image/jpeg', quality);
     }
+
+    // 所有繪製完成後才釋放來源 bitmap。
+    if (bitmap.close) bitmap.close();
 
     return {
       base64: dataUrl.split(',')[1] || '',
