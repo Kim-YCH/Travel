@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const VERSION = '20260728.3';
+const VERSION = '20260728.4';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const CDN_CACHE = `travel-cdn-${VERSION}`;
 
@@ -80,7 +80,8 @@ self.addEventListener('install', (event) => {
       }
     }));
 
-    await self.skipWaiting();
+    // 刻意不自動 skipWaiting：新版安裝好後安靜等待，避免在使用者操作到一半時
+    // 接手並觸發整頁重載。使用者按「刷新版本」時會送 TRAVEL_SKIP_WAITING 才套用。
   })());
 });
 

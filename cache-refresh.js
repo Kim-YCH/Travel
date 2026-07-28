@@ -1,8 +1,8 @@
-// version: 20260728.3
+// version: 20260728.4
 // 只有使用者明確按「刷新版本 / 重新載入」時才整頁 reload。
 // 平常資料新增、修改、刪除都應交給各模組做局部更新。
 (function () {
-  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260728.3';
+  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260728.4';
 
   async function clearBrowserCaches() {
     try {
@@ -27,13 +27,8 @@
       });
     });
 
-    // 新版 SW 接手後重整一次，避免新舊資源混用。
-    let reloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloading) return;
-      reloading = true;
-      window.location.reload();
-    });
+    // 刻意不在這裡自動 reload。新版 SW 會安靜等待，只有使用者按「刷新版本」才套用並重載。
+    // （先前的 controllerchange 自動 reload 會在每次部署後，使用者一開網站就把畫面重置回首頁／第一天。）
   }
 
   async function activateWaitingServiceWorker() {
