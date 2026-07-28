@@ -1,10 +1,10 @@
-// version: 20260723.2
+// version: 20260728.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260723.2';
+  const VERSION = '20260728.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
@@ -29,6 +29,15 @@
   const boundRoots = new WeakSet();
   const AUTO_REFRESH_MS = 60000;
   const AUTO_CHECK_MS = 30000;
+
+  // 品項圖片：與清單文字狀態分開管理。imagesByItem[itemId] = [imgObj,...]
+  const imagesByItem = {};
+  let imagesLoadedForOwner = null;
+  let sharedFileInput = null;
+  let pendingUploadItemId = '';
+  const IMAGE_MAX_EDGE = 1600;
+  const IMAGE_TARGET_BYTES = 1.2 * 1024 * 1024;
+  const IMAGE_INITIAL_QUALITY = 0.82;
 
   function safeJsonParse(value, fallback) {
     try { return JSON.parse(value); } catch (_) { return fallback; }
@@ -345,9 +354,12 @@
       updateEmptyUI();
       updateStatsUI();
       updateSyncUI();
+      initAllThumbSortables();
     } else {
       render();
     }
+    // 首次或換人後補抓圖片；loadAllImages 內有 owner 去重，不會重複打。
+    if (selectedOwner && imagesLoadedForOwner !== selectedOwner) loadAllImages();
   }
 
   function refreshChecklistFromDatabase() {
@@ -358,6 +370,7 @@
       return;
     }
     loadFromSheet({ manual: true, partial: true });
+    loadAllImages(true);
   }
 
   async function loadFromSheet(options = {}) {
@@ -615,6 +628,25 @@
       .prep-section-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
       @media (max-width: 420px) { .prep-add-row { grid-template-columns: 1fr; } .prep-owner-row { grid-template-columns: 1fr; } .prep-item { flex-wrap: nowrap; } }
       .prep-item.is-checked .prep-item-text { text-decoration: line-through; color: #94a3b8; }
+      .prep-item-wrap { border-top: 1px solid #f1f5f9; }
+      .prep-item-wrap:first-of-type { border-top: none; }
+      .prep-item-wrap .prep-item { border-top: none; }
+      .prep-item-images:empty { display: none; }
+      .prep-item-images { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px 30px; scrollbar-width: none; }
+      .prep-item-images::-webkit-scrollbar { display: none; }
+      .prep-thumb { position: relative; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; background: #f1f5f9; box-shadow: 0 1px 3px rgba(15,23,42,.12); }
+      .prep-thumb.is-uploading { opacity: .55; }
+      .prep-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+      .prep-thumb-delete { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border: none; border-radius: 999px; background: rgba(15,23,42,.62); color: #fff; font-size: 11px; line-height: 20px; padding: 0; cursor: pointer; }
+      .prep-thumb-spinner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #475569; background: rgba(255,255,255,.65); }
+      .prep-image-add.is-busy { opacity: .5; pointer-events: none; }
+      .prep-img-viewer { position: fixed; inset: 0; z-index: 100000; background: rgba(2,6,23,.92); display: flex; align-items: center; justify-content: center; }
+      .prep-img-viewer img { max-width: 92vw; max-height: 82vh; border-radius: 8px; }
+      .prep-img-viewer-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: none; border-radius: 999px; background: rgba(255,255,255,.16); color: #fff; font-size: 22px; cursor: pointer; }
+      .prep-img-viewer-prev { left: 12px; }
+      .prep-img-viewer-next { right: 12px; }
+      .prep-img-viewer-close { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 16px; width: 40px; height: 40px; border: none; border-radius: 999px; background: rgba(255,255,255,.16); color: #fff; font-size: 20px; cursor: pointer; }
+      .prep-img-viewer-count { position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); left: 0; right: 0; text-align: center; color: #e2e8f0; font-size: 13px; }
       .prep-muted { color: #94a3b8; font-size: 13px; padding: 8px 0; }
       .prep-bottom-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
       .prep-action-btn.secondary { background: #f1f5f9; color: #475569; }
@@ -627,13 +659,38 @@
   }
 
   function renderItem(item) {
+    const id = escapeHtml(item.id);
     return `
-      <div class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
-        <input type="checkbox" ${item.checked ? 'checked' : ''} ${!isBrowserOnline() ? 'disabled' : ''} />
-        <span class="prep-item-text">${escapeHtml(item.text)}</span>
-        <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
-        <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕</button>
+      <div class="prep-item-wrap" data-item-id="${id}">
+        <div class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${id}">
+          <input type="checkbox" ${item.checked ? 'checked' : ''} ${!isBrowserOnline() ? 'disabled' : ''} />
+          <span class="prep-item-text">${escapeHtml(item.text)}</span>
+          <button class="prep-icon-btn prep-image-add" title="加圖片" type="button">📷</button>
+          <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
+          <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕</button>
+        </div>
+        ${renderItemImages(item.id)}
       </div>`;
+  }
+
+  // 縮圖列：沒有圖片時輸出空容器（CSS :empty 收合，不占版面）。
+  function renderItemImages(itemId) {
+    const id = escapeHtml(itemId);
+    const list = imagesByItem[itemId] || [];
+    const thumbs = list.map(img => {
+      const url = escapeHtml(img.url || '');
+      const imageId = escapeHtml(img.id || '');
+      return `<div class="prep-thumb" data-item-id="${id}" data-image-id="${imageId}">
+          <img src="${url}" alt="準備品項圖片" loading="lazy" />
+          <button class="prep-thumb-delete" title="刪除圖片" type="button" aria-label="刪除圖片">✕</button>
+        </div>`;
+    }).join('');
+    const uploading = uploadingByItem[itemId] || 0;
+    let spinners = '';
+    for (let i = 0; i < uploading; i++) {
+      spinners += '<div class="prep-thumb is-uploading"><div class="prep-thumb-spinner">上傳中</div></div>';
+    }
+    return `<div class="prep-item-images" data-item-id="${id}">${thumbs}${spinners}</div>`;
   }
 
   function renderSection(section) {
@@ -825,9 +882,12 @@
     syncStatus = selectedOwner ? '讀取資料庫' : '';
     lastSyncedAt = '';
     lastRemoteUpdatedAt = '';
+    // 換人就清掉上一位的圖片快取，避免短暫顯示錯人的圖。
+    Object.keys(imagesByItem).forEach(k => delete imagesByItem[k]);
+    imagesLoadedForOwner = null;
     loadLocalState();
     render();
-    if (selectedOwner) loadFromSheet({ replacePending: true });
+    if (selectedOwner) { loadFromSheet({ replacePending: true }); loadAllImages(true); }
   }
 
   function addSectionFromInputs() {
@@ -1171,6 +1231,25 @@
       if (target.closest('.prep-delete-section')) { deleteSection(target.closest('.prep-delete-section')); return; }
       if (target.closest('.prep-edit-item')) { event.preventDefault(); editItem(target.closest('.prep-edit-item')); return; }
       if (target.closest('.prep-delete-item')) { event.preventDefault(); deleteItem(target.closest('.prep-delete-item')); return; }
+      if (target.closest('.prep-image-add')) {
+        const itemEl = target.closest('.prep-item');
+        if (itemEl) onImageAddClick(itemEl.dataset.itemId);
+        return;
+      }
+      if (target.closest('.prep-thumb-delete')) {
+        event.preventDefault();
+        const thumb = target.closest('.prep-thumb');
+        if (thumb) deleteImage(thumb.dataset.itemId, thumb.dataset.imageId);
+        return;
+      }
+      if (target.closest('.prep-thumb') && target.tagName === 'IMG') {
+        const thumb = target.closest('.prep-thumb');
+        const itemId = thumb.dataset.itemId;
+        const list = imagesByItem[itemId] || [];
+        const idx = list.findIndex(img => String(img.id) === String(thumb.dataset.imageId));
+        openImageViewer(itemId, idx < 0 ? 0 : idx);
+        return;
+      }
       if (target.closest('.prep-clear-checks')) { clearChecks(); return; }
       if (target.closest('.prep-delete-all')) { deleteAll(); }
     });
@@ -1187,6 +1266,284 @@
       if (target.matches('.prep-new-section-title')) { event.preventDefault(); addSectionFromInputs(); return; }
       if (target.matches('.prep-new-item-input')) { event.preventDefault(); addItemFromInput(target); }
     });
+  }
+
+  /* ===================== 品項圖片 ===================== */
+
+  const uploadingByItem = {};
+
+  function groupImagesByItem(list) {
+    const map = {};
+    (list || []).forEach(img => {
+      const itemId = String(img.item_id || '').trim();
+      if (!itemId) return;
+      if (!map[itemId]) map[itemId] = [];
+      map[itemId].push(img);
+    });
+    Object.keys(map).forEach(itemId => {
+      map[itemId].sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+    });
+    return map;
+  }
+
+  async function loadAllImages(force) {
+    if (!API_URL || !selectedOwner || !isBrowserOnline()) return;
+    if (!force && imagesLoadedForOwner === selectedOwner) return;
+    const requestOwner = selectedOwner;
+    try {
+      const res = await apiPost(buildBasePayload('prep_item_images_get'));
+      if (selectedOwner !== requestOwner) return;
+      if (res && res.status === 'success' && Array.isArray(res.images)) {
+        Object.keys(imagesByItem).forEach(k => delete imagesByItem[k]);
+        Object.assign(imagesByItem, groupImagesByItem(res.images));
+        imagesLoadedForOwner = requestOwner;
+        refreshPersonalArea();
+      }
+    } catch (err) {
+      console.warn('load prep images failed:', err);
+    }
+  }
+
+  function ensureSharedFileInput() {
+    if (sharedFileInput) return sharedFileInput;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.setAttribute('capture', 'environment'); // 手機優先開相機；桌機忽略。
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files || []);
+      const itemId = pendingUploadItemId;
+      input.value = '';
+      if (itemId && files.length) handleFilesSelected(itemId, files);
+    });
+    document.body.appendChild(input);
+    sharedFileInput = input;
+    return input;
+  }
+
+  function onImageAddClick(itemId) {
+    if (!isBrowserOnline()) {
+      alert('圖片需連線後才能上傳。');
+      return;
+    }
+    if (!selectedOwner) return;
+    pendingUploadItemId = itemId;
+    ensureSharedFileInput().click();
+  }
+
+  async function handleFilesSelected(itemId, files) {
+    for (let i = 0; i < files.length; i++) {
+      // 逐張序列上傳，避免一次塞爆 Apps Script 與網路。
+      // eslint-disable-next-line no-await-in-loop
+      await uploadOneImage(itemId, files[i]);
+    }
+  }
+
+  // 讀檔、修正方向、Canvas 壓成 JPEG，逐步降品質/尺寸直到 <= 1.2MB。
+  async function compressImage(file) {
+    const bitmap = await fileToBitmap(file);
+    let width = bitmap.width;
+    let height = bitmap.height;
+    const longest = Math.max(width, height);
+    if (longest > IMAGE_MAX_EDGE) {
+      const scale = IMAGE_MAX_EDGE / longest;
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    if (bitmap.close) bitmap.close();
+
+    let quality = IMAGE_INITIAL_QUALITY;
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+    // 先降品質；仍過大時縮尺寸再試。
+    while (dataUrlBytes(dataUrl) > IMAGE_TARGET_BYTES && quality > 0.4) {
+      quality -= 0.12;
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+    while (dataUrlBytes(dataUrl) > IMAGE_TARGET_BYTES && canvas.width > 480) {
+      canvas.width = Math.round(canvas.width * 0.85);
+      canvas.height = Math.round(canvas.height * 0.85);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    return {
+      base64: dataUrl.split(',')[1] || '',
+      mimeType: 'image/jpeg',
+      width: canvas.width,
+      height: canvas.height
+    };
+  }
+
+  async function fileToBitmap(file) {
+    // createImageBitmap 帶 imageOrientation 可自動套用 EXIF 方向（行動瀏覽器支援）。
+    if (window.createImageBitmap) {
+      try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+      catch (_) { try { return await createImageBitmap(file); } catch (_2) {} }
+    }
+    return await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image decode failed')); };
+      img.src = url;
+    });
+  }
+
+  function dataUrlBytes(dataUrl) {
+    const base64 = String(dataUrl).split(',')[1] || '';
+    return Math.floor(base64.length * 0.75);
+  }
+
+  function bumpUploading(itemId, delta) {
+    uploadingByItem[itemId] = Math.max(0, (uploadingByItem[itemId] || 0) + delta);
+    refreshItemImages(itemId);
+  }
+
+  async function uploadOneImage(itemId, file) {
+    if (!isBrowserOnline()) { alert('圖片需連線後才能上傳。'); return; }
+    bumpUploading(itemId, 1);
+    try {
+      const compressed = await compressImage(file);
+      if (!compressed.base64) throw new Error('empty image data');
+      const clientUploadId = makeId('upload');
+      const payload = Object.assign(buildBasePayload('prep_image_upload'), {
+        itemId,
+        clientUploadId,
+        imageBase64: compressed.base64,
+        mimeType: compressed.mimeType,
+        fileName: String(file.name || 'photo'),
+        width: compressed.width,
+        height: compressed.height
+      });
+      const res = await apiPost(payload);
+      if (!res || res.status !== 'success') throw new Error((res && res.message) || 'upload failed');
+      if (Array.isArray(res.images)) imagesByItem[itemId] = groupImagesByItem(res.images)[itemId] || res.images;
+    } catch (err) {
+      console.warn('prep image upload failed:', err);
+      alert('圖片上傳失敗，請稍後再試。');
+    } finally {
+      bumpUploading(itemId, -1);
+    }
+  }
+
+  async function deleteImage(itemId, imageId) {
+    if (!isBrowserOnline()) { alert('圖片需連線後才能刪除。'); return; }
+    if (!confirm('刪除這張圖片？')) return;
+    const backup = (imagesByItem[itemId] || []).slice();
+    imagesByItem[itemId] = backup.filter(img => String(img.id) !== String(imageId));
+    refreshItemImages(itemId);
+    try {
+      const res = await apiPost(Object.assign(buildBasePayload('prep_image_delete'), { itemId, imageId }));
+      if (!res || res.status !== 'success') throw new Error((res && res.message) || 'delete failed');
+      if (Array.isArray(res.images)) { imagesByItem[itemId] = res.images; refreshItemImages(itemId); }
+    } catch (err) {
+      console.warn('prep image delete failed:', err);
+      imagesByItem[itemId] = backup;
+      refreshItemImages(itemId);
+      alert('圖片刪除失敗，請稍後再試。');
+    }
+  }
+
+  async function reorderImages(itemId, orderedIds) {
+    const before = (imagesByItem[itemId] || []).slice();
+    const byId = {};
+    before.forEach(img => { byId[String(img.id)] = img; });
+    const next = orderedIds.map(id => byId[String(id)]).filter(Boolean);
+    if (next.length !== before.length) return;
+    imagesByItem[itemId] = next;
+    try {
+      const res = await apiPost(Object.assign(buildBasePayload('prep_image_reorder'), { itemId, imageIds: orderedIds }));
+      if (res && res.status === 'success' && Array.isArray(res.images)) {
+        imagesByItem[itemId] = res.images;
+        refreshItemImages(itemId);
+      }
+    } catch (err) {
+      console.warn('prep image reorder failed:', err);
+      imagesByItem[itemId] = before;
+      refreshItemImages(itemId);
+    }
+  }
+
+  // 只重繪單一品項的縮圖列，避免整區重render 打斷其他輸入。
+  function refreshItemImages(itemId) {
+    if (!root) return;
+    const wrap = root.querySelector('.prep-item-wrap[data-item-id="' + cssEscape(itemId) + '"]');
+    if (!wrap) return;
+    const old = wrap.querySelector('.prep-item-images');
+    if (!old) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = renderItemImages(itemId);
+    const fresh = tmp.firstElementChild;
+    old.replaceWith(fresh);
+    initThumbSortable(fresh, itemId);
+  }
+
+  function initThumbSortable(container, itemId) {
+    if (!container || !window.Sortable) return;
+    if ((imagesByItem[itemId] || []).length < 2) return;
+    if (container._prepSortable) return;
+    container._prepSortable = window.Sortable.create(container, {
+      animation: 150,
+      draggable: '.prep-thumb',
+      filter: '.prep-thumb-delete',
+      onEnd: () => {
+        const ids = Array.from(container.querySelectorAll('.prep-thumb')).map(el => el.dataset.imageId).filter(Boolean);
+        reorderImages(itemId, ids);
+      }
+    });
+  }
+
+  function initAllThumbSortables() {
+    if (!root) return;
+    root.querySelectorAll('.prep-item-images').forEach(container => {
+      const itemId = container.dataset.itemId;
+      if (itemId) initThumbSortable(container, itemId);
+    });
+  }
+
+  function openImageViewer(itemId, startIndex) {
+    const list = imagesByItem[itemId] || [];
+    if (!list.length) return;
+    let index = Math.max(0, Math.min(startIndex || 0, list.length - 1));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'prep-img-viewer';
+    overlay.innerHTML = `
+      <button class="prep-img-viewer-close" type="button" aria-label="關閉">✕</button>
+      <button class="prep-img-viewer-btn prep-img-viewer-prev" type="button" aria-label="上一張">‹</button>
+      <img src="" alt="準備品項圖片" />
+      <button class="prep-img-viewer-btn prep-img-viewer-next" type="button" aria-label="下一張">›</button>
+      <div class="prep-img-viewer-count"></div>`;
+    const imgEl = overlay.querySelector('img');
+    const countEl = overlay.querySelector('.prep-img-viewer-count');
+    const show = () => {
+      imgEl.src = list[index] ? (list[index].url || '') : '';
+      countEl.textContent = (index + 1) + ' / ' + list.length;
+    };
+    const close = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+    const prev = () => { index = (index - 1 + list.length) % list.length; show(); };
+    const next = () => { index = (index + 1) % list.length; show(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowLeft') prev();
+      else if (e.key === 'ArrowRight') next();
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.closest('.prep-img-viewer-close')) { close(); return; }
+      if (e.target.closest('.prep-img-viewer-prev')) { prev(); return; }
+      if (e.target.closest('.prep-img-viewer-next')) { next(); }
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    show();
   }
 
   function cssEscape(value) {
