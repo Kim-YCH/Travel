@@ -71,9 +71,11 @@ createApp({
     const todayKey = ref('');
     let todayRefreshTimer = null;
     let moneyRefreshTimer = null;
+    let syncRetryTimer = null;
     let lastMoneyRefreshAt = 0;
     const MONEY_REFRESH_INTERVAL_MS = 60 * 1000;
     const MONEY_REFRESH_THROTTLE_MS = 15 * 1000;
+    const SYNC_RETRY_INTERVAL_MS = 30 * 1000;
 
     const people = ref([]);
     const itinerary = ref([]);
@@ -3812,8 +3814,51 @@ createApp({
       }, MONEY_REFRESH_INTERVAL_MS);
     };
 
+    const stopSyncRetry = () => {
+      if (!syncRetryTimer) return;
+      clearInterval(syncRetryTimer);
+      syncRetryTimer = null;
+    };
+
+    const startSyncRetry = () => {
+      stopSyncRetry();
+      syncRetryTimer = setInterval(() => {
+        if (
+          currentView.value === 'app' &&
+          currentTrip.value?.id &&
+          pendingSyncQueue.value.length &&
+          !document.hidden
+        ) {
+          flushPendingQueue();
+        }
+      }, SYNC_RETRY_INTERVAL_MS);
+    };
+
     const manualSync = async () => {
-      await refreshMoneyData({ force: true, silent: false });
+      if (!currentTrip.value?.id || isLoading.value) return false;
+      syncStatus.value = 'syncing';
+      syncMessage.value = '';
+
+      try {
+        await flushPendingQueue();
+        if (pendingSyncQueue.value.length) return false;
+
+        const refreshed = await fetchData({
+          force: true,
+          silent: false
+        });
+
+        if (refreshed) {
+          syncStatus.value = 'synced';
+          syncMessage.value = '已同步';
+        }
+        return refreshed;
+      } catch (err) {
+        console.error('manualSync failed:', err);
+        syncStatus.value = 'error';
+        syncMessage.value = '同步失敗';
+        return false;
+      }
     };
 
     const switchTab = async (tab) => {
@@ -3892,8 +3937,9 @@ createApp({
       // iOS 主畫面書籤會保留上次畫面，回到前景時主動刷新日期/倒數。
       if (currentView.value === 'lobby') {
         fetchTrips();
-      } else if (canAutoRefreshMoney()) {
-        refreshMoneyData({ silent: true });
+      } else if (currentView.value === 'app') {
+        if (pendingSyncQueue.value.length) flushPendingQueue();
+        if (canAutoRefreshMoney()) refreshMoneyData({ silent: true });
       }
       updateMoneyAutoRefresh();
     };
@@ -3922,6 +3968,7 @@ createApp({
       window.addEventListener('pageshow', handleAppResume);
       document.addEventListener('visibilitychange', handleVisibilityChange);
       todayRefreshTimer = setInterval(refreshTodayKey, 60 * 1000);
+      startSyncRetry();
       updateMoneyAutoRefresh();
       fetchTrips();
     });
@@ -3932,6 +3979,7 @@ createApp({
       window.removeEventListener('pageshow', handleAppResume);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (todayRefreshTimer) clearInterval(todayRefreshTimer);
+      stopSyncRetry();
       stopMoneyAutoRefresh();
       if (mapBounceTimer) clearTimeout(mapBounceTimer);
       probeSearch.dispose();
