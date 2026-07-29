@@ -27,6 +27,31 @@
     return out;
   };
 
+  const classifySharedMapUrl = (value) => {
+    const raw = String(value || '').trim();
+    const urlWithScheme = !/^[a-z][a-z\d+.-]*:\/\//i.test(raw)
+      && /^(?:naver\.me|(?:m\.)?map\.naver\.com|m\.place\.naver\.com|maps\.app\.goo\.gl|goo\.gl|(?:www\.)?google\.com|maps\.google\.com)(?:[/?#]|$)/i.test(raw)
+      ? `https://${raw}`
+      : raw;
+
+    try {
+      const url = new URL(urlWithScheme);
+      if (url.protocol !== 'https:') {
+        return { supported: false, provider: '', kind: '', url: urlWithScheme };
+      }
+
+      const host = url.hostname.toLowerCase();
+      if (host === 'naver.me') return { supported: true, provider: 'naver', kind: 'short', url: urlWithScheme };
+      if (host === 'map.naver.com' || host === 'm.map.naver.com' || host === 'm.place.naver.com') return { supported: true, provider: 'naver', kind: 'full', url: urlWithScheme };
+      if (host === 'maps.app.goo.gl' || host === 'goo.gl') return { supported: true, provider: 'google', kind: 'short', url: urlWithScheme };
+      if (host === 'google.com' || host === 'www.google.com' || host === 'maps.google.com') return { supported: true, provider: 'google', kind: 'full', url: urlWithScheme };
+    } catch (_) {
+      // Ordinary place queries are handled by the existing search.
+    }
+
+    return { supported: false, provider: '', kind: '', url: urlWithScheme };
+  };
+
   /**
    * 建立一組 debounce 的 Places Autocomplete 搜尋。
    *
@@ -119,6 +144,7 @@
     PLACE_DETAIL_FIELDS,
     getPlaceDetailFields,
     mergePredictions,
+    classifySharedMapUrl,
     createPredictionSearch
   });
 })(window);

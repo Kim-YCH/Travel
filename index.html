@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- version: 20260729.1 -->
+<!-- version: 20260730.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260729.1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260729.1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260729.1" />
-  <link rel="manifest" href="./site.webmanifest?v=20260729.1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260730.2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260730.2" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260730.2" />
+  <link rel="manifest" href="./site.webmanifest?v=20260730.2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -16,8 +16,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260729.1" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260729.1" />
+  <link rel="stylesheet" href="./style.css?v=20260730.2" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260730.2" />
 </head>
 <body>
 
@@ -333,11 +333,13 @@
             <button
               @click="addPlace"
               class="bg-blue-600 text-white w-[54px] h-[54px] rounded-xl text-3xl shadow active:scale-95 transition flex items-center justify-center pb-1 flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-              :disabled="isAddingPlace"
+              :disabled="isAddingPlace || isResolvingMapUrl"
             >+</button>
 
-            <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
+            <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isResolvingMapUrl || mapUrlResolveError || isCoordinateMode)" class="suggestions-list">
               <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+              <div v-if="isResolvingMapUrl" class="p-3 text-center text-gray-500 text-sm">正在解析 {{ mapUrlProvider === 'naver' ? 'Naver Map' : 'Google Maps' }} 網址...</div>
+              <div v-if="!isResolvingMapUrl && mapUrlResolveError" class="p-3 text-sm text-rose-600">網址解析失敗：{{ mapUrlResolveError }}</div>
               <div v-if="translatedSearchHint" class="px-3 py-2 text-xs text-blue-600 bg-blue-50 border-b border-blue-100">🌐 {{ translatedSearchHint }}</div>
 
               <div
@@ -363,6 +365,7 @@
                 <div class="overflow-hidden">
                   <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
                   <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                  <div v-if="item.from_map_url" class="text-[11px] text-blue-600 mt-0.5">{{ item.source === 'naver' ? 'Naver Map' : 'Google Maps' }}</div>
                 </div>
               </div>
 
@@ -1303,23 +1306,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260729.1"></script>
-<script src="./cache-refresh.js?v=20260729.1"></script>
-<script src="./keyword-map.js?v=20260729.1"></script>
-<script src="./js/utils.js?v=20260729.1"></script>
-<script src="./js/api.js?v=20260729.1"></script>
-<script src="./js/cache.js?v=20260729.1"></script>
-<script src="./js/maps.js?v=20260729.1"></script>
-<script src="./js/places.js?v=20260729.1"></script>
-<script src="./js/itinerary.js?v=20260729.1"></script>
-<script src="./js/hotels.js?v=20260729.1"></script>
-<script src="./js/expenses.js?v=20260729.1"></script>
-<script src="./js/weather.js?v=20260729.1"></script>
-<script src="./js/export.js?v=20260729.1"></script>
-<script src="./js/probe-search.js?v=20260729.1"></script>
-<script src="./app.js?v=20260729.1"></script>
-<script src="./search-zh-label.js?v=20260729.1"></script>
-<script src="./prep-checklist.js?v=20260729.1"></script>
+<script src="./config.js?v=20260730.2"></script>
+<script src="./cache-refresh.js?v=20260730.2"></script>
+<script src="./keyword-map.js?v=20260730.2"></script>
+<script src="./js/utils.js?v=20260730.2"></script>
+<script src="./js/api.js?v=20260730.2"></script>
+<script src="./js/cache.js?v=20260730.2"></script>
+<script src="./js/maps.js?v=20260730.2"></script>
+<script src="./js/places.js?v=20260730.2"></script>
+<script src="./js/itinerary.js?v=20260730.2"></script>
+<script src="./js/hotels.js?v=20260730.2"></script>
+<script src="./js/expenses.js?v=20260730.2"></script>
+<script src="./js/weather.js?v=20260730.2"></script>
+<script src="./js/export.js?v=20260730.2"></script>
+<script src="./js/probe-search.js?v=20260730.2"></script>
+<script src="./app.js?v=20260730.2"></script>
+<script src="./search-zh-label.js?v=20260730.2"></script>
+<script src="./prep-checklist.js?v=20260730.2"></script>
 
 </body>
 </html>

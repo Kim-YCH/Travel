@@ -106,6 +106,9 @@ createApp({
     const searchResults = ref([]);
     const translatedSearchHint = ref('');
     const isSearching = ref(false);
+    const isResolvingMapUrl = ref(false);
+    const mapUrlResolveError = ref('');
+    const mapUrlProvider = ref('');
     const isCoordinateMode = ref(false);
     const resolvedCoordName = ref('');
     const selectedLat = ref(null);
@@ -291,6 +294,66 @@ createApp({
     };
 
     const mergePredictions = TravelPlaces.mergePredictions;
+    let mapUrlResolveGeneration = 0;
+
+    const mapUrlCoordinate = (value) => {
+      if (value === null || value === undefined || value === '') return null;
+      const coordinate = Number(value);
+      return Number.isFinite(coordinate) ? coordinate : null;
+    };
+
+    const resetMapUrlResolveState = () => {
+      mapUrlResolveGeneration += 1;
+      isResolvingMapUrl.value = false;
+      mapUrlResolveError.value = '';
+      mapUrlProvider.value = '';
+    };
+
+    const resolveSharedMapUrl = async (info) => {
+      const generation = ++mapUrlResolveGeneration;
+      isResolvingMapUrl.value = true;
+      mapUrlResolveError.value = '';
+      mapUrlProvider.value = info.provider;
+      selectedPlaceData.value = null;
+      searchResults.value = [];
+      translatedSearchHint.value = '';
+
+      try {
+        const result = await apiGet({ action: 'resolve_map_url', url: info.url });
+        if (generation !== mapUrlResolveGeneration) return;
+        if (result?.status === 'error') throw new Error(result.message || '無法解析這個網址');
+
+        const provider = result?.provider === 'naver' ? 'naver' : 'google';
+        const placeId = String(result?.placeId || '').trim();
+        const name = String(result?.name || '').trim();
+        const address = String(result?.address || '').trim();
+        const lat = mapUrlCoordinate(result?.lat);
+        const lng = mapUrlCoordinate(result?.lng);
+        if (!placeId && !name && (lat === null || lng === null)) throw new Error('無法從網址取得地點資訊');
+
+        const title = name || '地圖位置';
+        searchResults.value = [{
+          source: provider,
+          from_map_url: true,
+          place_id: provider === 'naver' ? `naver_url_${placeId || `${lat}_${lng}`}` : placeId,
+          description: address || title,
+          address,
+          roadAddress: address,
+          lat,
+          lng,
+          structured_formatting: {
+            main_text: title,
+            secondary_text: address || (provider === 'naver' ? 'Naver Map 網址' : 'Google Maps 網址')
+          }
+        }];
+      } catch (err) {
+        if (generation !== mapUrlResolveGeneration) return;
+        console.warn('resolveSharedMapUrl failed:', err);
+        mapUrlResolveError.value = err?.message || '無法解析這個網址';
+      } finally {
+        if (generation === mapUrlResolveGeneration) isResolvingMapUrl.value = false;
+      }
+    };
 
     const geocodePlaceCandidates = async (keyword, options = {}) => {
       const q = String(keyword || '').trim();
@@ -2123,12 +2186,20 @@ createApp({
       const q = newPlace.value.trim();
 
       if (!q) {
+        resetMapUrlResolveState();
         searchResults.value = [];
         translatedSearchHint.value = '';
         isCoordinateMode.value = false;
         isSearching.value = false;
         return;
       }
+
+      const mapUrlInfo = TravelPlaces.classifySharedMapUrl(q);
+      if (mapUrlInfo.supported) {
+        await resolveSharedMapUrl(mapUrlInfo);
+        return;
+      }
+      resetMapUrlResolveState();
 
       const coordRegex = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/;
       if (coordRegex.test(q)) {
@@ -2186,6 +2257,7 @@ createApp({
 
       const placeName = newPlace.value.trim();
       if(!placeName) return;
+      if (TravelPlaces.classifySharedMapUrl(placeName).supported && !selectedPlaceData.value) return;
 
       isAddingPlace.value = true;
 
@@ -2288,6 +2360,11 @@ createApp({
               }
             }
           }
+        } else if (selectedPlaceSnapshot?.lat != null && selectedPlaceSnapshot?.lng != null) {
+          lat = Number(selectedPlaceSnapshot.lat);
+          lng = Number(selectedPlaceSnapshot.lng);
+          address = selectedPlaceSnapshot.address || selectedPlaceSnapshot.description || '';
+          placeId = '';
         } else if (selectedLatSnapshot != null && selectedLngSnapshot != null) {
           lat = selectedLatSnapshot;
           lng = selectedLngSnapshot;
@@ -4018,7 +4095,7 @@ createApp({
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
       walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
       categories, itineraryTypes,
-      searchResults, translatedSearchHint, isSearching, isCoordinateMode, resolvedCoordName,
+      searchResults, translatedSearchHint, isSearching, isResolvingMapUrl, mapUrlResolveError, mapUrlProvider, isCoordinateMode, resolvedCoordName,
       isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
       tripWeather,
