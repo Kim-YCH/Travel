@@ -2181,9 +2181,20 @@ createApp({
     };
 
     let searchTimeout = null;
+    let placeSearchGeneration = 0;
+
+    const cancelPendingPlaceSearch = () => {
+      placeSearchGeneration += 1;
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+      }
+      isSearching.value = false;
+    };
 
     const searchPlacesInput = async () => {
       const q = newPlace.value.trim();
+      cancelPendingPlaceSearch();
 
       if (!q) {
         resetMapUrlResolveState();
@@ -2221,19 +2232,22 @@ createApp({
 
       selectedPlaceData.value = null;
       isSearching.value = true;
-
-      if (searchTimeout) clearTimeout(searchTimeout);
+      const searchGeneration = placeSearchGeneration;
 
       searchTimeout = setTimeout(async () => {
         try {
           const out = await searchPlacesWithTranslation(q);
+          if (searchGeneration !== placeSearchGeneration) return;
           searchResults.value = out.predictions || [];
           translatedSearchHint.value = out.hint || '';
           isSearching.value = false;
         } catch (err) {
           console.error(err);
+          if (searchGeneration !== placeSearchGeneration) return;
           searchResults.value = [];
           isSearching.value = false;
+        } finally {
+          if (searchGeneration === placeSearchGeneration) searchTimeout = null;
         }
       }, 300);
     };
