@@ -329,13 +329,17 @@ createApp({
         const address = String(result?.address || '').trim();
         const lat = mapUrlCoordinate(result?.lat);
         const lng = mapUrlCoordinate(result?.lng);
-        if (!placeId && !name && (lat === null || lng === null)) throw new Error('無法從網址取得地點資訊');
+        if (!placeId && !name && (lat === null || lng === null)) {
+          throw new Error('無法從網址取得地點資訊');
+        }
 
         const title = name || '地圖位置';
         searchResults.value = [{
           source: provider,
           from_map_url: true,
-          place_id: provider === 'naver' ? `naver_url_${placeId || `${lat}_${lng}`}` : placeId,
+          place_id: provider === 'naver'
+            ? `naver_url_${placeId || `${lat}_${lng}`}`
+            : placeId,
           description: address || title,
           address,
           roadAddress: address,
@@ -1034,18 +1038,20 @@ createApp({
 
     // appname 是 Naver URL scheme 的必填參數，網頁要填頁面網址；
     // Naver Map 用它做「返回原 App」，填非網址的字串會讓那條路徑失效。
-    const naverAppName = () => encodeURIComponent(String(window.location?.host || 'travel'));
+    const naverAppName = () => String(window.location?.host || 'travel');
 
     const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
-      const title = String(nameKo || name || '地點').trim();
-      const encodedTitle = encodeURIComponent(title);
-
-      if (lat != null && lng != null) {
-        window.location.href = `nmap://place?lat=${lat}&lng=${lng}&name=${encodedTitle}&appname=${naverAppName()}`;
+      const url = TravelMaps.buildNaverPlaceSearchUrl({
+        name,
+        nameKo,
+        lat,
+        lng,
+        appname: naverAppName()
+      });
+      if (url) {
+        window.location.href = url;
         return;
       }
-
-      window.location.href = `nmap://search?query=${encodedTitle}&appname=${naverAppName()}`;
     };
 
     const { resolveWeatherLocation, loadTripWeather, scheduleTripWeatherLoad } = TravelWeather.create({
