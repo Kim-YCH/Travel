@@ -153,16 +153,15 @@
     return `nmap://route/${NAVER_APP_PATH[mode] || 'public'}?${params.join('&')}`;
   };
 
-  // A Google place name cannot always be resolved by Naver's place database.
-  // Coordinates remain the authoritative hand-off for a saved itinerary point.
-  const buildNaverPlaceSearchUrl = ({ name = '', nameKo = '', lat = null, lng = null, appname = '' } = {}) => {
+  const buildNaverPlaceUrl = ({ name = '', nameKo = '', lat = null, lng = null, appname = '' } = {}) => {
     const point = normalizeRoutePoint({ name: nameKo || name, lat, lng });
-    const query = point
-      ? `${point.lat},${point.lng}`
-      : String(nameKo || name || '').trim();
-    if (!query) return '';
+    const title = String(nameKo || name || '地點').trim();
+    if (point) {
+      return `nmap://place?lat=${point.lat}&lng=${point.lng}&name=${encodeURIComponent(title)}&appname=${encodeURIComponent(appname || 'travel')}`;
+    }
+    if (!title) return '';
 
-    return `nmap://search?query=${encodeURIComponent(query)}&appname=${encodeURIComponent(appname || 'travel')}`;
+    return `nmap://search?query=${encodeURIComponent(title)}&appname=${encodeURIComponent(appname || 'travel')}`;
   };
 
   /**
@@ -184,7 +183,7 @@
     makeMapPinIcon,
     makeHotelMapPinIcon,
     buildNaverRouteUrl,
-    buildNaverPlaceSearchUrl,
+    buildNaverPlaceUrl,
     buildGoogleRouteUrl
   });
 })(window);

@@ -1041,7 +1041,7 @@ createApp({
     const naverAppName = () => String(window.location?.host || 'travel');
 
     const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
-      const url = TravelMaps.buildNaverPlaceSearchUrl({
+      const url = TravelMaps.buildNaverPlaceUrl({
         name,
         nameKo,
         lat,
