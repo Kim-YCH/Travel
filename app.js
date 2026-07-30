@@ -327,8 +327,11 @@ createApp({
         const placeId = String(result?.placeId || '').trim();
         const name = String(result?.name || '').trim();
         const address = String(result?.address || '').trim();
-        const lat = mapUrlCoordinate(result?.lat);
-        const lng = mapUrlCoordinate(result?.lng);
+        const recoveredCoords = provider === 'google'
+          ? TravelPlaces.extractSharedMapCoordinates(result?.finalUrl, result?.originalUrl, info.url)
+          : { lat: null, lng: null };
+        const lat = mapUrlCoordinate(result?.lat) ?? recoveredCoords.lat;
+        const lng = mapUrlCoordinate(result?.lng) ?? recoveredCoords.lng;
         if (!placeId && !name && (lat === null || lng === null)) {
           throw new Error('無法從網址取得地點資訊');
         }

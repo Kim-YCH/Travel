@@ -41,15 +41,53 @@
       }
 
       const host = url.hostname.toLowerCase();
-      if (host === 'naver.me') return { supported: true, provider: 'naver', kind: 'short', url: urlWithScheme };
-      if (host === 'map.naver.com' || host === 'm.map.naver.com' || host === 'm.place.naver.com') return { supported: true, provider: 'naver', kind: 'full', url: urlWithScheme };
-      if (host === 'maps.app.goo.gl' || host === 'goo.gl') return { supported: true, provider: 'google', kind: 'short', url: urlWithScheme };
-      if (host === 'google.com' || host === 'www.google.com' || host === 'maps.google.com') return { supported: true, provider: 'google', kind: 'full', url: urlWithScheme };
+      if (host === 'naver.me') {
+        return { supported: true, provider: 'naver', kind: 'short', url: urlWithScheme };
+      }
+      if (host === 'map.naver.com' || host === 'm.map.naver.com' || host === 'm.place.naver.com') {
+        return { supported: true, provider: 'naver', kind: 'full', url: urlWithScheme };
+      }
+      if (host === 'maps.app.goo.gl' || host === 'goo.gl') {
+        return { supported: true, provider: 'google', kind: 'short', url: urlWithScheme };
+      }
+      if (host === 'google.com' || host === 'www.google.com' || host === 'maps.google.com') {
+        return { supported: true, provider: 'google', kind: 'full', url: urlWithScheme };
+      }
     } catch (_) {
-      // Ordinary place queries are handled by the existing search.
+      // An incomplete or ordinary place query is handled by the existing search.
     }
 
     return { supported: false, provider: '', kind: '', url: urlWithScheme };
+  };
+
+  const extractSharedMapCoordinates = (...values) => {
+    const expand = (value) => {
+      let source = String(value || '');
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const decoded = decodeURIComponent(source);
+          if (decoded === source) break;
+          source = decoded;
+        } catch (_) {
+          break;
+        }
+      }
+      return source;
+    };
+
+    for (const value of values) {
+      const source = expand(value);
+      const placeMatch = source.match(/!3d(-?\d+(?:\.\d+)?).*?!4d(-?\d+(?:\.\d+)?)/);
+      const viewportMatch = source.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+      const match = placeMatch || viewportMatch;
+      if (!match) continue;
+
+      const lat = Number(match[1]);
+      const lng = Number(match[2]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+
+    return { lat: null, lng: null };
   };
 
   /**
@@ -145,6 +183,7 @@
     getPlaceDetailFields,
     mergePredictions,
     classifySharedMapUrl,
+    extractSharedMapCoordinates,
     createPredictionSearch
   });
 })(window);
