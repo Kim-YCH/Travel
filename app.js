@@ -337,6 +337,31 @@ createApp({
         }
 
         const title = name || '地圖位置';
+        if (provider === 'google' && isKoreaTrip.value) {
+          if (lat === null || lng === null) {
+            throw new Error('Google 地點缺少座標，無法核對 Naver 地點');
+          }
+
+          const lookupName = TravelPlaces.extractLikelyPlaceName(title);
+          const naverCandidates = await naverPlaceCandidates(lookupName);
+          if (generation !== mapUrlResolveGeneration) return;
+
+          const matchedPlace = TravelPlaces.findNearbyPlaceCandidate(
+            naverCandidates,
+            { lat, lng }
+          );
+          if (!matchedPlace) {
+            throw new Error('已解析 Google 地點，但找不到距離相符的 Naver 地點');
+          }
+
+          searchResults.value = [{
+            ...matchedPlace,
+            from_map_url: true,
+            matched_from_google: true
+          }];
+          return;
+        }
+
         searchResults.value = [{
           source: provider,
           from_map_url: true,
@@ -2806,8 +2831,9 @@ createApp({
       if (isKoreaTrip.value) {
         const lat = p.lat !== '' && p.lat != null ? Number(p.lat) : null;
         const lng = p.lng !== '' && p.lng != null ? Number(p.lng) : null;
+        const cleanName = TravelPlaces.extractLikelyPlaceName(p.name || '');
         openNaverMap({
-          name: p.name || '',
+          name: cleanName,
           nameKo: p.name_ko || '',
           lat,
           lng

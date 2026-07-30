@@ -90,6 +90,57 @@
     return { lat: null, lng: null };
   };
 
+  const extractLikelyPlaceName = (value) => {
+    const source = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!source) return '';
+
+    const commaParts = source.split(',').map(part => part.trim()).filter(Boolean);
+    const candidate = commaParts.length >= 3 ? commaParts[commaParts.length - 1] : source;
+    const trailingLatinName = candidate.match(
+      /[\u3400-\u9fff\uac00-\ud7af]\s+([A-Za-z][A-Za-z0-9&'().+\-]*(?:\s+[A-Za-z0-9&'().+\-]+){0,5})$/
+    );
+
+    return trailingLatinName ? trailingLatinName[1].trim() : candidate;
+  };
+
+  const placeCoordinate = (value, limit) => {
+    if (value === null || value === undefined || value === '') return null;
+    const coordinate = Number(value);
+    return Number.isFinite(coordinate) && Math.abs(coordinate) <= limit ? coordinate : null;
+  };
+
+  const distanceMeters = (origin, target) => {
+    const lat1 = placeCoordinate(origin?.lat, 90);
+    const lng1 = placeCoordinate(origin?.lng, 180);
+    const lat2 = placeCoordinate(target?.lat, 90);
+    const lng2 = placeCoordinate(target?.lng, 180);
+    if (lat1 === null || lng1 === null || lat2 === null || lng2 === null) return Infinity;
+
+    const radians = value => value * Math.PI / 180;
+    const dLat = radians(lat2 - lat1);
+    const dLng = radians(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  const findNearbyPlaceCandidate = (candidates, origin, maxDistanceMeters = 300) => {
+    const maxDistance = Number(maxDistanceMeters);
+    if (!Array.isArray(candidates) || !Number.isFinite(maxDistance) || maxDistance < 0) return null;
+
+    let closest = null;
+    let closestDistance = Infinity;
+    candidates.forEach((candidate) => {
+      const distance = distanceMeters(origin, candidate);
+      if (distance < closestDistance) {
+        closest = candidate;
+        closestDistance = distance;
+      }
+    });
+
+    return closestDistance <= maxDistance ? closest : null;
+  };
+
   /**
    * 建立一組 debounce 的 Places Autocomplete 搜尋。
    *
@@ -184,6 +235,8 @@
     mergePredictions,
     classifySharedMapUrl,
     extractSharedMapCoordinates,
+    extractLikelyPlaceName,
+    findNearbyPlaceCandidate,
     createPredictionSearch
   });
 })(window);
