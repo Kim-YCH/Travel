@@ -1,22 +1,36 @@
 <!DOCTYPE html>
 <!-- version: 20260730.9 -->
+<!-- 電腦版入口。body 與 index.html 完全相同（同一個 Vue App、同一批模組、同一組綁定），
+     差別只在本 <head>：多載 pc.css 做桌機佈局、視窗可縮放、窄螢幕自動退回手機版。
+     詳見 docs/desktop.md。修改功能時 body 要與 index.html 保持同步。 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>出發囉</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>出發囉 · 電腦版</title>
 
-  <!-- 寬螢幕自動轉電腦版 pc.html；?mobile=1 或切到手機版後可留在此頁。手機不受影響（條件為假）。 -->
+  <!-- 窄螢幕（手機）誤入電腦版時退回手機版；?pc=1 可強制留在電腦版。 -->
   <script>
     (function () {
       try {
         var params = new URLSearchParams(location.search);
-        if (params.get('mobile') === '1') { sessionStorage.setItem('travel-view', 'mobile'); return; }
-        if (window.innerWidth > 1024 && sessionStorage.getItem('travel-view') !== 'mobile') {
-          location.replace('pc.html' + location.search);
+        if (params.get('pc') === '1') { sessionStorage.setItem('travel-view', 'pc'); return; }
+        if (window.innerWidth <= 1024 && sessionStorage.getItem('travel-view') !== 'pc') {
+          location.replace('index.html' + location.search);
         }
       } catch (e) {}
     })();
+    // 注入「手機版」浮動切換鈕，不動 body 靜態內容（保持與 index.html 相同）。
+    window.addEventListener('DOMContentLoaded', function () {
+      var a = document.createElement('a');
+      a.id = 'pc-view-toggle';
+      a.href = 'index.html?mobile=1';
+      a.textContent = '📱 手機版';
+      a.addEventListener('click', function () {
+        try { sessionStorage.setItem('travel-view', 'mobile'); } catch (e) {}
+      });
+      document.body.appendChild(a);
+    });
   </script>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260730.9" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260730.9" />
@@ -31,6 +45,8 @@
 
   <link rel="stylesheet" href="./style.css?v=20260730.9" />
   <link rel="stylesheet" href="./cloud-theme.css?v=20260730.9" />
+  <!-- 桌機佈局覆蓋，只在電腦版載入，載入順序在最後才能覆蓋前面的手機樣式。 -->
+  <link rel="stylesheet" href="./pc.css?v=20260730.9" />
 </head>
 <body>
 
