@@ -1,8 +1,8 @@
-// version: 20260801.2
+// version: 20260801.3
 // 只有使用者明確按「刷新版本 / 重新載入」時才整頁 reload。
 // 平常資料新增、修改、刪除都應交給各模組做局部更新。
 (function () {
-  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260801.2';
+  const VERSION = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.APP_VERSION) || '20260801.3';
 
   async function clearBrowserCaches() {
     try {
@@ -16,13 +16,25 @@
 
   // Service Worker：讓 App 加到主畫面後，在完全沒有網路時仍然開得起來。
   // 註冊放在 load 之後，不跟首屏資源搶頻寬。
+  // sw.js 只有一份、放在站台根目錄。手機版入口在根目錄，桌面版入口在 desktop/，
+  // 相對路徑會解析到不同位置，所以路徑由載入這支檔案的 <script data-sw-url> 指定。
+  // 沒指定時維持 './sw.js'，手機版行為不變。
+  function getServiceWorkerUrl() {
+    const el = document.currentScript
+      || document.querySelector('script[src*="cache-refresh.js"]');
+    const url = el && el.dataset && el.dataset.swUrl;
+    return url || './sw.js';
+  }
+
+  const SW_URL = getServiceWorkerUrl();
+
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
     // file:// 開啟時無法註冊，本機直接開檔案測試不該噴錯。
     if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') return;
 
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch((err) => {
+      navigator.serviceWorker.register(SW_URL).catch((err) => {
         console.warn('service worker register failed:', err);
       });
     });

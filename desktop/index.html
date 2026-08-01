@@ -1,20 +1,20 @@
 <!DOCTYPE html>
-<!-- version: 20260801.2 -->
+<!-- version: 20260801.3 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260801.2" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260801.3" />
 
-  <script src="../js/device-router.js?v=20260801.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../js/device-router.js?v=20260801.3" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260801.2" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260801.2" />
-  <link rel="stylesheet" href="./desktop.css?v=20260801.2" />
+  <link rel="stylesheet" href="../style.css?v=20260801.3" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260801.3" />
+  <link rel="stylesheet" href="./desktop.css?v=20260801.3" />
 </head>
 <body class="desktop-body">
 
@@ -71,7 +71,12 @@
 
       <div class="desktop-sidebar-foot">
         <button type="button" class="desktop-sync" :class="syncStatusBadgeClass" @click="manualSync">{{ syncStatusText }}</button>
-        <span class="desktop-version">{{ APP_VERSION }}</span>
+        <button
+          type="button"
+          class="desktop-version-refresh"
+          title="清除快取並重新載入"
+          onclick="window.TRAVEL_FORCE_REFRESH && window.TRAVEL_FORCE_REFRESH()"
+        >↻ {{ APP_VERSION }}</button>
       </div>
     </aside>
 
@@ -407,8 +412,8 @@
                   <span>{{ formatInvolved(item.involved) }}</span>
                   <span>${{ Math.round(item.amount) }}</span>
                   <span class="desktop-place-actions">
-                    <button type="button" @click="openEditExpenseModal(item)">編輯</button>
-                    <button type="button" @click="removeExpense(item.id)">刪除</button>
+                    <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯個人分帳" @click="openEditExpenseModal(item)" :disabled="isSavingExpense">✏️</button>
+                    <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除個人分帳" @click="removeExpense(item.id)" :disabled="isSavingExpense">✕</button>
                   </span>
                 </div>
                 <p v-if="!filteredExpenses.length" class="desktop-empty">尚無個人分帳紀錄</p>
@@ -521,8 +526,8 @@
                   <span>{{ formatSharedWalletUsers(tx) }}</span>
                   <span>${{ Math.round(tx.amount) }}</span>
                   <span class="desktop-place-actions">
-                    <button type="button" @click="openEditWalletModal(tx)">編輯</button>
-                    <button type="button" @click="removeSharedWalletTransaction(tx)">刪除</button>
+                    <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯錢包紀錄" @click="openEditWalletModal(tx)" :disabled="isSavingSharedWallet">✏️</button>
+                    <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除錢包紀錄" @click="removeSharedWalletTransaction(tx)" :disabled="isSavingSharedWallet">✕</button>
                   </span>
                 </div>
                 <p v-if="!sharedWalletRecords.length" class="desktop-empty">尚無共同錢包紀錄</p>
@@ -833,22 +838,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260801.2"></script>
-<script src="../keyword-map.js?v=20260801.2"></script>
-<script src="../js/utils.js?v=20260801.2"></script>
-<script src="../js/api.js?v=20260801.2"></script>
-<script src="../js/cache.js?v=20260801.2"></script>
-<script src="../js/maps.js?v=20260801.2"></script>
-<script src="../js/places.js?v=20260801.2"></script>
-<script src="../js/itinerary.js?v=20260801.2"></script>
-<script src="../js/hotels.js?v=20260801.2"></script>
-<script src="../js/expenses.js?v=20260801.2"></script>
-<script src="../js/weather.js?v=20260801.2"></script>
-<script src="../js/export.js?v=20260801.2"></script>
-<script src="../js/probe-search.js?v=20260801.2"></script>
-<script src="../app.js?v=20260801.2"></script>
-<script src="../search-zh-label.js?v=20260801.2"></script>
-<script src="../prep-checklist.js?v=20260801.2"></script>
+<script src="../config.js?v=20260801.3"></script>
+<!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
+<script src="../cache-refresh.js?v=20260801.3" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260801.3"></script>
+<script src="../js/utils.js?v=20260801.3"></script>
+<script src="../js/api.js?v=20260801.3"></script>
+<script src="../js/cache.js?v=20260801.3"></script>
+<script src="../js/maps.js?v=20260801.3"></script>
+<script src="../js/places.js?v=20260801.3"></script>
+<script src="../js/itinerary.js?v=20260801.3"></script>
+<script src="../js/hotels.js?v=20260801.3"></script>
+<script src="../js/expenses.js?v=20260801.3"></script>
+<script src="../js/weather.js?v=20260801.3"></script>
+<script src="../js/export.js?v=20260801.3"></script>
+<script src="../js/probe-search.js?v=20260801.3"></script>
+<script src="../app.js?v=20260801.3"></script>
+<script src="../search-zh-label.js?v=20260801.3"></script>
+<script src="../prep-checklist.js?v=20260801.3"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';
