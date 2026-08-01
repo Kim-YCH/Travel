@@ -5,17 +5,15 @@
  */
 'use strict';
 
-const VERSION = '20260730.9';
+const VERSION = '20260730.8';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const CDN_CACHE = `travel-cdn-${VERSION}`;
 
 const SHELL_ASSETS = [
   './',
   `./index.html?v=${VERSION}`,
-  `./pc.html?v=${VERSION}`,
   `./style.css?v=${VERSION}`,
   `./cloud-theme.css?v=${VERSION}`,
-  `./pc.css?v=${VERSION}`,
   `./config.js?v=${VERSION}`,
   `./cache-refresh.js?v=${VERSION}`,
   `./keyword-map.js?v=${VERSION}`,
