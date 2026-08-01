@@ -5,18 +5,21 @@
  */
 'use strict';
 
-const VERSION = '20260730.8';
+const VERSION = '20260801.2';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const CDN_CACHE = `travel-cdn-${VERSION}`;
 
 const SHELL_ASSETS = [
   './',
   `./index.html?v=${VERSION}`,
+  `./desktop/index.html?v=${VERSION}`,
+  `./desktop/desktop.css?v=${VERSION}`,
   `./style.css?v=${VERSION}`,
   `./cloud-theme.css?v=${VERSION}`,
   `./config.js?v=${VERSION}`,
   `./cache-refresh.js?v=${VERSION}`,
   `./keyword-map.js?v=${VERSION}`,
+  `./js/device-router.js?v=${VERSION}`,
   `./js/utils.js?v=${VERSION}`,
   `./js/api.js?v=${VERSION}`,
   `./js/cache.js?v=${VERSION}`,
@@ -54,6 +57,25 @@ const NETWORK_ONLY_HOSTS = [
 
 const isNetworkOnly = (url) =>
   NETWORK_ONLY_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith('.' + host));
+
+function getNavigationFallbackAsset(requestUrl, scopeUrl) {
+  try {
+    const requestPath = new URL(requestUrl).pathname;
+    const scopePath = new URL(scopeUrl).pathname;
+    const relativePath = requestPath.startsWith(scopePath)
+      ? requestPath.slice(scopePath.length)
+      : requestPath.replace(/^\/+/, '');
+    const isDesktopPath = relativePath === 'desktop'
+      || relativePath.startsWith('desktop/');
+    return isDesktopPath
+      ? `./desktop/index.html?v=${VERSION}`
+      : `./index.html?v=${VERSION}`;
+  } catch (_) {
+    return `./index.html?v=${VERSION}`;
+  }
+}
+
+self.TravelServiceWorker = Object.freeze({ getNavigationFallbackAsset });
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -114,8 +136,8 @@ self.addEventListener('fetch', (event) => {
         return await fetch(req);
       } catch (err) {
         const cache = await caches.open(SHELL_CACHE);
-        return (await cache.match(`./index.html?v=${VERSION}`))
-          || (await cache.match('./'))
+        const fallbackAsset = getNavigationFallbackAsset(req.url, self.registration.scope);
+        return (await cache.match(fallbackAsset))
           || Response.error();
       }
     })());

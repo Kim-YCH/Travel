@@ -1,0 +1,1180 @@
+/* 桌面版面。只做結構，顏色一律引用 cloud-theme.css 的 --cloud-* 變數。 */
+
+.desktop-body {
+  overflow: auto;
+}
+
+/* 手機版的 .mobile-container 限制在 480px，桌面用自己的容器 */
+.desktop-app {
+  min-height: 100dvh;
+  background: var(--cloud-sky-2);
+  color: var(--cloud-text);
+}
+
+.desktop-app[v-cloak] {
+  display: none;
+}
+
+/* 大廳側欄與工作區側欄共用（見 .desktop-brand 版本字樣、.desktop-sidebar-foot 版本字樣） */
+.desktop-version {
+  font-size: 12px;
+  color: var(--cloud-muted);
+}
+
+/* ---------------------------------------------------------------- 工作區 */
+
+.desktop-shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "sidebar header"
+    "sidebar main";
+  height: 100dvh;
+}
+
+.desktop-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 16px;
+  background: var(--cloud-surface);
+  border-right: 1px solid var(--cloud-border);
+  backdrop-filter: blur(8px);
+  /* Keep the sidebar reachable on short desktop viewports without horizontal spill. */
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.desktop-brand {
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-nav {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-nav button {
+  text-align: left;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cloud-muted);
+  cursor: pointer;
+}
+
+.desktop-nav button:hover {
+  background: var(--cloud-sky);
+}
+
+.desktop-nav button.is-active {
+  background: var(--cloud-primary);
+  color: #fff;
+}
+
+.desktop-weather {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 12px;
+}
+
+.desktop-weather-icon {
+  font-size: 26px;
+}
+
+.desktop-weather strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.desktop-weather em {
+  font-size: 12px;
+  font-style: normal;
+  color: var(--cloud-muted);
+}
+
+/* 大廳消失後，旅程清單搬進 .desktop-nav 跟 .desktop-sidebar-foot 之間原本的
+   空白區塊。這一塊要吃掉所有剩餘高度（flex: 1）並自己捲動，讓上面的導覽／
+   天氣跟下面的新增旅程表單、同步狀態維持固定大小，旅程一多也不會把側欄撐爆。 */
+.desktop-trip-nav {
+  flex: 1 1 auto;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desktop-trip-nav h3 {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--cloud-muted);
+}
+
+.desktop-trip-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-trip-create-btn {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--cloud-border);
+  border-radius: 8px;
+  background: var(--cloud-surface);
+  color: var(--cloud-primary-strong);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.desktop-trip-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-trip-list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cloud-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-trip-list-item:hover {
+  background: var(--cloud-sky);
+}
+
+.desktop-trip-list-item.is-active {
+  background: var(--cloud-primary);
+  color: #fff;
+}
+
+.desktop-trip-list-item span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cloud-muted);
+}
+
+.desktop-trip-list-item.is-active span {
+  color: inherit;
+  opacity: .85;
+}
+
+.desktop-sidebar-foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desktop-sync,
+.desktop-ghost {
+  padding: 9px 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cloud-muted);
+  cursor: pointer;
+}
+
+.desktop-primary {
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cloud-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.desktop-primary:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.desktop-header {
+  grid-area: header;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 16px 28px;
+  color: #fff;
+  /* cloud-theme.css 的 .app-header 用 !important 蓋掉 background 並自帶 30px 圓角，
+     這裡不寫 background（寫了也是死碼），只把繼承來的卡片圓角關掉——桌面 header
+     是滿版，不該有手機卡片式的下緣圓角。 */
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.desktop-header h1 {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.desktop-header p {
+  font-size: 12px;
+  opacity: .85;
+}
+
+.desktop-main {
+  grid-area: main;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.desktop-pane {
+  height: 100%;
+  overflow: auto;
+  padding: 22px 28px;
+}
+
+button.suggestion-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+/* currentTrip 為 null 時（尚未選旅程，或旅程被刪除後）取代行程／分帳／設定
+   三個分頁顯示的引導文字；準備分頁不受影響，見 index.html 該處註解。 */
+.desktop-main-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--cloud-muted);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------ 行程分頁 */
+
+.desktop-itinerary {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  padding: 22px 28px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.desktop-itinerary-left {
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.desktop-itinerary-right {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.desktop-day-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.desktop-day-tabs button {
+  padding: 7px 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 999px;
+  background: var(--cloud-surface);
+  cursor: pointer;
+  line-height: 1.25;
+}
+
+.desktop-day-tabs button strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.desktop-day-tabs button em {
+  display: block;
+  font-size: 10px;
+  font-style: normal;
+  color: var(--cloud-muted);
+}
+
+.desktop-day-tabs button.is-active {
+  background: var(--cloud-primary);
+  border-color: var(--cloud-primary);
+  color: #fff;
+}
+
+.desktop-day-tabs button.is-active em {
+  color: inherit;
+  opacity: .85;
+}
+
+.desktop-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px 104px 84px;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 行程搜尋拆成兩列：搜尋框與下方操作列都使用完整可用寬度。 */
+.desktop-itinerary-add-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.desktop-add-row-fields {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px;
+  gap: 8px;
+  align-items: center;
+}
+
+.desktop-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--cloud-muted);
+}
+
+.desktop-hint-warn {
+  color: var(--cloud-accent);
+}
+
+.desktop-list-block h3 {
+  margin: 6px 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--cloud-muted);
+}
+
+/* 兩列 grid：第一列放把手／時間／圖示／內容，第二列把手／時間／圖示欄位延續
+   （靠 grid-template-areas 的 icon/time/handle 名稱在兩列重複達成），內容欄位
+   下方換成動作按鈕靠右對齊。這樣名稱／交通摘要／備註可以拿到卡片全寬換行，
+   不會被 4 個文字按鈕擠壓。 */
+.desktop-place-card {
+  display: grid;
+  grid-template-columns: 18px 58px 30px minmax(0, 1fr);
+  grid-template-areas:
+    "handle time icon main"
+    "handle time icon actions";
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: start;
+}
+
+.desktop-drag-handle {
+  grid-area: handle;
+  align-self: center;
+  cursor: grab;
+  color: var(--cloud-muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+.desktop-drag-handle:active {
+  cursor: grabbing;
+}
+
+.desktop-place-time {
+  grid-area: time;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--cloud-muted);
+}
+
+.desktop-place-icon {
+  grid-area: icon;
+  align-self: center;
+  font-size: 20px;
+}
+
+.desktop-place-main {
+  grid-area: main;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.desktop-place-main strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.desktop-place-main em {
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  color: var(--cloud-muted);
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.desktop-place-actions {
+  display: flex;
+  gap: 5px;
+}
+
+/* 只在直接是 .desktop-place-card 子元素時套用 grid-area：分帳分頁的
+   .desktop-tr 也重用 .desktop-place-actions 這個 class（純粹借按鈕排版），
+   它的父層 grid 沒有 "actions" 這個命名區域，不能讓它跟著跑版。 */
+.desktop-place-card > .desktop-place-actions {
+  grid-area: actions;
+  justify-self: end;
+}
+
+.desktop-place-actions button {
+  padding: 4px 7px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 8px;
+  background: var(--cloud-surface);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.desktop-place-actions .desktop-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.desktop-icon-demote,
+.desktop-icon-promote {
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-icon-danger {
+  color: var(--cloud-accent);
+}
+
+.desktop-place-actions button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.desktop-empty {
+  padding: 14px;
+  font-size: 13px;
+  color: var(--cloud-muted);
+}
+
+.desktop-map-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.desktop-map-head h3 {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.desktop-map-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.desktop-map-actions button {
+  padding: 5px 10px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 8px;
+  background: var(--cloud-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* app.js 的 initGoogleMap 只認 #map，容器高度由桌面版面決定 */
+.desktop-map {
+  flex: 1;
+  min-height: 420px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--cloud-shadow-soft);
+}
+
+.desktop-map-boot {
+  padding: 10px 0;
+}
+
+.desktop-probe {
+  max-height: 240px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-probe-item {
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 8px;
+  background: var(--cloud-surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.desktop-probe-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.desktop-probe-toolbar input {
+  flex: 1;
+  min-width: 0;
+}
+
+.desktop-probe-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: default;
+}
+
+.desktop-probe-selected span {
+  font-size: 12px;
+  color: var(--cloud-muted);
+}
+
+/* -------------------------------------------------- 卡片列欄位修飾 */
+/* .desktop-place-card 預設是兩列 grid-template-areas（拖曳把手／時間／圖示／內容
+   在第一列，動作按鈕在第二列靠右），用於行程分頁的正式行程列，拖曳把手只有這個
+   變體有。以下兩個變體的子元素數量都不一樣，grid-template-areas 不能只覆寫
+   grid-template-columns 沿用父層區域名稱（欄數對不上，版面會壞掉）——每個變體都要
+   給自己完整的 columns + areas。子元素數量已對照 desktop/index.html 的實際標記：
+
+   - .desktop-hotel-row：沒有時間欄，只有 icon／內容／動作。行程分頁「當日住宿」
+     （index.html 第 245-251 行）跟設定分頁「住宿」清單（第 484-494 行）共用這個
+     class，但前者少了動作按鈕，只有 icon + 內容兩個子元素；後者是 icon + 內容 +
+     動作三個子元素。用 areas 讓「動作」那格在缺按鈕時保持空白即可，不需要另外
+     切一個 class。
+   - .desktop-alt-row：沒有時間欄也沒有圖示欄，只有名稱（裸 <strong>，不是包在
+     .desktop-place-main 裡）＋動作兩個子元素（index.html 第 234-240 行）。 */
+.desktop-place-card.desktop-hotel-row {
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-areas:
+    "icon main"
+    "icon actions";
+}
+
+.desktop-place-card.desktop-alt-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main actions";
+  align-items: center;
+}
+
+.desktop-place-card.desktop-alt-row > strong {
+  grid-area: main;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* ------------------------------------------------------------ 分帳分頁 */
+
+.desktop-money-toolbar,
+.desktop-money-grid {
+  width: min(1240px, 100%);
+  margin-inline: auto;
+}
+
+.desktop-money-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.desktop-money-mode,
+.desktop-money-submode {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(136px, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 8px;
+  background: var(--cloud-sky);
+}
+
+.desktop-money-mode button,
+.desktop-money-submode button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cloud-muted);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.desktop-money-mode button.is-active,
+.desktop-money-submode button.is-active {
+  background: #fff;
+  color: var(--cloud-primary-strong);
+  box-shadow: var(--cloud-shadow-soft);
+}
+
+.desktop-wallet-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: var(--cloud-muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.desktop-wallet-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--cloud-primary);
+}
+
+.desktop-money-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.desktop-money-grid > .card {
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.desktop-span-2 {
+  grid-column: 1 / -1;
+}
+
+.desktop-money-summary-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.desktop-money-summary-head > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-money-summary-head span,
+.desktop-money-metrics span {
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.desktop-money-summary-head strong {
+  color: var(--cloud-text);
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.desktop-money-mode-status {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 6px;
+  background: var(--cloud-sky);
+  color: var(--cloud-primary-strong) !important;
+}
+
+.desktop-money-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.desktop-money-metrics > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 6px;
+  background: var(--cloud-sky-2);
+}
+
+.desktop-money-metrics strong {
+  color: var(--cloud-text);
+  font-size: 17px;
+}
+
+.desktop-money-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.desktop-money-section-head h3,
+.desktop-wallet-balances h3 {
+  margin: 0;
+  color: var(--cloud-text);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.desktop-money-section-head p {
+  margin: 3px 0 0;
+  color: var(--cloud-muted);
+  font-size: 12px;
+}
+
+.desktop-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+
+.desktop-expense-form {
+  grid-template-columns: minmax(220px, 2fr) minmax(150px, 1fr) minmax(180px, 1fr);
+  align-items: end;
+}
+
+.desktop-wallet-form {
+  grid-template-columns: repeat(2, minmax(180px, 260px)) minmax(120px, auto);
+  align-items: end;
+  margin-top: 14px;
+}
+
+.desktop-form-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-form-field > span,
+.desktop-money-field > span {
+  display: block;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.desktop-form-field input,
+.desktop-form-field select {
+  width: 100%;
+  min-width: 0;
+}
+
+.desktop-form-wide {
+  grid-column: 1 / -1;
+}
+
+.desktop-form-submit {
+  grid-column: 1 / -1;
+  min-width: 132px;
+  min-height: 42px;
+  justify-self: end;
+}
+
+.desktop-table {
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.desktop-tr {
+  min-width: 760px;
+  display: grid;
+  grid-template-columns: 96px minmax(160px, 1fr) 90px 110px 120px 90px 130px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--cloud-border);
+  font-size: 13px;
+}
+
+.desktop-th {
+  color: var(--cloud-muted);
+  font-weight: 800;
+}
+
+.desktop-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.desktop-people > button,
+.desktop-people-check-option {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+  word-break: keep-all;
+  writing-mode: horizontal-tb;
+}
+
+.desktop-people > button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.desktop-people > button.is-active {
+  border-color: var(--cloud-primary);
+  background: var(--cloud-primary);
+  color: #fff;
+}
+
+.desktop-category-options,
+.desktop-people-check {
+  margin-top: 0;
+}
+
+.desktop-table-wallet {
+  margin-top: 18px;
+}
+
+.desktop-table-wallet .desktop-tr {
+  min-width: 620px;
+  grid-template-columns: 90px minmax(170px, 1fr) 160px 100px 130px;
+}
+
+.desktop-money-field {
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.desktop-expense-form .desktop-money-field,
+.desktop-wallet-form .desktop-money-field {
+  margin-top: 0;
+}
+
+.desktop-people-check-option {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.desktop-people-check-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.desktop-people-check-option span {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.desktop-people-check-option input:checked + span {
+  border-color: var(--cloud-primary);
+  background: var(--cloud-primary);
+  color: #fff;
+}
+
+.desktop-people-check-option input:focus-visible + span {
+  outline: 2px solid var(--cloud-primary);
+  outline-offset: 2px;
+}
+
+.desktop-money-submode {
+  margin-top: 2px;
+}
+
+.desktop-wallet-balances {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cloud-border);
+}
+
+.desktop-wallet-balances .desktop-money-summary,
+.desktop-analysis-list {
+  margin-top: 8px;
+}
+
+.desktop-money-summary p,
+.desktop-analysis-list p,
+.desktop-settlement-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cloud-border);
+}
+
+.desktop-money-summary p:last-child,
+.desktop-analysis-list p:last-child,
+.desktop-settlement-row:last-child {
+  border-bottom: 0;
+}
+
+.desktop-analysis-list strong,
+.desktop-settlement-row strong {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1180px) {
+  .desktop-money-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-span-2 {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 980px) {
+  .desktop-money-toolbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .desktop-money-mode {
+    width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .desktop-wallet-toggle {
+    margin-left: auto;
+  }
+
+  .desktop-expense-form,
+  .desktop-wallet-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .desktop-money-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ------------------------------------------------------ 準備與設定分頁 */
+
+.desktop-settings {
+  width: min(1240px, 100%);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.desktop-settings-main,
+.desktop-settings-side {
+  min-width: 0;
+}
+
+.desktop-settings-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.desktop-settings .card {
+  margin-bottom: 0;
+}
+
+.desktop-settings-member-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.desktop-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.desktop-member-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--cloud-border);
+}
+
+.desktop-member-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-member-row > button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--cloud-muted);
+  cursor: pointer;
+}
+
+.desktop-settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desktop-settings-actions .desktop-ghost {
+  width: 100%;
+}
+
+.desktop-settings p {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+@media (max-width: 1180px) {
+  .desktop-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* prep-checklist.js 自己注入樣式，這裡只給它一個寬一點的容器 */
+#prep-checklist-root {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* -------------------------------------------------------------- Modal */
+
+.desktop-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .45);
+}
+
+.desktop-modal {
+  width: min(560px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.desktop-create-trip-modal {
+  width: min(420px, 100%);
+}
+
+.desktop-modal h3 {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.desktop-modal textarea {
+  min-height: 92px;
+}
+
+.desktop-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

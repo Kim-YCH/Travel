@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<!-- version: 20260801.2 -->
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>出發囉</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260801.2" />
+
+  <script src="../js/device-router.js?v=20260801.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+  <link rel="stylesheet" href="../style.css?v=20260801.2" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260801.2" />
+  <link rel="stylesheet" href="./desktop.css?v=20260801.2" />
+</head>
+<body class="desktop-body">
+
+<div id="app" class="desktop-app" v-cloak>
+  <div v-if="isLoading" class="loading-bar"></div>
+
+  <!-- 工作區：大廳已合併進側欄，殼永遠渲染 -->
+  <div class="desktop-shell">
+    <aside class="desktop-sidebar">
+      <div class="desktop-brand">✈️ 出發囉</div>
+
+      <nav class="desktop-nav" aria-label="主要導覽">
+        <button type="button" :class="{ 'is-active': currentTab === 'itinerary' }" @click="switchTab('itinerary'); switchDayViewMode('map')">📍 行程</button>
+        <button type="button" :class="{ 'is-active': currentTab === 'money' }" @click="switchTab('money')">💰 分帳</button>
+        <button type="button" :class="{ 'is-active': currentTab === 'prep' }" @click="switchTab('prep')">🎒 準備</button>
+        <button type="button" :class="{ 'is-active': currentTab === 'settings' }" @click="switchTab('settings')">⚙️ 設定</button>
+      </nav>
+
+      <div v-if="tripWeather.status === 'ready'" class="desktop-weather">
+        <span class="desktop-weather-icon">{{ tripWeather.icon }}</span>
+        <div>
+          <strong>{{ tripWeather.max }}° / {{ tripWeather.min }}°</strong>
+          <em>{{ tripWeather.title }}</em>
+        </div>
+      </div>
+
+      <!-- 原本大廳的旅程清單，現在住在側欄的空白區塊；中間可捲動，兩端維持固定大小 -->
+      <div class="desktop-trip-nav">
+        <div class="desktop-trip-nav-head">
+          <h3>我的旅程</h3>
+          <button
+            type="button"
+            class="desktop-trip-create-btn"
+            title="新增旅程"
+            aria-label="新增旅程"
+            @click="openCreateTripModal"
+          >+</button>
+        </div>
+        <div class="desktop-trip-list">
+          <button
+            v-for="trip in trips"
+            :key="trip.id"
+            type="button"
+            class="desktop-trip-list-item"
+            :class="{ 'is-active': currentTrip && currentTrip.id === trip.id }"
+            @click="selectTrip(trip); switchDayViewMode('map')"
+          >
+            <strong>{{ trip.name }}</strong>
+            <span>📍 {{ trip.city }}</span>
+          </button>
+          <p v-if="!trips.length" class="desktop-empty">尚無旅程</p>
+        </div>
+      </div>
+
+      <div class="desktop-sidebar-foot">
+        <button type="button" class="desktop-sync" :class="syncStatusBadgeClass" @click="manualSync">{{ syncStatusText }}</button>
+        <span class="desktop-version">{{ APP_VERSION }}</span>
+      </div>
+    </aside>
+
+    <!-- currentTrip 在 exitTrip()／deleteTripTotally() 之後會變回 null，h1 一定要有內容
+         （prep-checklist.js 靠 .app-header h1 的文字去比對 trips_cache 找目前旅程），
+         這裡給一個不會撞名真實旅程的預設字串，而不是留空。 -->
+    <header class="app-header desktop-header">
+      <h1>{{ currentTrip ? currentTrip.name : '尚未選擇旅程' }}</h1>
+      <p v-if="currentTrip">Day {{ currentDay }} · {{ dayLabel(currentDay) }} · {{ currentTrip.city }}</p>
+    </header>
+
+    <main class="desktop-main">
+      <!-- 未選旅程時，行程／分帳／設定三個分頁不渲染內容，只顯示引導文字；
+           準備分頁維持在下面獨立掛載（見該處註解），不受此判斷影響。 -->
+      <template v-if="currentTrip">
+      <section v-show="currentTab === 'itinerary'" class="desktop-pane desktop-itinerary">
+        <div class="desktop-itinerary-left">
+          <div class="desktop-day-tabs">
+            <button
+              v-for="d in totalDays"
+              :key="'day-' + d"
+              type="button"
+              :class="{ 'is-active': currentDay === d }"
+              @click="onDayClick(d)"
+              @dblclick="onDayDblClick(d)"
+            >
+              <strong>Day {{ d }}</strong>
+              <em>{{ dayLabel(d) || '—' }}</em>
+            </button>
+            <button type="button" class="desktop-day-add" @click="addNewDay">＋</button>
+          </div>
+
+          <div class="card desktop-add-place relative">
+            <div class="desktop-add-row desktop-itinerary-add-row">
+              <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '，或貼上地圖網址'" />
+              <div class="desktop-add-row-fields">
+                <input v-model="newTime" type="time" />
+                <select v-model="newPlaceType">
+                  <option v-for="type in itineraryTypes" :key="'type-' + type" :value="type">{{ type }}</option>
+                </select>
+                <button type="button" class="desktop-primary" @click="addPlace" :disabled="isAddingPlace">新增</button>
+              </div>
+            </div>
+
+            <div v-if="isResolvingMapUrl" class="desktop-hint">正在解析地圖網址…</div>
+            <div v-if="mapUrlResolveError" class="desktop-hint desktop-hint-warn">{{ mapUrlResolveError }}</div>
+            <div v-if="translatedSearchHint" class="desktop-hint">🌐 {{ translatedSearchHint }}</div>
+
+            <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
+              <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+              <div v-if="isCoordinateMode" class="suggestion-item bg-green-50" @click="useCoordinateInput">
+                <span class="text-xl">📍</span>
+                <div>
+                  <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
+                  <div class="text-xs text-green-600">點擊使用</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                v-for="item in searchResults"
+                :key="'d-sug-' + item.place_id"
+                class="suggestion-item hover:bg-blue-50"
+                @click="selectPlace(item)"
+              >
+                <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">📍</span>
+                <div class="overflow-hidden">
+                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="card itinerary-route-card">
+            <button type="button" class="route-panel-toggle" @click="toggleRoutePanel">
+              <span>🧭 路線查詢</span>
+              <span class="route-panel-caret">{{ routePanelOpen ? '▲' : '▼' }}</span>
+            </button>
+            <div v-if="routePanelOpen" class="route-panel-body">
+              <label class="route-field">
+                <span class="route-field-label">起點</span>
+                <select v-model="routeStartKey" class="route-select">
+                  <option value="">請選擇</option>
+                  <option v-for="opt in routePointOptions" :key="'d-rs-' + opt.key" :value="opt.key">{{ opt.label }}</option>
+                </select>
+              </label>
+              <label class="route-field">
+                <span class="route-field-label">終點</span>
+                <select v-model="routeGoalKey" class="route-select">
+                  <option value="">請選擇</option>
+                  <option v-for="opt in routePointOptions" :key="'d-rg-' + opt.key" :value="opt.key">{{ opt.label }}</option>
+                </select>
+              </label>
+              <div class="route-mode-switch">
+                <button
+                  v-for="m in routeModes"
+                  :key="'d-rm-' + m.key"
+                  type="button"
+                  class="route-mode-btn"
+                  :class="routeMode === m.key ? 'route-mode-btn-active' : ''"
+                  @click="routeMode = m.key"
+                >{{ m.label }}</button>
+              </div>
+              <button type="button" class="route-open-btn" :disabled="!canOpenRoute" @click="openRoute">
+                開啟 {{ routeMapLabel }} 路線
+              </button>
+            </div>
+          </div>
+
+          <div class="desktop-list-block" ref="itineraryListEl">
+            <h3>正式行程</h3>
+            <article
+              v-for="place in filteredItinerary"
+              :key="place.id"
+              :data-id="place.id"
+              class="card desktop-place-card"
+              @click="focusItineraryMapPoint(currentDayMapPoints.find(p => p.kind === 'itinerary' && p.id === place.id))"
+            >
+              <div class="drag-handle desktop-drag-handle select-none" @click.stop>≡</div>
+              <span class="desktop-place-time">{{ place.time ? formatTime(place.time) : '未定' }}</span>
+              <span class="desktop-place-icon">{{ getItineraryIcon(place) }}</span>
+              <div class="desktop-place-main" @click="handleItineraryContentClick($event, place)">
+                <span class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">{{ getItineraryCategoryLabel(place) }}</span>
+                <strong>{{ place.name }}</strong>
+                <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通資訊">
+                  <span v-for="detail in getTransportSummary(place)" :key="place.id + '-' + detail">{{ detail }}</span>
+                </div>
+                <em v-if="getItineraryNote(place)" v-html="linkifyMessage(getItineraryNote(place))"></em>
+              </div>
+              <div class="desktop-place-actions" @click.stop>
+                <button type="button" class="desktop-icon-btn desktop-icon-demote" title="正式轉備案" aria-label="正式轉備案" @click="moveItineraryToAlternative(place)" :disabled="isPromotingAlternative || isLoading">↓</button>
+                <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯" @click="openEditModal(place)" :disabled="isLoading">✏️</button>
+                <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除" @click="removePlace(place.id)" :disabled="isLoading">✕</button>
+              </div>
+            </article>
+            <p v-if="!filteredItinerary.length" class="desktop-empty">這一天還沒有行程</p>
+          </div>
+
+          <div class="desktop-list-block" ref="alternativeListEl">
+            <h3 v-if="filteredAlternatives.length">備案</h3>
+            <article v-for="alt in filteredAlternatives" :key="alt.id" :data-id="alt.id" class="card desktop-place-card desktop-alt-row">
+              <strong>{{ alt.name }}</strong>
+              <div class="desktop-place-actions">
+                <button type="button" class="desktop-icon-btn desktop-icon-promote" title="轉為正式行程" aria-label="轉為正式行程" @click="promoteAlternativeToItinerary(alt)" :disabled="isPromotingAlternative || isLoading">↑</button>
+                <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯" @click="openEditModal(alt)" :disabled="isLoading">✏️</button>
+                <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除" @click="removeAlternative(alt.id)" :disabled="isDeletingAlternative || isLoading">✕</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="desktop-list-block">
+            <h3>當日住宿</h3>
+            <article v-for="hotel in currentDayHotels" :key="hotel.id" class="card desktop-place-card desktop-hotel-row" @click="openHotelMap(hotel)">
+              <span class="desktop-place-icon">🏠</span>
+              <div class="desktop-place-main">
+                <strong>{{ hotel.name }}</strong>
+                <em>{{ hotelDayRangeLabel(hotel) }} · {{ hotel.address }}</em>
+              </div>
+            </article>
+            <p v-if="!currentDayHotels.length" class="desktop-empty">這一天沒有住宿</p>
+          </div>
+        </div>
+
+        <div class="desktop-itinerary-right">
+          <div class="desktop-map-head">
+            <h3>Day {{ currentDay }} 地圖</h3>
+            <div class="desktop-map-actions">
+              <button type="button" @click="fitBoundsToTrip">全部</button>
+              <button type="button" @click="showAllCurrentDayMapPoints">本日</button>
+              <button type="button" @click="toggleProbeSearch">探點</button>
+            </div>
+          </div>
+
+          <div v-if="!isMapReady" class="desktop-map-boot">
+            <button type="button" class="desktop-primary" @click="switchDayViewMode('map')">載入地圖</button>
+          </div>
+
+          <div id="map" class="desktop-map"></div>
+
+          <div v-if="probeSearchOpen" class="card desktop-probe">
+            <div class="desktop-probe-toolbar">
+              <input v-model="probeQuery" @input="searchProbePlacesInput" @keyup.enter="searchProbeByQuery" placeholder="搜尋地圖上的點" />
+              <button v-if="probeQuery || probePlace" type="button" class="desktop-ghost" @click="clearProbeSearch">清除</button>
+              <button type="button" class="desktop-ghost" @click="closeProbeSearchPanel">關閉</button>
+            </div>
+            <div v-if="probeIsSearching" class="desktop-hint">搜尋中…</div>
+            <button
+              v-for="item in probeResults"
+              :key="'d-probe-' + (item.place_id || item.description)"
+              type="button"
+              class="desktop-probe-item"
+              @click="selectProbePlace(item)"
+            >{{ item.probe_title || item.name || item.description }}</button>
+            <div v-if="probePlace" class="desktop-probe-item desktop-probe-selected">
+              <strong>🔎 {{ probePlace.name }}</strong>
+              <span v-if="probePlace.address">{{ probePlace.address }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section v-show="currentTab === 'money'" class="desktop-pane desktop-money">
+        <div class="desktop-money-toolbar">
+          <div class="desktop-money-mode" role="tablist" aria-label="分帳模式">
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="moneyDisplayMode === 'personal'"
+              :class="{ 'is-active': moneyDisplayMode === 'personal' }"
+              @click="moneyDisplayMode = 'personal'"
+            >個人分帳</button>
+            <button
+              v-if="sharedWalletEnabled"
+              type="button"
+              role="tab"
+              :aria-selected="moneyDisplayMode === 'wallet'"
+              :class="{ 'is-active': moneyDisplayMode === 'wallet' }"
+              @click="moneyDisplayMode = 'wallet'"
+            >共同錢包</button>
+          </div>
+
+          <label class="desktop-wallet-toggle">
+            <input type="checkbox" :checked="sharedWalletEnabled" @change="updateSharedWalletSetting($event.target.checked)" :disabled="isUpdatingSharedWalletSetting" />
+            啟用共同錢包
+          </label>
+        </div>
+
+        <div class="desktop-money-grid">
+          <article class="card desktop-money-summary desktop-span-2">
+            <div class="desktop-money-summary-head">
+              <div>
+                <span>旅程實際支出</span>
+                <strong>${{ Math.round(actualTripExpense) }}</strong>
+              </div>
+              <span class="desktop-money-mode-status">{{ moneyDisplayMode === 'personal' ? '個人分帳' : '共同錢包' }}</span>
+            </div>
+            <div class="desktop-money-metrics">
+              <div v-if="moneyDisplayMode === 'personal'">
+                <span>個人分帳支出</span>
+                <strong>${{ Math.round(totalExpense) }}</strong>
+              </div>
+              <div v-if="moneyDisplayMode === 'personal'">
+                <span>待結算筆數</span>
+                <strong>{{ settlementPlan.length }}</strong>
+              </div>
+              <div v-if="moneyDisplayMode === 'personal'">
+                <span>旅伴人數</span>
+                <strong>{{ people.length }}</strong>
+              </div>
+              <div v-if="moneyDisplayMode === 'wallet'">
+                <span>累計存入</span>
+                <strong>${{ Math.round(sharedWalletDepositTotal) }}</strong>
+              </div>
+              <div v-if="moneyDisplayMode === 'wallet'">
+                <span>共同支出</span>
+                <strong>${{ Math.round(sharedWalletPaymentTotal) }}</strong>
+              </div>
+              <div v-if="moneyDisplayMode === 'wallet'">
+                <span>目前餘額</span>
+                <strong>${{ Math.round(sharedWalletBalance) }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <template v-if="moneyDisplayMode === 'personal'">
+            <article class="card desktop-span-2 desktop-money-entry">
+              <div class="desktop-money-section-head">
+                <div>
+                  <h3>新增個人分帳</h3>
+                  <p>記錄付款人與實際參與分攤的旅伴</p>
+                </div>
+              </div>
+
+              <div class="desktop-form desktop-expense-form">
+                <label class="desktop-form-field">
+                  <span>項目</span>
+                  <input v-model="newExpense.title" placeholder="例如：晚餐" />
+                </label>
+                <label class="desktop-form-field">
+                  <span>金額</span>
+                  <input v-model.number="newExpense.amount" type="number" min="0" placeholder="$ 金額" />
+                </label>
+                <label class="desktop-form-field">
+                  <span>付款人</span>
+                  <select v-model="newExpense.payer">
+                    <option disabled value="">請選擇</option>
+                    <option v-for="(p, index) in people" :key="'d-payer-' + p.id" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
+                  </select>
+                </label>
+
+                <div class="desktop-money-field desktop-form-wide">
+                  <span>分類</span>
+                  <div class="desktop-people desktop-category-options" aria-label="個人分帳分類">
+                    <button
+                      v-for="cat in categories"
+                      :key="'d-cat-' + cat"
+                      type="button"
+                      :class="{ 'is-active': newExpense.category === cat }"
+                      @click="newExpense.category = cat"
+                    >{{ cat }}</button>
+                  </div>
+                </div>
+
+                <div class="desktop-money-field desktop-form-wide">
+                  <span>分攤給（點擊切換）</span>
+                  <div class="desktop-people desktop-people-check">
+                    <label v-for="(p, index) in people" :key="'d-inv-' + p.id" class="desktop-people-check-option">
+                      <input type="checkbox" :value="p.name" v-model="newExpense.involved">
+                      <span>{{ p.name || '成員 ' + (index+1) }}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <button type="button" class="desktop-primary desktop-form-submit" @click="addExpense" :disabled="isAddingExpense">
+                  {{ isAddingExpense ? '寫入中' : '新增分帳' }}
+                </button>
+              </div>
+            </article>
+
+            <article class="card desktop-span-2">
+              <div class="desktop-money-section-head">
+                <div>
+                  <h3>個人分帳紀錄</h3>
+                  <p>可檢查付款人、分類與參與成員</p>
+                </div>
+              </div>
+              <div class="desktop-table">
+                <div class="desktop-tr desktop-th"><span>日期</span><span>項目</span><span>付款人</span><span>分類</span><span>參與</span><span>金額</span><span></span></div>
+                <div v-for="item in filteredExpenses" :key="item.id" class="desktop-tr">
+                  <span>{{ expenseDateLabel(item) }}</span>
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.payer }}</span>
+                  <span>{{ getExpenseCategoryIcon(item.category) }} {{ item.category }}</span>
+                  <span>{{ formatInvolved(item.involved) }}</span>
+                  <span>${{ Math.round(item.amount) }}</span>
+                  <span class="desktop-place-actions">
+                    <button type="button" @click="openEditExpenseModal(item)">編輯</button>
+                    <button type="button" @click="removeExpense(item.id)">刪除</button>
+                  </span>
+                </div>
+                <p v-if="!filteredExpenses.length" class="desktop-empty">尚無個人分帳紀錄</p>
+              </div>
+            </article>
+          </template>
+
+          <template v-else-if="sharedWalletEnabled && moneyDisplayMode === 'wallet'">
+            <article class="card desktop-span-2 desktop-wallet-card">
+              <div class="desktop-money-section-head">
+                <div>
+                  <h3>共同錢包</h3>
+                  <p>分開記錄旅伴存入與共同支出</p>
+                </div>
+              </div>
+
+              <div class="desktop-money-submode" role="tablist" aria-label="共同錢包操作">
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="walletEntryMode === 'deposit'"
+                  :class="{ 'is-active': walletEntryMode === 'deposit' }"
+                  @click="walletEntryMode = 'deposit'"
+                >新增存入</button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="walletEntryMode === 'payment'"
+                  :class="{ 'is-active': walletEntryMode === 'payment' }"
+                  @click="walletEntryMode = 'payment'"
+                >新增公費支出</button>
+              </div>
+
+              <div v-if="walletEntryMode === 'deposit'" class="desktop-form desktop-wallet-form">
+                <label class="desktop-form-field">
+                  <span>存入人</span>
+                  <select v-model="newSharedWalletDeposit.person">
+                    <option disabled value="">選擇存入人</option>
+                    <option v-for="(p, index) in people" :key="'d-wd-' + p.id" :value="p.name">{{ p.name || '成員 ' + (index+1) }}</option>
+                  </select>
+                </label>
+                <label class="desktop-form-field">
+                  <span>金額</span>
+                  <input v-model.number="newSharedWalletDeposit.amount" type="number" min="1" placeholder="$ 金額" />
+                </label>
+                <button
+                  type="button"
+                  class="desktop-primary desktop-form-submit"
+                  @click="addSharedWalletDeposit"
+                  :disabled="isSavingSharedWallet || !newSharedWalletDeposit.person || Number(newSharedWalletDeposit.amount) <= 0"
+                >{{ isSavingSharedWallet ? '寫入中' : '存入' }}</button>
+              </div>
+
+              <template v-else>
+                <div class="desktop-form desktop-wallet-form">
+                  <label class="desktop-form-field">
+                    <span>支出項目</span>
+                    <input v-model="newSharedWalletPayment.title" placeholder="例如：包車費" />
+                  </label>
+                  <label class="desktop-form-field">
+                    <span>金額</span>
+                    <input v-model.number="newSharedWalletPayment.amount" type="number" min="1" placeholder="$ 金額" />
+                  </label>
+
+                  <div class="desktop-money-field desktop-form-wide">
+                    <span>使用人</span>
+                    <div class="desktop-people">
+                      <button
+                        type="button"
+                        :class="{ 'is-active': newSharedWalletPayment.persons.length === 0 }"
+                        @click="selectAllSharedWalletPaymentPeople"
+                      >所有人分攤</button>
+                      <button
+                        v-for="(p, index) in people"
+                        :key="'d-wp-' + p.id"
+                        type="button"
+                        :class="{ 'is-active': newSharedWalletPayment.persons.includes(p.name) }"
+                        @click="toggleSharedWalletPaymentPerson(p.name)"
+                      >{{ p.name || '成員 ' + (index+1) }}</button>
+                    </div>
+                  </div>
+
+                  <div class="desktop-money-field desktop-form-wide">
+                    <span>分類</span>
+                    <div class="desktop-people desktop-category-options" aria-label="公費支出分類">
+                      <button
+                        v-for="cat in categories"
+                        :key="'d-wc-' + cat"
+                        type="button"
+                        :class="{ 'is-active': newSharedWalletPayment.category === cat }"
+                        @click="newSharedWalletPayment.category = cat"
+                      >{{ cat }}</button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="desktop-primary desktop-form-submit"
+                    @click="addSharedWalletPayment"
+                    :disabled="isSavingSharedWallet || !newSharedWalletPayment.title || Number(newSharedWalletPayment.amount) <= 0"
+                  >{{ isSavingSharedWallet ? '寫入中' : '新增支出' }}</button>
+                </div>
+              </template>
+
+              <div class="desktop-table desktop-table-wallet">
+                <div class="desktop-tr desktop-th"><span>類型</span><span>項目</span><span>對象</span><span>金額</span><span></span></div>
+                <div v-for="tx in sharedWalletRecords" :key="tx.id" class="desktop-tr">
+                  <span>{{ tx.type === 'deposit' ? '存入' : '支出' }}</span>
+                  <strong>{{ tx.type === 'deposit' ? (tx.person || '存入') : tx.title }}</strong>
+                  <span>{{ formatSharedWalletUsers(tx) }}</span>
+                  <span>${{ Math.round(tx.amount) }}</span>
+                  <span class="desktop-place-actions">
+                    <button type="button" @click="openEditWalletModal(tx)">編輯</button>
+                    <button type="button" @click="removeSharedWalletTransaction(tx)">刪除</button>
+                  </span>
+                </div>
+                <p v-if="!sharedWalletRecords.length" class="desktop-empty">尚無共同錢包紀錄</p>
+              </div>
+
+              <div class="desktop-wallet-balances">
+                <h3>成員錢包餘額</h3>
+                <div class="desktop-money-summary">
+                  <p v-for="res in sharedWalletMemberBalances" :key="'d-wb-' + res.name">
+                    <span>{{ res.name }}</span>
+                    <strong>${{ Math.round(res.balance) }}</strong>
+                  </p>
+                </div>
+              </div>
+            </article>
+          </template>
+
+          <article class="card">
+            <h3>旅程消費分析</h3>
+            <div class="desktop-analysis-list">
+              <p v-for="row in categoryAnalysis" :key="'d-ca-' + row.name">
+                <span>{{ getExpenseCategoryIcon(row.name) }} {{ row.name }}</span>
+                <strong>${{ Math.round(row.total) }}</strong>
+              </p>
+              <p v-if="!categoryAnalysis.length" class="desktop-empty">尚無可分析的支出</p>
+            </div>
+          </article>
+
+          <article v-if="moneyDisplayMode === 'personal'" class="card">
+            <h3>結算</h3>
+            <div class="desktop-money-summary">
+              <p v-for="res in balanceSheet" :key="'d-bs-' + res.name">
+                <span>{{ res.name }}</span>
+                <strong>{{ res.balance > 0 ? '+' : '' }}{{ Math.round(res.balance) }}</strong>
+              </p>
+            </div>
+            <p v-for="row in settlementPlan" :key="'d-sp-' + row.from + row.to" class="desktop-settlement-row">
+              <span>{{ row.from }} → {{ row.to }}</span>
+              <strong>${{ row.amount }}</strong>
+            </p>
+            <p v-if="!settlementPlan.length" class="desktop-empty">目前不需要轉帳</p>
+          </article>
+
+        </div>
+      </section>
+      <section v-show="currentTab === 'settings'" class="desktop-pane desktop-settings">
+        <div class="desktop-settings-main">
+          <article class="card desktop-settings-lodging">
+            <h3>住宿管理</h3>
+            <div class="desktop-form">
+              <input v-model="hotelSearchQuery" @input="searchHotelPlacesInput" placeholder="搜尋住宿名稱或地址" />
+              <input v-model.number="newHotel.start_day" type="number" min="1" placeholder="起始 Day" />
+              <input v-model.number="newHotel.end_day" type="number" min="1" placeholder="結束 Day" />
+              <button type="button" class="desktop-primary" @click="addHotel" :disabled="isAddingHotel">新增</button>
+            </div>
+            <div v-if="hotelSearchResults.length" class="suggestions-list">
+              <button
+                type="button"
+                v-for="item in hotelSearchResults"
+                :key="'d-hotel-' + item.place_id"
+                class="suggestion-item hover:bg-teal-50"
+                @click="selectHotelPlace(item)"
+              >
+                <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">🏨</span>
+                <div class="overflow-hidden">
+                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+                </div>
+              </button>
+            </div>
+            <article v-for="hotel in hotels" :key="hotel.id" class="desktop-place-card desktop-hotel-row">
+              <span class="desktop-place-icon">🏠</span>
+              <div class="desktop-place-main">
+                <strong>{{ hotel.name }}</strong>
+                <em>{{ hotelDayRangeLabel(hotel) }} · {{ hotel.address }}</em>
+              </div>
+              <div class="desktop-place-actions">
+                <button type="button" @click="openEditHotelModal(hotel)">編輯</button>
+                <button type="button" @click="removeHotel(hotel.id)" :disabled="isDeletingHotel">刪除</button>
+              </div>
+            </article>
+          </article>
+        </div>
+
+        <aside class="desktop-settings-side">
+          <article class="card">
+            <h3>成員管理</h3>
+            <div class="desktop-settings-member-form">
+              <input v-model="newPerson" placeholder="新成員名稱" />
+              <button type="button" class="desktop-primary" @click="addPerson">新增</button>
+            </div>
+            <div class="desktop-member-list">
+              <div v-for="(p, idx) in people" :key="'d-person-' + p.id" class="desktop-member-row">
+                <span :title="p.name">{{ p.name || '成員 ' + (idx + 1) }}</span>
+                <button
+                  type="button"
+                  title="移除成員"
+                  :aria-label="'移除 ' + (p.name || '成員 ' + (idx + 1))"
+                  @click="removePerson(idx)"
+                >×</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card desktop-settings-actions">
+            <h3>資料匯出</h3>
+            <button type="button" class="desktop-ghost" @click="exportItinerary">複製行程文字</button>
+            <button type="button" class="desktop-ghost" @click="downloadBackupHtml">下載 HTML 備份</button>
+          </article>
+
+          <article class="card desktop-settings-actions">
+            <h3>旅程操作</h3>
+            <button type="button" class="desktop-ghost" @click="deleteTripTotally">刪除整個旅程</button>
+          </article>
+        </aside>
+      </section>
+      </template>
+      <div v-else class="desktop-main-empty">從左側選一趟旅程開始</div>
+
+      <!-- prep-checklist.js 用 MutationObserver + 1.2s 輪詢盯著這個掛載點，
+           不管有沒有選旅程都必須留在 DOM 裡（只用 v-show 隱藏，不能用 v-if 拆掉），
+           否則它會卡在一個已經被移除的節點上，之後永遠等不到重新掛載。 -->
+      <section v-show="currentTab === 'prep'" class="desktop-pane prep-page">
+        <div id="prep-checklist-root"></div>
+      </section>
+
+      <div
+        v-if="showCreateTripModal"
+        class="desktop-modal-mask"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="desktop-create-trip-title"
+        tabindex="-1"
+        data-desktop-modal-mask
+        @click.self="closeCreateTripModal"
+        @keydown.esc="closeCreateTripModal"
+      >
+        <form class="card desktop-modal desktop-create-trip-modal" @submit.prevent="createTripFromModal">
+          <h3 id="desktop-create-trip-title">新增旅程</h3>
+          <label class="desktop-form-field">
+            <span>旅程名稱</span>
+            <input v-model="newTripName" autocomplete="off" />
+          </label>
+          <label class="desktop-form-field">
+            <span>主要城市</span>
+            <input v-model="newTripCity" autocomplete="off" />
+          </label>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeCreateTripModal">取消</button>
+            <button type="submit" class="desktop-primary" :disabled="isLoading || isCreatingTrip || !newTripName.trim()">建立</button>
+          </div>
+        </form>
+      </div>
+
+      <div v-if="showEditModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditModal" @keydown.esc="closeEditModal">
+        <div class="card desktop-modal">
+          <h3>編輯行程</h3>
+          <div class="desktop-form">
+            <input v-model="editPlace.name" placeholder="名稱" />
+            <input v-model="editPlace.time" type="time" />
+            <select v-model="editPlace.type"><option v-for="type in itineraryTypes" :key="'d-et-' + type" :value="type">{{ type }}</option></select>
+          </div>
+
+          <section v-if="editPlace.type === '交通'" class="transport-editor" aria-label="交通資訊">
+            <div class="transport-editor-title">交通資訊</div>
+            <div class="transport-editor-grid">
+              <label>
+                <span>班次</span>
+                <input v-model="editPlace.transport.number">
+              </label>
+              <label>
+                <span>航廈／月台</span>
+                <input v-model="editPlace.transport.terminal" placeholder="航廈 / 月台">
+              </label>
+              <label>
+                <span>座位</span>
+                <input v-model="editPlace.transport.seat" placeholder="32A / 8車 12號">
+              </label>
+              <label>
+                <span>出發時間</span>
+                <input v-model="editPlace.transport.checkin" type="time">
+              </label>
+            </div>
+          </section>
+
+          <textarea v-model="editPlace.message" placeholder="備註"></textarea>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeEditModal">取消</button>
+            <button type="button" class="desktop-primary" @click="saveEditPlace">儲存</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showEditHotelModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditHotelModal" @keydown.esc="closeEditHotelModal">
+        <div class="card desktop-modal">
+          <h3>編輯住宿</h3>
+          <input v-model="editHotelSearchQuery" @input="searchEditHotelPlacesInput" placeholder="重新搜尋住宿" />
+          <div v-if="editHotelSearchResults.length" class="suggestions-list">
+            <button
+              type="button"
+              v-for="item in editHotelSearchResults"
+              :key="'d-eh-' + item.place_id"
+              class="suggestion-item hover:bg-teal-50"
+              @click="selectEditHotelPlace(item)"
+            >
+              <span class="text-xl">🏠</span>
+              <div class="overflow-hidden">
+                <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+                <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+              </div>
+            </button>
+          </div>
+          <div class="desktop-form">
+            <input v-model="editHotel.name" placeholder="名稱" />
+            <input v-model.number="editHotel.start_day" type="number" min="1" />
+            <input v-model.number="editHotel.end_day" type="number" min="1" />
+          </div>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeEditHotelModal">取消</button>
+            <button type="button" class="desktop-primary" @click="saveEditHotel" :disabled="isSavingHotel">儲存</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showEditExpenseModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditExpenseModal" @keydown.esc="closeEditExpenseModal">
+        <div class="card desktop-modal">
+          <h3>編輯支出</h3>
+          <div class="desktop-form">
+            <input v-model="editExpense.title" placeholder="項目" />
+            <input v-model.number="editExpense.amount" type="number" min="0" />
+            <select v-model="editExpense.payer"><option v-for="p in people" :key="'d-ep-' + p.name" :value="p.name">{{ p.name }}</option></select>
+            <select v-model="editExpense.category"><option v-for="cat in categories" :key="'d-ec-' + cat" :value="cat">{{ cat }}</option></select>
+          </div>
+          <div class="desktop-money-field">
+            <span>分攤給（點擊切換）</span>
+            <div class="desktop-people desktop-people-check">
+              <label v-for="(p, index) in people" :key="'d-einv-' + p.id" class="desktop-people-check-option">
+                <input type="checkbox" :value="p.name" v-model="editExpense.involved">
+                <span>{{ p.name || '成員 ' + (index+1) }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeEditExpenseModal">取消</button>
+            <button type="button" class="desktop-primary" @click="saveEditExpense" :disabled="isSavingExpense">儲存</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showEditWalletModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditWalletModal" @keydown.esc="closeEditWalletModal">
+        <div class="card desktop-modal">
+          <h3>編輯錢包紀錄</h3>
+          <div class="desktop-form">
+            <input v-model="editWallet.title" placeholder="項目" />
+            <input v-model.number="editWallet.amount" type="number" min="0" />
+          </div>
+          <div v-if="editWallet.type === 'deposit'" class="desktop-people" aria-label="Deposit owner">
+            <button
+              v-for="p in people"
+              :key="'d-ew-deposit-' + p.name"
+              type="button"
+              :class="{ 'is-active': editWallet.person === p.name }"
+              @click="editWallet.person = p.name"
+              :aria-pressed="editWallet.person === p.name"
+            >{{ p.name }}</button>
+          </div>
+          <div v-else class="desktop-people" aria-label="Payment participants">
+            <button
+              v-for="p in people"
+              :key="'d-ew-payment-' + p.name"
+              type="button"
+              :class="{ 'is-active': editWallet.persons.includes(p.name) }"
+              @click="toggleEditWalletPerson(p.name)"
+              :aria-pressed="editWallet.persons.includes(p.name)"
+            >{{ p.name }}</button>
+            <button
+              type="button"
+              :class="{ 'is-active': editWallet.persons.length === 0 }"
+              :aria-pressed="editWallet.persons.length === 0"
+              @click="selectAllEditWalletPeople"
+            >全選</button>
+          </div>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeEditWalletModal">取消</button>
+            <button type="button" class="desktop-primary" @click="saveEditWalletTransaction" :disabled="isSavingSharedWallet">儲存</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showDayModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeDayModal" @keydown.esc="closeDayModal">
+        <div class="card desktop-modal">
+          <h3>Day {{ modalDay }}</h3>
+          <label>設定 Day 1 日期<input v-model="dateInput" type="date" /></label>
+          <button type="button" class="desktop-primary" @click="applyDay1Date">套用</button>
+          <label>與哪一天交換
+            <select v-model.number="swapTargetDay">
+              <option v-for="d in totalDays" :key="'d-swap-' + d" :value="d">Day {{ d }}</option>
+            </select>
+          </label>
+          <button type="button" class="desktop-ghost" @click="swapWithDay">交換</button>
+          <button type="button" class="desktop-ghost" @click="deleteDay(modalDay)">刪除這一天</button>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeDayModal">關閉</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../config.js?v=20260801.2"></script>
+<script src="../keyword-map.js?v=20260801.2"></script>
+<script src="../js/utils.js?v=20260801.2"></script>
+<script src="../js/api.js?v=20260801.2"></script>
+<script src="../js/cache.js?v=20260801.2"></script>
+<script src="../js/maps.js?v=20260801.2"></script>
+<script src="../js/places.js?v=20260801.2"></script>
+<script src="../js/itinerary.js?v=20260801.2"></script>
+<script src="../js/hotels.js?v=20260801.2"></script>
+<script src="../js/expenses.js?v=20260801.2"></script>
+<script src="../js/weather.js?v=20260801.2"></script>
+<script src="../js/export.js?v=20260801.2"></script>
+<script src="../js/probe-search.js?v=20260801.2"></script>
+<script src="../app.js?v=20260801.2"></script>
+<script src="../search-zh-label.js?v=20260801.2"></script>
+<script src="../prep-checklist.js?v=20260801.2"></script>
+<script>
+  (() => {
+    const modalSelector = '[data-desktop-modal-mask]';
+    const focusableSelector = [
+      'button:not([disabled])',
+      '[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+    const backgroundStates = new Map();
+    let activeModal = null;
+    let previouslyFocusedElement = null;
+
+    const backgroundNodes = () => document.querySelectorAll(
+      '.desktop-sidebar, .desktop-header, .desktop-main > :not([data-desktop-modal-mask])'
+    );
+
+    const setBackgroundIsolation = (isOpen) => {
+      backgroundNodes().forEach((node) => {
+        if (isOpen) {
+          if (!backgroundStates.has(node)) {
+            backgroundStates.set(node, {
+              ariaHidden: node.getAttribute('aria-hidden'),
+              inert: node.inert
+            });
+          }
+          node.inert = isOpen;
+          node.setAttribute('aria-hidden', 'true');
+          return;
+        }
+
+        const previous = backgroundStates.get(node);
+        if (!previous) return;
+        node.inert = previous.inert;
+        if (previous.ariaHidden === null) node.removeAttribute('aria-hidden');
+        else node.setAttribute('aria-hidden', previous.ariaHidden);
+        backgroundStates.delete(node);
+      });
+    };
+
+    const focusableElements = (modal) => [...modal.querySelectorAll(focusableSelector)]
+      .filter((element) => element.getClientRects().length > 0);
+
+    const syncModalFocus = () => {
+      const nextModal = document.querySelector(modalSelector);
+      if (nextModal === activeModal) return;
+
+      activeModal = nextModal;
+      setBackgroundIsolation(Boolean(nextModal));
+
+      if (nextModal) {
+        previouslyFocusedElement = document.activeElement;
+        requestAnimationFrame(() => {
+          if (activeModal !== nextModal) return;
+          const first = focusableElements(nextModal)[0];
+          (first || nextModal).focus({ preventScroll: true });
+        });
+        return;
+      }
+
+      const trigger = previouslyFocusedElement;
+      previouslyFocusedElement = null;
+      requestAnimationFrame(() => {
+        if (trigger instanceof HTMLElement && trigger.isConnected) {
+          trigger.focus({ preventScroll: true });
+        }
+      });
+    };
+
+    const setupDesktopModalFocus = () => {
+      new MutationObserver(syncModalFocus).observe(document.body, { childList: true, subtree: true });
+      document.addEventListener('keydown', (event) => {
+        if (!event.isTrusted || !activeModal) return;
+
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          activeModal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          return;
+        }
+
+        if (event.key !== 'Tab') return;
+        const focusable = focusableElements(activeModal);
+        if (!focusable.length) {
+          event.preventDefault();
+          activeModal.focus({ preventScroll: true });
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !activeModal.contains(document.activeElement))) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && (document.activeElement === last || !activeModal.contains(document.activeElement))) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      }, true);
+      syncModalFocus();
+    };
+
+    setupDesktopModalFocus();
+  })();
+</script>
+</body>
+</html>

@@ -50,6 +50,8 @@ createApp({
     const trips = ref([]);
     const newTripName = ref('');
     const newTripCity = ref('');
+    const showCreateTripModal = ref(false);
+    const isCreatingTrip = ref(false);
 
     const currentTab = ref('itinerary');
     const dayViewMode = ref('list');
@@ -1060,26 +1062,34 @@ createApp({
     };
 
     const openMapWindow = (url) => {
-      if (!url) return;
-      window.open(url, '_blank', 'noopener,noreferrer');
+      if (!url) return false;
+
+      const popup = window.open(url, '_blank');
+      if (popup) {
+        try { popup.opener = null; } catch (err) {}
+        return true;
+      }
+
+      window.location.href = url;
+      return false;
     };
 
     // appname 是 Naver URL scheme 的必填參數，網頁要填頁面網址；
     // Naver Map 用它做「返回原 App」，填非網址的字串會讓那條路徑失效。
     const naverAppName = () => String(window.location?.host || 'travel');
 
-    const openNaverMap = ({ name = '', nameKo = '', lat = null, lng = null }) => {
-      const url = TravelMaps.buildNaverPlaceUrl({
-        name,
-        nameKo,
-        lat,
-        lng,
-        appname: naverAppName()
-      });
-      if (url) {
-        window.location.href = url;
+    const openNaverMap = ({ name = '', nameKo = '', address = '', lat = null, lng = null }) => {
+      const params = { name, nameKo, address, lat, lng };
+      if (isDesktopLayout()) {
+        openMapWindow(TravelMaps.buildNaverWebPlaceUrl(params));
         return;
       }
+
+      const url = TravelMaps.buildNaverPlaceUrl({
+        ...params,
+        appname: naverAppName()
+      });
+      if (url) window.location.href = url;
     };
 
     const { resolveWeatherLocation, loadTripWeather, scheduleTripWeatherLoad } = TravelWeather.create({
@@ -1223,17 +1233,10 @@ createApp({
     };
 
     const showAllCurrentDayMapPoints = () => {
-      if (!mapInstance || !window.google) return;
-      const points = getCurrentDayMapPoints();
-      if (!points.length) return;
-
+      mapDisplayFilter.value = `day-${currentDay.value || 1}`;
       markMapPointSelected(null);
       closeMapLocator();
-
-      const bounds = new google.maps.LatLngBounds();
-      points.forEach(point => bounds.extend({ lat: point.lat, lng: point.lng }));
-      mapInstance.fitBounds(bounds);
-      if (points.length === 1) mapInstance.setZoom(16);
+      updateMapMarkers();
     };
 
     const probeSearch = TravelProbeSearch.create({
@@ -1321,7 +1324,7 @@ createApp({
       const encodedQuery = encodeURIComponent(queryText);
 
       if (isKoreaTrip.value) {
-        openNaverMap({ name: queryText, nameKo: name, lat, lng });
+        openNaverMap({ name: queryText, nameKo: name, address, lat, lng });
         return;
       }
 
@@ -1333,34 +1336,50 @@ createApp({
       openMapWindow(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`);
     };
 
+    const mapInfoWindowActionHtml = ({ buttonId, label, color, desktopUrl = '' }) => {
+      const commonStyle = `display:inline-block;background:${color};color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;text-decoration:none;`;
+      if (desktopUrl) {
+        return `<a href="${escapeHtml(desktopUrl)}" target="_blank" rel="noopener noreferrer" style="${commonStyle}">${escapeHtml(label)}</a>`;
+      }
+      return `<button id="${buttonId}" style="${commonStyle}">${escapeHtml(label)}</button>`;
+    };
+
     const showHotelInfoWindow = (hotel, marker) => {
       if (!infoWindow || !window.google) return;
 
       const buttonId = `open-hotel-map-${String(hotel.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
       const mapLabel = isKoreaTrip.value ? '開啟 Naver Map' : '開啟 Google Maps';
+      const desktopUrl = isDesktopLayout() && isKoreaTrip.value
+        ? TravelMaps.buildNaverWebPlaceUrl({
+          name: hotel.name || '',
+          nameKo: hotel.name || '',
+          address: hotel.address || '',
+          lat: hotel.lat,
+          lng: hotel.lng
+        })
+        : '';
 
       infoWindow.setContent(
         `<div style="padding:8px; color:#111; max-width:230px;">
           <div style="font-weight:bold; margin-bottom:4px;">🏠 ${escapeHtml(hotel.name || '住宿')}</div>
           <div style="font-size:12px; color:#555; margin-bottom:3px;">${escapeHtml(hotelDayRangeLabel(hotel))}</div>
           <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(hotel.address || '')}</div>
-          <button
-            id="${buttonId}"
-            style="background:#0d9488;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
-          >${mapLabel}</button>
+          ${mapInfoWindowActionHtml({ buttonId, label: mapLabel, color: '#0d9488', desktopUrl })}
         </div>`
       );
 
       infoWindow.open(mapInstance, marker);
 
-      google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
-        const btn = document.getElementById(buttonId);
-        if (btn) btn.onclick = () => openHotelMap(hotel);
-      });
+      if (!desktopUrl) {
+        google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+          const btn = document.getElementById(buttonId);
+          if (btn) btn.onclick = () => openHotelMap(hotel);
+        });
+      }
     };
 
     const getMapDisplayDay = () => {
-      if (isDayMapView()) {
+      if (!isDesktopLayout() && isDayMapView()) {
         return currentDay.value || 1;
       }
       const raw = String(mapDisplayFilter.value || 'all');
@@ -1416,22 +1435,30 @@ createApp({
 
           if (isKoreaTrip.value) {
             const buttonId = `open-itinerary-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+            const desktopUrl = isDesktopLayout()
+              ? TravelMaps.buildNaverWebPlaceUrl({
+                name: item.name || '',
+                nameKo: item.name_ko || item.nameKo || '',
+                address: item.address || '',
+                lat: item.lat,
+                lng: item.lng
+              })
+              : '';
             infoWindow.setContent(
               `<div style="padding:8px; color:#111; max-width:240px;">
                 <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '')}</div>
                 <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(getItineraryInfoText(item))}</div>
-                <button
-                  id="${buttonId}"
-                  style="background:#ef4444;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
-                >開啟 Naver Map</button>
+                ${mapInfoWindowActionHtml({ buttonId, label: '開啟 Naver Map', color: '#ef4444', desktopUrl })}
               </div>`
             );
             infoWindow.open(mapInstance, marker);
 
-            google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
-              const btn = document.getElementById(buttonId);
-              if (btn) btn.onclick = () => openExternalMap(item);
-            });
+            if (!desktopUrl) {
+              google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+                const btn = document.getElementById(buttonId);
+                if (btn) btn.onclick = () => openExternalMap(item);
+              });
+            }
             return;
           }
 
@@ -1475,22 +1502,30 @@ createApp({
         marker.addListener("click", () => {
           if (isKoreaTrip.value) {
             const buttonId = `open-alt-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
+            const desktopUrl = isDesktopLayout()
+              ? TravelMaps.buildNaverWebPlaceUrl({
+                name: item.name || '',
+                nameKo: item.name_ko || item.nameKo || '',
+                address: item.address || '',
+                lat: item.lat,
+                lng: item.lng
+              })
+              : '';
             infoWindow.setContent(
               `<div style="padding:8px; color:#111; max-width:240px;">
                 <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(item.name || '')}</div>
                 <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(formatTime(item.time)||'')} ${escapeHtml(getItineraryInfoText(item))}</div>
-                <button
-                  id="${buttonId}"
-                  style="background:#f59e0b;color:white;border:0;border-radius:8px;padding:7px 10px;font-weight:bold;font-size:12px;"
-                >開啟 Naver Map</button>
+                ${mapInfoWindowActionHtml({ buttonId, label: '開啟 Naver Map', color: '#f59e0b', desktopUrl })}
               </div>`
             );
             infoWindow.open(mapInstance, marker);
 
-            google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
-              const btn = document.getElementById(buttonId);
-              if (btn) btn.onclick = () => openExternalMap(item);
-            });
+            if (!desktopUrl) {
+              google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+                const btn = document.getElementById(buttonId);
+                if (btn) btn.onclick = () => openExternalMap(item);
+              });
+            }
             return;
           }
 
@@ -1547,6 +1582,7 @@ createApp({
 
       if (hasPoint) {
         mapInstance.fitBounds(bounds);
+        if (markers.length === 1) mapInstance.setZoom(16);
       } else {
         mapInstance.setCenter({ lat: 23.6, lng: 121 });
         mapInstance.setZoom(8);
@@ -1557,6 +1593,9 @@ createApp({
     };
 
     const fitBoundsToTrip = () => {
+      mapDisplayFilter.value = 'all';
+      markMapPointSelected(null);
+      closeMapLocator();
       updateMapMarkers();
     };
 
@@ -1618,22 +1657,44 @@ createApp({
 
     const createTrip = async () => {
       const name = newTripName.value.trim();
-      if(!name) return;
+      if(!name || isCreatingTrip.value) return false;
 
-      const id = generateId();
-      const newTrip = {
-        id,
-        name,
-        city: newTripCity.value.trim() || '',
-        start_date: '',
-        shared_wallet_enabled: false
-      };
+      isCreatingTrip.value = true;
+      try {
+        const id = generateId();
+        const newTrip = {
+          id,
+          name,
+          city: newTripCity.value.trim() || '',
+          start_date: '',
+          shared_wallet_enabled: false
+        };
 
-      trips.value.push(newTrip);
+        trips.value.push(newTrip);
+        newTripName.value = '';
+        newTripCity.value = '';
+
+        await postJSON({ action: 'add', type: 'trips', data: newTrip });
+        return true;
+      } finally {
+        isCreatingTrip.value = false;
+      }
+    };
+
+    const openCreateTripModal = () => {
       newTripName.value = '';
       newTripCity.value = '';
+      showCreateTripModal.value = true;
+    };
 
-      await postJSON({ action: 'add', type: 'trips', data: newTrip });
+    const closeCreateTripModal = () => {
+      showCreateTripModal.value = false;
+    };
+
+    const createTripFromModal = async () => {
+      const created = await createTrip();
+      if (created) closeCreateTripModal();
+      return created;
     };
 
     const selectTrip = async (trip) => {
@@ -2076,13 +2137,20 @@ createApp({
       } catch (e) {}
     };
 
+    // 桌面版把 dayViewMode 固定在 'map'（清單與地圖同時顯示），不像手機版有獨立的
+    // list 檢視。桌面 index.html 的掛載根節點帶 class="desktop-app"；手機版沒有這個
+    // class，所以 isDesktopLayout() 在手機上永遠回傳 false，以下每個用到它的分支都會
+    // 收斂回原本的手機行為，不影響手機。桌面只開放「正式行程」拖曳，備案維持不可拖曳。
+    const isDesktopLayout = () => !!document.querySelector('.desktop-app');
+
     let lastSortableSignature = '';
     const initSortable = () => {
       if (!itineraryListEl.value || !alternativeListEl.value) {
         destroySortable();
         return;
       }
-      if (currentTab.value !== 'itinerary' || dayViewMode.value !== 'list' || !currentTrip.value) {
+      const desktop = isDesktopLayout();
+      if (currentTab.value !== 'itinerary' || (!desktop && dayViewMode.value !== 'list') || !currentTrip.value) {
         destroySortable();
         return;
       }
@@ -2091,7 +2159,11 @@ createApp({
       const alternativeIds = getDomIds(alternativeListEl.value).join('|');
       const signature = `${currentTrip.value.id}__${currentDay.value}__${selectedIds}__${alternativeIds}`;
 
-      if (sortable && alternativeSortable && lastSortableSignature === signature) return;
+      // 桌面不建立 alternativeSortable（見下方），所以不能沿用「兩個都存在」當作
+      // 「已經初始化過」的判斷依據，否則桌面每次 scheduleSortableInit() 都會被判定
+      // 成「還沒 ready」而重建。手機兩個 sortable 都會建立，這條件跟原本完全一樣。
+      const sortablesReady = desktop ? !!sortable : !!(sortable && alternativeSortable);
+      if (sortablesReady && lastSortableSignature === signature) return;
 
       destroySortable();
       lastSortableSignature = signature;
@@ -2108,7 +2180,11 @@ createApp({
       };
 
       sortable = new Sortable(itineraryListEl.value, commonOptions);
-      alternativeSortable = new Sortable(alternativeListEl.value, commonOptions);
+      // 備案清單桌面版不給拖曳把手（見 desktop/index.html），這裡刻意不建立
+      // alternativeSortable，避免使用者用鍵盤／輔助工具觸發時仍能拖動備案。
+      if (!desktop) {
+        alternativeSortable = new Sortable(alternativeListEl.value, commonOptions);
+      }
     };
 
     let sortableInitTimer = null;
@@ -2835,6 +2911,7 @@ createApp({
         openNaverMap({
           name: cleanName,
           nameKo: p.name_ko || '',
+          address: p.address || '',
           lat,
           lng
         });
@@ -4135,8 +4212,8 @@ createApp({
 
     return {
       APP_VERSION,
-      currentView, currentTrip, trips, newTripName, newTripCity,
-      currentTab, dayViewMode, moneyDisplayMode, isLoading, syncStatusText, syncStatusBadgeClass, manualSync,
+      currentView, currentTrip, trips, newTripName, newTripCity, showCreateTripModal,
+      currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,
       isAddingPlace, isAddingExpense, isSavingSharedWallet, isUpdatingSharedWalletSetting, isSavingExpense,
       isAddingAlternative, isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,
@@ -4152,7 +4229,7 @@ createApp({
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
       newAlternative, alternativeSearchQuery, alternativeSearchResults, alternativeIsSearching,
 
-      createTrip, selectTrip, exitTrip, deleteTripTotally, fetchData,
+      createTrip, openCreateTripModal, closeCreateTripModal, createTripFromModal, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
       switchTab, switchDayViewMode, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
       tripCountdownDays, tripCountdownLabel,

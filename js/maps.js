@@ -153,15 +153,31 @@
     return `nmap://route/${NAVER_APP_PATH[mode] || 'public'}?${params.join('&')}`;
   };
 
-  const buildNaverPlaceUrl = ({ name = '', nameKo = '', lat = null, lng = null, appname = '' } = {}) => {
-    const point = normalizeRoutePoint({ name: nameKo || name, lat, lng });
-    const title = String(nameKo || name || '地點').trim();
+  const buildNaverPlaceUrl = ({ name = '', nameKo = '', address = '', lat = null, lng = null, appname = '' } = {}) => {
+    const point = normalizeRoutePoint({ name: nameKo || name || address, lat, lng });
+    const title = String(nameKo || name || address || '地點').trim();
     if (point) {
       return `nmap://place?lat=${point.lat}&lng=${point.lng}&name=${encodeURIComponent(title)}&appname=${encodeURIComponent(appname || 'travel')}`;
     }
-    if (!title) return '';
+    const searchText = String(address || nameKo || name).trim();
+    if (!searchText) return '';
 
-    return `nmap://search?query=${encodeURIComponent(title)}&appname=${encodeURIComponent(appname || 'travel')}`;
+    return `nmap://search?query=${encodeURIComponent(searchText)}&appname=${encodeURIComponent(appname || 'travel')}`;
+  };
+
+  /**
+   * Naver Map 桌面版地點網址。座標優先開啟 marker，缺座標時才搜尋保存的地址。
+   */
+  const buildNaverWebPlaceUrl = ({ name = '', nameKo = '', address = '', lat = null, lng = null, zoom = 16 } = {}) => {
+    const title = String(nameKo || name || address || '地點').trim();
+    const point = normalizeRoutePoint({ name: title, lat, lng });
+    if (point) {
+      const normalizedZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : 16;
+      return `https://map.naver.com/p/?title=${encodeURIComponent(title)}&lng=${point.lng}&lat=${point.lat}&zoom=${normalizedZoom}&type=0`;
+    }
+
+    const savedAddress = String(address).trim();
+    return savedAddress ? `https://map.naver.com/p/search/${encodeURIComponent(savedAddress)}` : '';
   };
 
   /**
@@ -184,6 +200,7 @@
     makeHotelMapPinIcon,
     buildNaverRouteUrl,
     buildNaverPlaceUrl,
+    buildNaverWebPlaceUrl,
     buildGoogleRouteUrl
   });
 })(window);
