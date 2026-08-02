@@ -1265,6 +1265,7 @@ createApp({
 
     const {
       clearProbeMarker,
+      renderProbeMarker,
       focusProbePlace,
       clearProbeSearch,
       closeProbeSearchPanel,
@@ -2416,29 +2417,33 @@ createApp({
       const ids = oldIds.slice();
       ids.push(String(id));
 
-      itinerary.value.push(item);
-      setOrderIds(currentTrip.value.id, d, ids);
-
-      newPlace.value = '';
-      newNote.value = '';
-      newTime.value = '';
-      selectedPlaceData.value = null;
-      searchResults.value = [];
-      translatedSearchHint.value = '';
-      selectedLat.value = null;
-      selectedLng.value = null;
-      isCoordinateMode.value = false;
-      resolvedCoordName.value = '';
-
-      await nextTick();
-      scheduleSortableInit();
-      updateMapMarkers();
-      scheduleTripCacheSave();
-      const initialAddPromise = postJSON({ action:'add', type:'itinerary', data: item });
-      const initialOrderPromise = saveOrderToDB(tripId, d, ids);
-      isAddingPlace.value = false;
-
+      // 從這裡開始都在 try 裡：中途拋錯（例如 updateMapMarkers 碰到 Google Maps 問題）
+      // 若沒被接住，isAddingPlace 會永遠停在 true，「新增」按鈕從此變灰且毫無提示。
       try {
+        itinerary.value.push(item);
+        setOrderIds(currentTrip.value.id, d, ids);
+
+        newPlace.value = '';
+        newNote.value = '';
+        newTime.value = '';
+        selectedPlaceData.value = null;
+        searchResults.value = [];
+        translatedSearchHint.value = '';
+        selectedLat.value = null;
+        selectedLng.value = null;
+        isCoordinateMode.value = false;
+        resolvedCoordName.value = '';
+
+        await nextTick();
+        scheduleSortableInit();
+        updateMapMarkers();
+        scheduleTripCacheSave();
+        const initialAddPromise = postJSON({ action:'add', type:'itinerary', data: item });
+        const initialOrderPromise = saveOrderToDB(tripId, d, ids);
+
+        // 樂觀寫入的畫面已經完成，先放行按鈕，雲端寫入繼續在背景跑（20260728.7 的設計）。
+        isAddingPlace.value = false;
+
         await initialAddPromise;
         await initialOrderPromise;
 

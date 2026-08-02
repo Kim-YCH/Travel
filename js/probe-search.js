@@ -364,6 +364,9 @@
 
     return Object.freeze({
       clearProbeMarker,
+      // app.js 的 updateMapMarkers() 重建完 marker 後要把探點 marker 補回去，
+      // 所以這個必須對外開放，不能只留在 closure 裡。
+      renderProbeMarker,
       getProbeResultTitle,
       getProbeDisplayName,
       focusProbePlace,
