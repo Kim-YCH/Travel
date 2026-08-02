@@ -2457,6 +2457,16 @@ createApp({
           address = naver.address;
           if (naver.lat != null) lat = naver.lat;
           if (naver.lng != null) lng = naver.lng;
+
+          // Naver 的地址型分享網址只給得出道路名地址，沒有座標。這條分支不會掉到下面的
+          // geocoder，所以在這裡補一次，否則行程點會存成沒有位置。
+          if ((lat == null || lng == null) && address) {
+            const [best] = await geocodePlaceCandidates(address);
+            if (best && best.lat != null && best.lng != null) {
+              lat = best.lat;
+              lng = best.lng;
+            }
+          }
         } else if (selectedPlaceSnapshot?.place_id) {
           placeId = selectedPlaceSnapshot.place_id;
 
