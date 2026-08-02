@@ -475,8 +475,9 @@ createApp({
         displayName: zhName || nameKo,
         nameKo,
         address: item?.roadAddress || item?.address || '',
-        lat: item?.lat != null ? Number(item.lat) : null,
-        lng: item?.lng != null ? Number(item.lng) : null
+        // 空字串同樣要擋：Number('') 是 0，會變成幾內亞灣的座標。
+        lat: item?.lat != null && item.lat !== '' ? Number(item.lat) : null,
+        lng: item?.lng != null && item.lng !== '' ? Number(item.lng) : null
       };
     };
 
@@ -1131,9 +1132,19 @@ createApp({
     };
 
     const hasMapCoordinates = (item) => {
-      const lat = Number(item?.lat);
-      const lng = Number(item?.lng);
-      return Number.isFinite(lat) && Number.isFinite(lng);
+      // Number(null) 與 Number('') 都是 0，而 Number.isFinite(0) 是 true。
+      // 直接轉型會讓「還沒拿到座標」的項目通過守門，marker 落在 (0,0) 的幾內亞灣：
+      // 新增當下先閃到非洲外海，等背景 geocode 完成才收斂回來。空值必須先擋掉。
+      const isBlank = (v) => v === null || v === undefined || String(v).trim() === '';
+      if (isBlank(item?.lat) || isBlank(item?.lng)) return false;
+
+      const lat = Number(item.lat);
+      const lng = Number(item.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+
+      // 已經寫進 Sheets 的髒資料：正好 (0,0) 幾乎必然是漏掉的空值，不是真實地點。
+      // 單一軸為 0 仍然合法（本初子午線、赤道）。
+      return !(lat === 0 && lng === 0);
     };
 
     const shouldShowItineraryOnMap = (item) => {
