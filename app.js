@@ -560,8 +560,43 @@ createApp({
       return diffDay;
     };
 
+    // 每個旅程各自記住上次看到的天數。只在使用者手動點天數時更新（見 onDayClick），
+    // 程式性設定天數（進旅程時）不寫入，才不會把記憶蓋掉。
+    const TRIP_DAYS_KEY = 'travel_trip_days';
+    const getRememberedDay = (tripId) => {
+      if (!tripId) return 0;
+      try {
+        const m = JSON.parse(localStorage.getItem(TRIP_DAYS_KEY) || '{}');
+        return parseInt(m[String(tripId)], 10) || 0;
+      } catch (e) { return 0; }
+    };
+    const rememberDay = () => {
+      if (!currentTrip.value?.id) return;
+      try {
+        const m = JSON.parse(localStorage.getItem(TRIP_DAYS_KEY) || '{}');
+        m[String(currentTrip.value.id)] = currentDay.value || 1;
+        localStorage.setItem(TRIP_DAYS_KEY, JSON.stringify(m));
+      } catch (e) {}
+    };
+
+    // 進旅程時決定停在哪一天：今天在旅程日期範圍內就到今天；否則回到記憶的上次天數，沒有才 Day 1。
     const applyEntryDayByToday = () => {
-      const day = getTripDayForToday(currentTrip.value, totalDays.value);
+      const maxDay = Math.max(1, parseInt(totalDays.value, 10) || 1);
+      const base = parseYMD(currentTrip.value?.start_date);
+      let inRangeToday = 0;
+      if (base) {
+        const today = parseYMD(todayKey.value || toYMD(new Date())) || new Date();
+        today.setHours(12, 0, 0, 0);
+        const diffDay = Math.floor((today.getTime() - base.getTime()) / 86400000) + 1;
+        if (diffDay >= 1 && diffDay <= maxDay) inRangeToday = diffDay;
+      }
+      let day;
+      if (inRangeToday) {
+        day = inRangeToday;
+      } else {
+        const remembered = getRememberedDay(currentTrip.value?.id);
+        day = (remembered >= 1 && remembered <= maxDay) ? remembered : 1;
+      }
       currentDay.value = day;
       newExpense.value.day = day;
     };
@@ -1936,6 +1971,7 @@ createApp({
 
     const onDayClick = async (d) => {
       currentDay.value = d;
+      rememberDay();
       mapLocatorOpen.value = false;
       selectedMapPoint.value = null;
       await nextTick();
