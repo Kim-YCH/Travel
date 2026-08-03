@@ -1410,6 +1410,35 @@ createApp({
 
     const { normalizeHexColor, shadeHexColor, makeMapPinIcon, makeHotelMapPinIcon } = TravelMaps;
 
+    // 把座標幾乎重合的點散開成一個小圓，避免地圖上的數字疊成一團。
+    // key 以小數 4 位（約 11 公尺）分組，同格內超過一個點就以等角度散開。
+    const computeSpreadPositions = (list) => {
+      const groups = new Map();
+      list.forEach((it) => {
+        const key = Number(it.lat).toFixed(4) + ',' + Number(it.lng).toFixed(4);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(it);
+      });
+      const positions = new Map();
+      groups.forEach((members) => {
+        if (members.length === 1) {
+          const it = members[0];
+          positions.set(it, { lat: Number(it.lat), lng: Number(it.lng) });
+          return;
+        }
+        const R = 0.00018; // 約 20 公尺
+        members.forEach((it, i) => {
+          const ang = (2 * Math.PI * i) / members.length;
+          const latRad = Number(it.lat) * Math.PI / 180;
+          positions.set(it, {
+            lat: Number(it.lat) + R * Math.cos(ang),
+            lng: Number(it.lng) + R * Math.sin(ang) / Math.max(0.2, Math.cos(latRad))
+          });
+        });
+      });
+      return positions;
+    };
+
     const updateMapMarkers = () => {
       if (!mapInstance || !window.google) return;
 
@@ -1430,13 +1459,25 @@ createApp({
       const bounds = new google.maps.LatLngBounds();
       let hasPoint = false;
 
+      // 「全部」模式（未指定單一天）時，標籤改成天數、並依天數上色，讓不同天一眼可分。
+      const allDaysMode = !displayDay;
+      const DAY_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#0ea5e9', '#f97316', '#a855f7', '#65a30d'];
+      const dayColorOf = (d) => DAY_COLORS[((parseInt(d, 10) || 1) - 1) % DAY_COLORS.length];
+      const dayNumOf = (item) => (item.day ? parseInt(item.day, 10) || 1 : 1);
+
+      // 座標幾乎重合的點散開成小圓，避免數字疊成一團看不清。
+      const displayPos = computeSpreadPositions(itemsToRender);
+
       itemsToRender.forEach((item, index) => {
         const pointKey = getMapPointKey('itinerary', item);
+        const dayNum = dayNumOf(item);
+        const baseColor = allDaysMode ? dayColorOf(dayNum) : '#ef4444';
+        const labelText = allDaysMode ? String(dayNum) : String(index + 1);
         const marker = new google.maps.Marker({
-          position: { lat: Number(item.lat), lng: Number(item.lng) },
+          position: displayPos.get(item) || { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
-          icon: makeMapPinIcon('#ef4444'),
-          label: { text: String(index + 1), color: '#1f2937', fontSize: '12px', fontWeight: '800' },
+          icon: makeMapPinIcon(baseColor),
+          label: { text: labelText, color: '#1f2937', fontSize: '12px', fontWeight: '800' },
           zIndex: 850,
           title: item.name
         });
@@ -1490,7 +1531,7 @@ createApp({
           infoWindow.open(mapInstance, marker);
         });
 
-        mapMarkerByPointKey.set(pointKey, { marker, kind: 'itinerary', baseColor: '#ef4444', zIndex: 850 });
+        mapMarkerByPointKey.set(pointKey, { marker, kind: 'itinerary', baseColor: baseColor, zIndex: 850 });
         markers.push(marker);
         bounds.extend(marker.getPosition());
         hasPoint = true;
