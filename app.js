@@ -1802,6 +1802,7 @@ createApp({
       } else {
         fetchData({ autoSelectToday: true });
       }
+      saveLastView();
     };
 
     const exitTrip = () => {
@@ -1818,7 +1819,38 @@ createApp({
       selectedMapPoint.value = null;
       clearProbeSearch();
       probeSearchOpen.value = false;
+      clearLastView();
       fetchTrips();
+    };
+
+    // 記住上次看到的旅程／天／分頁，重開直接回到原處（手機與桌面共用）。
+    const LAST_VIEW_KEY = 'travel_last_view';
+    let restorePreferredDay = null;
+    const saveLastView = () => {
+      try {
+        if (currentView.value === 'app' && currentTrip.value?.id) {
+          localStorage.setItem(LAST_VIEW_KEY, JSON.stringify({
+            tripId: String(currentTrip.value.id),
+            day: currentDay.value || 1,
+            tab: currentTab.value || 'itinerary'
+          }));
+        }
+      } catch (e) {}
+    };
+    const clearLastView = () => {
+      try { localStorage.removeItem(LAST_VIEW_KEY); } catch (e) {}
+    };
+    const restoreLastView = async () => {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(LAST_VIEW_KEY) || 'null'); } catch (e) {}
+      if (!saved || !saved.tripId) return;
+      const trip = trips.value.find(t => String(t.id) === String(saved.tripId));
+      if (!trip) return;
+      const day = parseInt(saved.day, 10);
+      // fetchData 載完資料設好 totalDays 後，會套用這個偏好天數並清掉（見 fetchData）。
+      restorePreferredDay = Number.isFinite(day) && day >= 1 ? day : null;
+      await selectTrip(trip);
+      if (saved.tab) currentTab.value = saved.tab;
     };
 
     const deleteTripTotally = async () => {
@@ -1875,6 +1907,12 @@ createApp({
         totalDays.value = Math.max(1, maxDay);
         if (options.autoSelectToday) {
           applyEntryDayByToday();
+        }
+        // 還原上次看到的天數：等 totalDays 確定後套用一次，夾在有效範圍內。
+        if (restorePreferredDay != null) {
+          currentDay.value = Math.min(Math.max(1, restorePreferredDay), totalDays.value);
+          newExpense.value.day = currentDay.value;
+          restorePreferredDay = null;
         }
 
         await ensureAllDayOrdersSynced(tripId);
@@ -4190,11 +4228,13 @@ createApp({
       scheduleSortableInit();
       if (isDayMapView()) updateMapMarkers();
       scheduleTripWeatherLoad(250);
+      saveLastView();
     });
 
     watch(currentTab, () => {
       scheduleSortableInit();
       updateMoneyAutoRefresh();
+      saveLastView();
       if (isDayMapView()) {
         setTimeout(() => updateMapMarkers(), 80);
       } else if (currentTab.value === 'itinerary') {
@@ -4262,7 +4302,8 @@ createApp({
       todayRefreshTimer = setInterval(refreshTodayKey, 60 * 1000);
       startSyncRetry();
       updateMoneyAutoRefresh();
-      fetchTrips();
+      await fetchTrips();
+      await restoreLastView();
     });
 
     onBeforeUnmount(() => {

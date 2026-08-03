@@ -1,20 +1,20 @@
 <!DOCTYPE html>
-<!-- version: 20260802.4 -->
+<!-- version: 20260802.5 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260802.4" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260802.5" />
 
-  <script src="../js/device-router.js?v=20260802.4" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../js/device-router.js?v=20260802.5" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260802.4" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260802.4" />
-  <link rel="stylesheet" href="./desktop.css?v=20260802.4" />
+  <link rel="stylesheet" href="../style.css?v=20260802.5" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260802.5" />
+  <link rel="stylesheet" href="./desktop.css?v=20260802.5" />
 </head>
 <body class="desktop-body">
 
@@ -689,6 +689,7 @@
             <input v-model="editPlace.name" placeholder="名稱" />
             <input v-model="editPlace.time" type="time" />
             <select v-model="editPlace.type"><option v-for="type in itineraryTypes" :key="'d-et-' + type" :value="type">{{ type }}</option></select>
+            <select v-model.number="editPlace.day" aria-label="Day"><option v-for="d in totalDays" :key="'d-epday-' + d" :value="d">Day {{ d }}</option></select>
           </div>
 
           <section v-if="editPlace.type === '交通'" class="transport-editor" aria-label="交通資訊">
@@ -745,6 +746,7 @@
             <input v-model.number="editHotel.start_day" type="number" min="1" />
             <input v-model.number="editHotel.end_day" type="number" min="1" />
           </div>
+          <textarea v-model="editHotel.address" rows="3" placeholder="地址或備註..."></textarea>
           <div class="desktop-modal-actions">
             <button type="button" class="desktop-ghost" @click="closeEditHotelModal">取消</button>
             <button type="button" class="desktop-primary" @click="saveEditHotel" :disabled="isSavingHotel">儲存</button>
@@ -760,6 +762,7 @@
             <input v-model.number="editExpense.amount" type="number" min="0" />
             <select v-model="editExpense.payer"><option v-for="p in people" :key="'d-ep-' + p.name" :value="p.name">{{ p.name }}</option></select>
             <select v-model="editExpense.category"><option v-for="cat in categories" :key="'d-ec-' + cat" :value="cat">{{ cat }}</option></select>
+            <select v-model.number="editExpense.day" aria-label="Day"><option v-for="d in totalDays" :key="'d-exday-' + d" :value="d">Day {{ d }}</option></select>
           </div>
           <div class="desktop-money-field">
             <span>分攤給（點擊切換）</span>
@@ -781,6 +784,7 @@
         <div class="card desktop-modal">
           <h3>編輯錢包紀錄</h3>
           <div class="desktop-form">
+            <input v-model="editWallet.date" type="date" aria-label="日期" />
             <input v-model="editWallet.title" placeholder="項目" />
             <input v-model.number="editWallet.amount" type="number" min="0" />
           </div>
@@ -822,6 +826,7 @@
               >{{ cat }}</button>
             </div>
           </div>
+          <input v-model="editWallet.note" placeholder="備註（選填）" />
           <div class="desktop-modal-actions">
             <button type="button" class="desktop-ghost" @click="closeEditWalletModal">取消</button>
             <button type="button" class="desktop-primary" @click="saveEditWalletTransaction" :disabled="isSavingSharedWallet">儲存</button>
@@ -850,24 +855,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260802.4"></script>
+<script src="../config.js?v=20260802.5"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260802.4" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260802.4"></script>
-<script src="../js/utils.js?v=20260802.4"></script>
-<script src="../js/api.js?v=20260802.4"></script>
-<script src="../js/cache.js?v=20260802.4"></script>
-<script src="../js/maps.js?v=20260802.4"></script>
-<script src="../js/places.js?v=20260802.4"></script>
-<script src="../js/itinerary.js?v=20260802.4"></script>
-<script src="../js/hotels.js?v=20260802.4"></script>
-<script src="../js/expenses.js?v=20260802.4"></script>
-<script src="../js/weather.js?v=20260802.4"></script>
-<script src="../js/export.js?v=20260802.4"></script>
-<script src="../js/probe-search.js?v=20260802.4"></script>
-<script src="../app.js?v=20260802.4"></script>
-<script src="../search-zh-label.js?v=20260802.4"></script>
-<script src="../prep-checklist.js?v=20260802.4"></script>
+<script src="../cache-refresh.js?v=20260802.5" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260802.5"></script>
+<script src="../js/utils.js?v=20260802.5"></script>
+<script src="../js/api.js?v=20260802.5"></script>
+<script src="../js/cache.js?v=20260802.5"></script>
+<script src="../js/maps.js?v=20260802.5"></script>
+<script src="../js/places.js?v=20260802.5"></script>
+<script src="../js/itinerary.js?v=20260802.5"></script>
+<script src="../js/hotels.js?v=20260802.5"></script>
+<script src="../js/expenses.js?v=20260802.5"></script>
+<script src="../js/weather.js?v=20260802.5"></script>
+<script src="../js/export.js?v=20260802.5"></script>
+<script src="../js/probe-search.js?v=20260802.5"></script>
+<script src="../app.js?v=20260802.5"></script>
+<script src="../search-zh-label.js?v=20260802.5"></script>
+<script src="../prep-checklist.js?v=20260802.5"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';
