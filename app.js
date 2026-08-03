@@ -1823,15 +1823,15 @@ createApp({
       fetchTrips();
     };
 
-    // 記住上次看到的旅程／天／分頁，重開直接回到原處（手機與桌面共用）。
+    // 記住上次看到的旅程與分頁，重開直接回到原處（手機與桌面共用）。
+    // 天數刻意不記憶：進行中的旅程一律以「今天」為準（applyEntryDayByToday），
+    // 比停在上次看的那一天更合用。分頁內的選擇（例如準備清單的 owner）由各模組自己保存。
     const LAST_VIEW_KEY = 'travel_last_view';
-    let restorePreferredDay = null;
     const saveLastView = () => {
       try {
         if (currentView.value === 'app' && currentTrip.value?.id) {
           localStorage.setItem(LAST_VIEW_KEY, JSON.stringify({
             tripId: String(currentTrip.value.id),
-            day: currentDay.value || 1,
             tab: currentTab.value || 'itinerary'
           }));
         }
@@ -1846,9 +1846,6 @@ createApp({
       if (!saved || !saved.tripId) return;
       const trip = trips.value.find(t => String(t.id) === String(saved.tripId));
       if (!trip) return;
-      const day = parseInt(saved.day, 10);
-      // fetchData 載完資料設好 totalDays 後，會套用這個偏好天數並清掉（見 fetchData）。
-      restorePreferredDay = Number.isFinite(day) && day >= 1 ? day : null;
       await selectTrip(trip);
       if (saved.tab) currentTab.value = saved.tab;
     };
@@ -1907,12 +1904,6 @@ createApp({
         totalDays.value = Math.max(1, maxDay);
         if (options.autoSelectToday) {
           applyEntryDayByToday();
-        }
-        // 還原上次看到的天數：等 totalDays 確定後套用一次，夾在有效範圍內。
-        if (restorePreferredDay != null) {
-          currentDay.value = Math.min(Math.max(1, restorePreferredDay), totalDays.value);
-          newExpense.value.day = currentDay.value;
-          restorePreferredDay = null;
         }
 
         await ensureAllDayOrdersSynced(tripId);
@@ -4228,7 +4219,6 @@ createApp({
       scheduleSortableInit();
       if (isDayMapView()) updateMapMarkers();
       scheduleTripWeatherLoad(250);
-      saveLastView();
     });
 
     watch(currentTab, () => {
