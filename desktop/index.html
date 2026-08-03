@@ -810,6 +810,18 @@
               @click="selectAllEditWalletPeople"
             >全選</button>
           </div>
+          <div v-if="editWallet.type === 'payment'" class="desktop-money-field desktop-form-wide">
+            <span>分類</span>
+            <div class="desktop-people desktop-category-options" aria-label="公費支出分類">
+              <button
+                v-for="cat in categories"
+                :key="'d-ewc-' + cat"
+                type="button"
+                :class="{ 'is-active': editWallet.category === cat }"
+                @click="editWallet.category = cat"
+              >{{ cat }}</button>
+            </div>
+          </div>
           <div class="desktop-modal-actions">
             <button type="button" class="desktop-ghost" @click="closeEditWalletModal">取消</button>
             <button type="button" class="desktop-primary" @click="saveEditWalletTransaction" :disabled="isSavingSharedWallet">儲存</button>
