@@ -4293,7 +4293,8 @@ createApp({
       startSyncRetry();
       updateMoneyAutoRefresh();
       await fetchTrips();
-      await restoreLastView();
+      // 只有桌面版重開自動回到上次旅程；手機版刻意停在首頁（大廳），由使用者自己點旅程進去。
+      if (isDesktopLayout()) await restoreLastView();
     });
 
     onBeforeUnmount(() => {
