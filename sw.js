@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const VERSION = '20260802.8';
+const VERSION = '20260806.2';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const CDN_CACHE = `travel-cdn-${VERSION}`;
 
@@ -14,6 +14,7 @@ const SHELL_ASSETS = [
   `./index.html?v=${VERSION}`,
   `./desktop/index.html?v=${VERSION}`,
   `./desktop/desktop.css?v=${VERSION}`,
+  `./tailwind-static.css?v=${VERSION}`,
   `./style.css?v=${VERSION}`,
   `./cloud-theme.css?v=${VERSION}`,
   `./config.js?v=${VERSION}`,
@@ -44,7 +45,6 @@ const SHELL_ASSETS = [
 
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js',
-  'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'
 ];
 

@@ -133,9 +133,17 @@ html, body {
       font-style: normal;
     }
 
-    .trip-weather-future,
-    .trip-weather-unavailable {
-      grid-template-columns: auto minmax(0, 1fr);
+    /* 「實測」＝這一天已經過去，資料是實際觀測值不是預報。 */
+    .trip-weather-kind {
+      display: inline-flex;
+      margin-left: 5px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #475569;
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 700;
     }
 
     /* Give scroll pages more real bottom space so content is not covered by iPhone home indicator / bottom nav. */

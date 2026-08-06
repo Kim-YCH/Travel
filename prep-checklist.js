@@ -1,10 +1,10 @@
-// version: 20260731.1
+// version: 20260806.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260731.1';
+  const VERSION = '20260806.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
@@ -33,6 +33,14 @@
   // 品項圖片：與清單文字狀態分開管理。imagesByItem[itemId] = [imgObj,...]
   const imagesByItem = {};
   let imagesLoadedForOwner = null;
+  // 圖片抓取的重試狀態。圖片跟清單文字不同：清單有自己的輪詢會一直補，
+  // 圖片原本只掛在 refreshPersonalArea() 結尾那一次呼叫上，
+  // 只要那條路徑被 loadFromSheet 的任何一個 early return 擋掉，就永遠不會再試。
+  let imagesInFlight = false;
+  let imagesRetryAfter = 0;
+  let imagesFailStreak = 0;
+  const IMAGES_MAX_RETRY = 5;
+  const IMAGES_RETRY_MS = 4000;
   let sharedFileInput = null;
   let pendingUploadItemId = '';
   const IMAGE_MAX_EDGE = 1600;
@@ -1286,10 +1294,19 @@
     return map;
   }
 
+  // force=true 是使用者主動要求（換人、↻ 更新資料）：無視退避直接重抓。
   async function loadAllImages(force) {
     if (!API_URL || !selectedOwner || !isBrowserOnline()) return;
     if (!force && imagesLoadedForOwner === selectedOwner) return;
+    // 同一時間只允許一個請求。ensureLoadedForCurrentTrip 的 1.2s 輪詢會一直叫它，
+    // 沒有這道閘就會在慢速網路上疊出一堆重複請求。
+    if (imagesInFlight) return;
+    if (force) { imagesRetryAfter = 0; imagesFailStreak = 0; }
+    // 連續失敗就退避，別讓輪詢變成每 1.2 秒打一次的無限重試。
+    if (!force && (imagesFailStreak >= IMAGES_MAX_RETRY || Date.now() < imagesRetryAfter)) return;
+
     const requestOwner = selectedOwner;
+    imagesInFlight = true;
     try {
       const res = await apiPost(buildBasePayload('prep_item_images_get'));
       if (selectedOwner !== requestOwner) return;
@@ -1297,10 +1314,18 @@
         Object.keys(imagesByItem).forEach(k => delete imagesByItem[k]);
         Object.assign(imagesByItem, groupImagesByItem(res.images));
         imagesLoadedForOwner = requestOwner;
+        imagesFailStreak = 0;
         refreshPersonalArea();
+      } else {
+        imagesFailStreak += 1;
+        imagesRetryAfter = Date.now() + IMAGES_RETRY_MS;
       }
     } catch (err) {
+      imagesFailStreak += 1;
+      imagesRetryAfter = Date.now() + IMAGES_RETRY_MS;
       console.warn('load prep images failed:', err);
+    } finally {
+      imagesInFlight = false;
     }
   }
 
@@ -1636,6 +1661,17 @@
         render();
       }
     }
+
+    // ★ 圖片的第二個觸發點，別拿掉。
+    // 原本圖片只在 refreshPersonalArea() 結尾被抓一次，而那條路徑要 loadFromSheet()
+    // 成功才會走到。首次載入時 prep-checklist.js 在 DOMContentLoaded 就跑，Vue 還沒
+    // 掛上 .app-header h1，getCurrentTripInfo() 拿不到旅程名 → loadFromSheet 直接
+    // return → 圖片永遠不會被抓，而且沒有任何重試，只能靠「換人」或「↻ 更新資料」
+    // 這兩條 force 路徑救回來。症狀就是「第一次載入沒有圖片，重新讀取才正常」。
+    //
+    // 這裡跟著既有的輪詢（只在準備頁可見時跑）一起補抓，內部有 in-flight 閘與
+    // 失敗退避，成功後 imagesLoadedForOwner 會擋掉後續呼叫，不會變成常駐請求。
+    if (selectedOwner && imagesLoadedForOwner !== selectedOwner) loadAllImages();
   }
 
   function init() {
@@ -1655,9 +1691,24 @@
     render();
     if (selectedOwner) loadFromSheet();
     bindAutoSyncEvents();
+    // 只看節點增刪。原本還監聽 characterData，等於 App 內任何文字變動
+    //（每次 Vue 重繪、每個計時器更新的字串）都會叫醒這支 observer。
     const observer = new MutationObserver(() => ensureLoadedForCurrentTrip());
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    setInterval(ensureLoadedForCurrentTrip, 1200);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 這個輪詢是用來偵測「使用者切到準備分頁」的：分頁用 v-show 切換，
+    // 只改 style 不動節點，MutationObserver 的 childList 收不到。
+    // 但沒必要在背景分頁或不在準備頁時做完整檢查 —— 那會讀 localStorage、
+    // 算成員指紋、可能觸發 render()。改成先用一次 querySelector 擋掉。
+    const isPrepVisible = () => {
+      const page = document.querySelector('.prep-page');
+      return !!page && page.getClientRects().length > 0;
+    };
+    setInterval(() => {
+      if (document.hidden) return;
+      if (!isPrepVisible()) return;
+      ensureLoadedForCurrentTrip();
+    }, 1200);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

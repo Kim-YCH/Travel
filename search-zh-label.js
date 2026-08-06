@@ -254,21 +254,37 @@
   }
 
   let patchTimer = null;
+  let pollTimer = null;
+
+  // 輪詢只在搜尋下拉真的存在時才跑。原本是無條件常駐，App 開著就每 1.8 秒掃一次
+  // document.querySelectorAll('.suggestions-list')，即使使用者整天沒用過搜尋。
+  function syncPolling() {
+    const open = !!document.querySelector('.suggestions-list');
+    if (open && !pollTimer) {
+      pollTimer = setInterval(patchAllSuggestionLists, 1800);
+    } else if (!open && pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
   function schedulePatch() {
     if (patchTimer) clearTimeout(patchTimer);
-    patchTimer = setTimeout(patchAllSuggestionLists, 80);
+    patchTimer = setTimeout(() => {
+      patchAllSuggestionLists();
+      syncPolling();
+    }, 80);
   }
 
   function init() {
     installStyle();
     patchAllSuggestionLists();
+    syncPolling();
 
+    // 只看節點增刪就夠了。原本還監聽 characterData，等於 App 內**任何**文字變動
+    // （每次 Vue 重繪、每個計時器更新的字串）都會叫醒這支 observer，成本高且用不到。
     const observer = new MutationObserver(schedulePatch);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-    // Also retry periodically while the dropdown is open. This covers cases where Vue reuses nodes
-    // without enough DOM mutations to trigger the observer.
-    setInterval(patchAllSuggestionLists, 1800);
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {

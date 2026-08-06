@@ -13,6 +13,40 @@
   --cloud-muted: #64748B;
   --cloud-shadow: 0 16px 38px rgba(37,99,235,.16);
   --cloud-shadow-soft: 0 10px 28px rgba(15,23,42,.08);
+
+  /* 語意色：桌面重繪需要「正／負／輔助」三組，原本的色票只有藍系。
+     手機版目前沒有引用點，純加法。desktop.css 禁止寫死色碼
+     （tests/run.js「桌面 CSS 沒有寫死品牌色」），所以一律從這裡取。 */
+  --cloud-positive: #15803D;
+  --cloud-positive-2: #16A34A;
+  --cloud-positive-3: #4ADE80;
+  --cloud-negative: #B91C1C;
+  --cloud-teal: #0D9488;
+  --cloud-teal-2: #5EEAD4;
+  --cloud-primary-soft: #60A5FA;
+  --cloud-sky-strong: #7DD3FC;
+
+  /* 主色漸層與按鈕陰影：desktop.css 的主要按鈕、導覽選取態共用同一組，
+     抽出來才不會在 desktop.css 內寫死 rgba 品牌色。 */
+  --cloud-primary-gradient: linear-gradient(135deg, var(--cloud-primary), var(--cloud-primary-2));
+  --cloud-shadow-btn: 0 8px 18px rgba(37,99,235,.22);
+
+  /* 半透明填色與線條：桌面重繪的淡底、hover 底色、虛線框共用。
+     直接寫 rgba 才能保留穿透玻璃底的效果（實色會蓋掉 backdrop-filter）。 */
+  --cloud-tint-blue: rgba(239,246,255,.92);
+  --cloud-tint-sky: rgba(224,242,254,.92);
+  --cloud-tint-sky-soft: rgba(224,242,254,.55);
+  --cloud-tint-red: rgba(254,226,226,.92);
+  --cloud-tint-slate: rgba(148,163,184,.13);
+  --cloud-tint-gray: rgba(241,245,249,.95);
+  --cloud-line: rgba(226,232,240,.85);
+  --cloud-line-dashed: rgba(148,163,184,.55);
+  --cloud-muted-2: #94A3B8;
+  --cloud-text-2: #475569;
+  --cloud-border-strong: rgba(191,219,254,.92);
+  --cloud-track: rgba(148,163,184,.18);
+  --cloud-hero-gradient:
+    linear-gradient(135deg, rgba(37,99,235,.12) 0%, rgba(14,165,233,.08) 45%, rgba(255,255,255,.94) 100%);
 }
 
 html, body {

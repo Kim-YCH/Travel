@@ -99,35 +99,10 @@
   color: #fff;
 }
 
-.desktop-weather {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--cloud-border);
-  border-radius: 12px;
-}
-
-.desktop-weather-icon {
-  font-size: 26px;
-}
-
-.desktop-weather strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.desktop-weather em {
-  font-size: 12px;
-  font-style: normal;
-  color: var(--cloud-muted);
-}
-
 /* 大廳消失後，旅程清單搬進 .desktop-nav 跟 .desktop-sidebar-foot 之間原本的
-   空白區塊。這一塊要吃掉所有剩餘高度（flex: 1）並自己捲動，讓上面的導覽／
-   天氣跟下面的新增旅程表單、同步狀態維持固定大小，旅程一多也不會把側欄撐爆。 */
+   空白區塊。這一塊要吃掉所有剩餘高度（flex: 1）並自己捲動，讓上面的導覽跟下面的
+   新增旅程表單、同步狀態維持固定大小，旅程一多也不會把側欄撐爆。
+   （天氣原本也在這裡，已移到藍色標頭 .desktop-header-weather。） */
 .desktop-trip-nav {
   flex: 1 1 auto;
   min-height: 72px;
@@ -724,40 +699,14 @@ button.suggestion-item {
   align-items: start;
 }
 
+/* border-radius 不寫在這裡：cloud-theme.css 的 .card 帶 !important，
+   實際圓角由檔尾「通用外觀重繪」與分帳重繪負責。 */
 .desktop-money-grid > .card {
   min-width: 0;
-  border-radius: 8px;
 }
 
 .desktop-span-2 {
   grid-column: 1 / -1;
-}
-
-.desktop-money-summary-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.desktop-money-summary-head > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.desktop-money-summary-head span,
-.desktop-money-metrics span {
-  color: var(--cloud-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.desktop-money-summary-head strong {
-  color: var(--cloud-text);
-  font-size: 28px;
-  line-height: 1.15;
 }
 
 .desktop-money-mode-status {
@@ -769,29 +718,6 @@ button.suggestion-item {
   color: var(--cloud-primary-strong) !important;
 }
 
-.desktop-money-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.desktop-money-metrics > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 11px 12px;
-  border: 1px solid var(--cloud-border);
-  border-radius: 6px;
-  background: var(--cloud-sky-2);
-}
-
-.desktop-money-metrics strong {
-  color: var(--cloud-text);
-  font-size: 17px;
-}
-
 .desktop-money-section-head {
   display: flex;
   align-items: flex-start;
@@ -800,8 +726,7 @@ button.suggestion-item {
   margin-bottom: 14px;
 }
 
-.desktop-money-section-head h3,
-.desktop-wallet-balances h3 {
+.desktop-money-section-head h3 {
   margin: 0;
   color: var(--cloud-text);
   font-size: 16px;
@@ -941,9 +866,17 @@ button.suggestion-item {
   margin-top: 10px;
 }
 
+/* 同一列的欄位靠 grid 的 gap 分隔，不需要 margin-top，否則會跟 gap 疊加。
+   但「分類」「分攤給」這種 .desktop-form-wide 是各自獨佔一整列的，
+   只靠 10px 的 row-gap 會讓上一組的按鈕跟下一組的標籤黏在一起。 */
 .desktop-expense-form .desktop-money-field,
 .desktop-wallet-form .desktop-money-field {
   margin-top: 0;
+}
+
+.desktop-expense-form .desktop-money-field.desktop-form-wide,
+.desktop-wallet-form .desktop-money-field.desktop-form-wide {
+  margin-top: 14px;
 }
 
 .desktop-people-check-option {
@@ -990,20 +923,11 @@ button.suggestion-item {
   margin-top: 2px;
 }
 
-.desktop-wallet-balances {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--cloud-border);
-}
-
-.desktop-wallet-balances .desktop-money-summary,
 .desktop-analysis-list {
   margin-top: 8px;
 }
 
-.desktop-money-summary p,
-.desktop-analysis-list p,
-.desktop-settlement-row {
+.desktop-analysis-list p {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1013,14 +937,11 @@ button.suggestion-item {
   border-bottom: 1px solid var(--cloud-border);
 }
 
-.desktop-money-summary p:last-child,
-.desktop-analysis-list p:last-child,
-.desktop-settlement-row:last-child {
+.desktop-analysis-list p:last-child {
   border-bottom: 0;
 }
 
-.desktop-analysis-list strong,
-.desktop-settlement-row strong {
+.desktop-analysis-list strong {
   flex: 0 0 auto;
 }
 
@@ -1053,10 +974,6 @@ button.suggestion-item {
   .desktop-wallet-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .desktop-money-metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 /* ------------------------------------------------------ 準備與設定分頁 */
@@ -1083,6 +1000,22 @@ button.suggestion-item {
 
 .desktop-settings .card {
   margin-bottom: 0;
+}
+
+/* 設定頁的住宿列是唯一沒有帶 .card 的 .desktop-place-card（行程頁的正式行程、
+   備案、當日住宿三處都有），所以拿不到 .card 的 margin-bottom: 12px；
+   就算補上 .card，上面那條 .desktop-settings .card 也會把它歸零。
+   直接給這裡的列自己的間距，列與列、以及第一列與上方表單才不會黏在一起。 */
+.desktop-settings-lodging .desktop-place-card {
+  margin-top: 14px;
+}
+
+/* 住宿列的圖示原本 align-self: center，而它橫跨 "main" 與 "actions" 兩列，
+   所以圖示落在兩列的正中間、名稱卻在第一列頂端，看起來就是文字太靠上。
+   改成跟名稱同一條基線對齊。 */
+.desktop-hotel-row .desktop-place-icon {
+  align-self: start;
+  line-height: 1.3;
 }
 
 .desktop-settings-member-form {
@@ -1148,10 +1081,400 @@ button.suggestion-item {
   }
 }
 
-/* prep-checklist.js 自己注入樣式，這裡只給它一個寬一點的容器 */
+/* ================================================================ 準備分頁
+   DOM 由 prep-checklist.js 於執行期產生（embeddedMode），它注入的
+   <style id="prep-checklist-style"> 排在所有 <link> 之後，所以這裡一律用
+   `.desktop-app #prep-checklist-root …`（權重 1,2,0 起跳）壓過它的
+   (0,1,0)/(0,2,0)，而不是靠檔案順序。
+   cloud-theme.css 對 `#prep-checklist-root .prep-section` 等有 (1,1,0)+
+   !important，只有 background / border / border-radius / box-shadow 這四個
+   屬性需要在這裡補 !important，其他屬性不要亂加。
+   ★ 不要改 prep-checklist.js。 */
+
 #prep-checklist-root {
-  max-width: 1100px;
+  /* 1240px 是「最多 3 欄」的上限：4 欄需要 4*300 + 3*16 = 1248px > 1240px，
+     所以下面的 auto-fill 數學上不可能排出第 4 欄。 */
+  max-width: min(1240px, 100%);
   margin: 0 auto;
+}
+
+/* ------------------------------------- 頂部：狀態列 / 對象 / 新增分類 */
+
+.desktop-app #prep-checklist-root .prep-status-line {
+  margin: 0 4px 12px;
+  font-size: 12px;
+}
+
+.desktop-app #prep-checklist-root .prep-refresh-btn {
+  cursor: pointer;
+}
+
+/* 卡片外觀統一。cloud-theme 用 !important 鎖了這四個屬性，必須同樣用
+   !important 而且權重更高（1,2,0 > 1,1,0）才蓋得過。 */
+.desktop-app #prep-checklist-root .prep-owner-box,
+.desktop-app #prep-checklist-root .prep-add-box,
+.desktop-app #prep-checklist-root .prep-section {
+  background: rgba(255, 255, 255, .92) !important;
+  border: 1px solid var(--cloud-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--cloud-shadow-soft) !important;
+}
+
+/* 「查看對象」收成一列，select 不要橫跨 1240px */
+.desktop-app #prep-checklist-root .prep-owner-box {
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.desktop-app #prep-checklist-root .prep-owner-row {
+  grid-template-columns: auto minmax(0, 280px);
+  justify-content: start;
+  gap: 12px;
+}
+
+/* 「新增分類」收成一列：標題 / 輸入框 / 按鈕 */
+.desktop-app #prep-checklist-root .prep-add-box {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+/* 高度：style.css 的 `input, select, textarea { height: 54px }` 讓欄位過高。
+   ★ 這裡刻意「不」寫 `#prep-checklist-root input`——那會以 (1,2,0) 蓋掉
+     `.prep-item input[type="checkbox"]` (0,2,1) 的 20×20，把勾選框撐爛。
+     所以只點名這幾個 class。 */
+.desktop-app #prep-checklist-root .prep-owner-select,
+.desktop-app #prep-checklist-root .prep-new-section-title {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  border-radius: 12px !important;
+}
+
+.desktop-app #prep-checklist-root .prep-add-box button {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ------------------------------------- 分類卡片：多欄並排 */
+
+/* .prep-section-list 在 prep-checklist.js 的注入 CSS 裡完全沒有規則，
+   是最乾淨的排版接手點。
+   auto-fill（不是 auto-fit）：只有 1~2 個分類時空軌道仍佔位，卡片維持
+   一致寬度，不會被撐成超寬。
+   欄數 = floor((容器寬 + 16) / 316)：容器 ≥ 932px → 3 欄 / ≥ 616px → 2 欄
+   / 其他 → 1 欄，由容器實際寬度自動決定，不需要 media query。 */
+.desktop-app #prep-checklist-root .prep-section-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.desktop-app #prep-checklist-root .prep-section {
+  /* 原本是 block + margin-bottom，進 grid 後會跟 gap 疊加 */
+  margin-bottom: 0;
+  padding: 16px;
+  min-width: 0;
+}
+
+/* ------------------------------------- 分類標題列 */
+
+.desktop-app #prep-checklist-root .prep-section-title {
+  /* 負邊距讓標題帶貼齊卡片邊緣；卡片 padding 是 16px，
+     圓角 18px - 1px 邊框 = 17px 才不會露出直角。 */
+  margin: -16px -16px 10px;
+  padding: 12px 14px;
+  border-radius: 17px 17px 0 0;
+  background: linear-gradient(180deg, var(--cloud-tint-sky-soft), transparent);
+  border-bottom: 1px solid var(--cloud-border);
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--cloud-text);
+}
+
+/* .prep-section-count 帶行內 style（font-size / color），只有 !important 蓋得掉 */
+.desktop-app #prep-checklist-root .prep-section-count {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--cloud-tint-sky);
+  font-size: 11px !important;
+  font-weight: 900;
+  line-height: 1.45;
+  white-space: nowrap;
+  color: var(--cloud-primary-strong) !important;
+}
+
+.desktop-app #prep-checklist-root .prep-section-actions {
+  gap: 4px;
+}
+
+/* ------------------------------------- 項目列 */
+
+.desktop-app #prep-checklist-root .prep-item-wrap {
+  border-top: 1px solid var(--cloud-line);
+}
+
+.desktop-app #prep-checklist-root .prep-item-wrap:first-of-type {
+  border-top: none;
+}
+
+/* 負左右邊距讓 hover 底色微微溢出到卡片留白區，看起來像整列被點亮。
+   ★ 不要在 .prep-item 上寫 border-top：注入 CSS 的
+     `.prep-item-wrap .prep-item { border-top: none }` 是 (0,2,0)，
+     分隔線一律掛在 .prep-item-wrap 上。 */
+.desktop-app #prep-checklist-root .prep-item {
+  gap: 10px;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  border-radius: 12px;
+  color: var(--cloud-text);
+  transition: background-color .16s ease;
+}
+
+.desktop-app #prep-checklist-root .prep-item input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* 縮圖列的 padding-left:30px 剛好對齊文字起點
+   （item padding-left 10px - margin -10px + 勾選框 20px + gap 10px = 30px），
+   不要動它。這裡只收一點下緣。 */
+.desktop-app #prep-checklist-root .prep-item-images {
+  padding-bottom: 8px;
+}
+
+/* 「尚無項目」做成淡虛線 placeholder */
+.desktop-app #prep-checklist-root .prep-items > .prep-muted {
+  margin: 2px 0;
+  padding: 12px;
+  border: 1px dashed var(--cloud-line-dashed);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* ---------------------- 三顆圖示鈕：淡化 / hover 上色
+
+   📷 ✏️ ✕ 三顆全部保留，只改視覺。
+   ★ 絕對不用 display:none / visibility:hidden / pointer-events —— 前者會讓
+     按鈕消失、後者會跟 `.prep-image-add.is-busy { pointer-events:none }`
+     （注入 CSS，代表上傳中）語意打架。這裡只動 opacity / filter / 顏色。
+   ★ 📷 ✏️ 是彩色 emoji，改 color 沒用，一定要 filter: grayscale(1)；
+     ✕ 是純文字符號，吃 color。
+   用自訂屬性把「狀態」放在列上、「樣式」放在按鈕上，一般鈕與 .is-danger
+   鈕共用同一套切換，不必為每個 hover 情境重複四條選擇器。 */
+
+/* 預設值 = 常駐彩色。沒有 hover 能力的裝置（觸控筆電的觸控模式、平板）
+   會停在這個狀態，按鈕永遠看得見。 */
+.desktop-app #prep-checklist-root .prep-item,
+.desktop-app #prep-checklist-root .prep-section-title {
+  --prep-btn-bg: var(--cloud-tint-blue);
+  --prep-btn-fg: var(--cloud-primary-strong);
+  --prep-btn-danger-bg: var(--cloud-tint-red);
+  --prep-btn-danger-fg: var(--cloud-negative);
+  --prep-btn-opacity: 1;
+  --prep-btn-filter: none;
+}
+
+.desktop-app #prep-checklist-root .prep-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--prep-btn-bg);
+  color: var(--prep-btn-fg);
+  opacity: var(--prep-btn-opacity);
+  filter: var(--prep-btn-filter);
+  transition: opacity .16s ease, filter .16s ease,
+              background-color .16s ease, color .16s ease;
+}
+
+/* (1,3,0) 蓋過注入 CSS 的 `.prep-icon-btn.is-danger` (0,2,0) */
+.desktop-app #prep-checklist-root .prep-icon-btn.is-danger {
+  background: var(--prep-btn-danger-bg);
+  color: var(--prep-btn-danger-fg);
+}
+
+@media (hover: hover) {
+  /* 靜置：灰階淡化。跟上面的預設值同權重，靠這個 @media 排在後面取勝。 */
+  .desktop-app #prep-checklist-root .prep-item,
+  .desktop-app #prep-checklist-root .prep-section-title {
+    --prep-btn-bg: var(--cloud-tint-slate);
+    --prep-btn-fg: var(--cloud-muted-2);
+    --prep-btn-danger-bg: var(--cloud-tint-slate);
+    --prep-btn-danger-fg: var(--cloud-muted-2);
+    --prep-btn-opacity: .3;
+    --prep-btn-filter: grayscale(1);
+  }
+
+  /* 滑到「該列」才上色。分類鈕改用 .prep-section:hover 觸發——三欄排版下
+     滑到卡片任一處就顯示，比只 hover 那條標題列好用。 */
+  .desktop-app #prep-checklist-root .prep-item:hover,
+  .desktop-app #prep-checklist-root .prep-item:focus-within,
+  .desktop-app #prep-checklist-root .prep-section:hover .prep-section-title,
+  .desktop-app #prep-checklist-root .prep-section-title:focus-within {
+    --prep-btn-bg: var(--cloud-tint-blue);
+    --prep-btn-fg: var(--cloud-primary-strong);
+    --prep-btn-danger-bg: var(--cloud-tint-red);
+    --prep-btn-danger-fg: var(--cloud-negative);
+    --prep-btn-opacity: 1;
+    --prep-btn-filter: none;
+  }
+
+  .desktop-app #prep-checklist-root .prep-item:hover {
+    background: var(--cloud-tint-sky-soft);
+  }
+
+  .desktop-app #prep-checklist-root .prep-icon-btn:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* 鍵盤操作：單獨 focus 到按鈕也要看得見（不倚賴上面的 :focus-within） */
+.desktop-app #prep-checklist-root .prep-icon-btn:focus-visible {
+  opacity: 1;
+  filter: none;
+  outline: 2px solid var(--cloud-primary);
+  outline-offset: 2px;
+}
+
+/* 上傳中：注入 CSS 有 `.prep-image-add.is-busy { opacity:.5; pointer-events:none }`，
+   但 prep-checklist.js 目前從來沒有加上 is-busy（搜過，只有 .prep-thumb.is-uploading
+   在用），所以這條現在是備用。哪天真的接上時，這裡負責把可視度從「靜置淡化」
+   拉回來，才看得出「處理中」跟「沒有滑到」的差別。 */
+.desktop-app #prep-checklist-root .prep-icon-btn.is-busy {
+  opacity: .5;
+  filter: none;
+}
+
+/* 放在 :hover transform 之後，把注入 CSS `.prep-icon-btn:active`(0,2,0)
+   的按壓回饋還回來（否則會被上面 (1,3,0) 的 :hover transform 吃掉）。 */
+.desktop-app #prep-checklist-root .prep-icon-btn:active {
+  transform: scale(.94);
+}
+
+/* ------------------------------------- 「新增項目」列：虛線 ghost */
+
+/* 原本是「上方一條虛線分隔」，改成整條虛線圓角框。
+   border 簡寫會一併清掉原本的 border-top。 */
+.desktop-app #prep-checklist-root .prep-section-add {
+  margin-top: 12px;
+  padding: 6px;
+  border: 1px dashed var(--cloud-line-dashed);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .55);
+  gap: 6px;
+  align-items: center;
+  transition: border-color .16s ease, background-color .16s ease;
+}
+
+/* (1,2,1) 蓋過 cloud-theme 的 `#prep-checklist-root input` (1,1,0)+!important */
+.desktop-app #prep-checklist-root .prep-section-add input {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  border: 0 !important;
+  background: transparent !important;
+  border-radius: 10px !important;
+}
+
+.desktop-app #prep-checklist-root .prep-section-add input::placeholder {
+  color: var(--cloud-muted-2);
+}
+
+/* 靜置是淡藍 tonal（仍然清楚是按鈕），hover / focus 該列才變回藍色漸層。
+   (1,2,1) 蓋過 cloud-theme 的 (1,1,1)+!important。 */
+.desktop-app #prep-checklist-root .prep-section-add button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--cloud-primary-strong);
+  background: var(--cloud-tint-sky) !important;
+  box-shadow: none !important;
+}
+
+@media (hover: hover) {
+  .desktop-app #prep-checklist-root .prep-section-add:hover,
+  .desktop-app #prep-checklist-root .prep-section-add:focus-within {
+    border-color: var(--cloud-primary);
+    background: rgba(255, 255, 255, .92);
+  }
+
+  .desktop-app #prep-checklist-root .prep-section-add:hover button,
+  .desktop-app #prep-checklist-root .prep-section-add:focus-within button {
+    background: var(--cloud-primary-gradient) !important;
+    color: #fff;
+  }
+}
+
+/* ------------------------------------- 底部動作列 */
+
+/* ★ 無分類時 prep-checklist.js 會加行內 style="display:none"，
+   行內樣式權重最高，這裡的 display:flex 蓋不過它，既有隱藏行為完整保留。 */
+.desktop-app #prep-checklist-root .prep-bottom-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+
+.desktop-app #prep-checklist-root .prep-action-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.desktop-app #prep-checklist-root .prep-action-btn.secondary {
+  background: var(--cloud-tint-gray) !important;
+  box-shadow: none !important;
+  color: var(--cloud-text-2);
+}
+
+.desktop-app #prep-checklist-root .prep-action-btn.danger {
+  background: var(--cloud-tint-red) !important;
+  box-shadow: none !important;
+  color: var(--cloud-negative);
+}
+
+/* ------------------------------------- 窄桌面回退 */
+
+@media (max-width: 900px) {
+  .desktop-app #prep-checklist-root .prep-owner-row,
+  .desktop-app #prep-checklist-root .prep-add-box {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-app #prep-checklist-root .prep-bottom-actions {
+    justify-content: stretch;
+  }
+
+  .desktop-app #prep-checklist-root .prep-action-btn {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-app #prep-checklist-root .prep-icon-btn,
+  .desktop-app #prep-checklist-root .prep-item,
+  .desktop-app #prep-checklist-root .prep-section-add {
+    transition: none;
+  }
 }
 
 /* -------------------------------------------------------------- Modal */
@@ -1193,4 +1516,1890 @@ button.suggestion-item {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* =====================================================================
+   通用外觀重繪（放檔尾：同權重時後出現者勝，可直接壓過上面的舊規則）
+
+   本區的代幣只有尺寸／半徑／動態，顏色一律沿用 cloud-theme.css 的
+   --cloud-*（tests/run.js「桌面 CSS 沒有寫死品牌色」會擋寫死色碼）。
+
+   --desktop-action-* 是「平常淡化、滑到該列才上色」的跨頁共用契約，
+   準備頁（#prep-checklist-root）直接引用同一組變數，不要另外湊數值。
+   ===================================================================== */
+.desktop-app {
+  --desktop-radius-card: 14px;
+  --desktop-radius-control: 10px;
+  --desktop-control-h: 42px;
+  --desktop-card-pad: 18px;
+  --desktop-action-idle-opacity: .38;
+  --desktop-action-idle-filter: grayscale(1);
+  --desktop-action-transition:
+    opacity .15s ease,
+    filter .15s ease,
+    background-color .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease,
+    color .15s ease;
+}
+
+/* --- 卡片基調 --------------------------------------------------------
+   cloud-theme.css 134-141 用 !important 鎖住 .card 的 background / border /
+   border-radius:22px / box-shadow，所以這裡必須「權重更高 (0,2,0) + 同樣
+   !important」才蓋得掉。
+
+   background 刻意不動：改成純白會一併打掉 backdrop-filter 的玻璃質感，而
+   --cloud-surface = rgba(255,255,255,.82) 疊在 --cloud-sky-2 底上，本來就
+   已經是設計稿要的白卡片。這裡只把 22px 的手機圓角收成 14px、白色玻璃邊
+   換成看得見的 --cloud-border。
+
+   padding 要排除 .itinerary-route-card：style.css:678 給它 padding:0，
+   路線面板的整片點擊區靠這個，蓋掉會跑版。 */
+.desktop-app .card {
+  border-radius: var(--desktop-radius-card) !important;
+  border: 1px solid var(--cloud-border) !important;
+  box-shadow: var(--cloud-shadow-soft) !important;
+}
+
+.desktop-app .card:not(.itinerary-route-card) {
+  padding: var(--desktop-card-pad);
+}
+
+/* 版面已經用 gap 的容器，就不要再帶 style.css:154 的 margin-bottom:12px
+   （會跟 gap 疊加）。 */
+.desktop-app .desktop-itinerary-left > .card,
+.desktop-app .desktop-itinerary-right > .card,
+.desktop-app .desktop-money-grid > .card,
+.desktop-app .card.desktop-modal {
+  margin-bottom: 0;
+}
+
+/* .desktop-list-block 是唯一沒有 gap 的清單容器（Sortable 掛在它身上，
+   不改 display 以免動到拖曳），保留 margin 當列距，最後一張歸零才不會
+   跟外層的 gap 再疊一次。 */
+.desktop-app .desktop-list-block > .card {
+  margin-bottom: 10px;
+}
+
+.desktop-app .desktop-list-block > .card:last-child {
+  margin-bottom: 0;
+}
+
+.desktop-app .card.desktop-modal {
+  border-radius: 16px !important;
+}
+
+/* 列卡密度：清單列不需要跟區塊卡一樣的 18px 內距。
+   hover 抬高限定 .card.desktop-place-card：設定頁的住宿列沒有 .card，
+   不該拿到浮空陰影。
+
+   ⚠ 行程頁的列卡已經被檔尾「行程分頁 · 重繪」的
+   `.desktop-list-block > .card.desktop-place-card`（(0,5,0)／hover (0,7,0)）
+   全面接管，下面這條 (0,4,0) 的 hover 對行程頁不再生效。要調行程列的
+   hover 表現請改那一段，改這裡不會有任何反應。 */
+.desktop-app .card.desktop-place-card {
+  padding: 12px 14px;
+  transition: box-shadow .15s ease;
+}
+
+.desktop-app .card.desktop-place-card:hover {
+  box-shadow: var(--cloud-shadow) !important;
+}
+
+/* --- 表單控制項密度 ---------------------------------------------------
+   style.css 158-171 是手機規格（height:54px / font-size:16px），桌面表單
+   一整排都過胖；cloud-theme.css 143-148 又用 !important 鎖住
+   border-radius:15px，所以半徑要帶 !important 才換得掉。
+
+   排除 checkbox / radio：分帳的「分攤給」勾選、共同錢包開關都靠原生尺寸，
+   被 height/padding 打到會壞掉。 */
+.desktop-app input:not([type="checkbox"]):not([type="radio"]),
+.desktop-app select,
+.desktop-app textarea {
+  height: var(--desktop-control-h);
+  padding: 0 12px;
+  font-size: 14px;
+  border-radius: var(--desktop-radius-control) !important;
+}
+
+.desktop-app textarea {
+  height: auto;
+  min-height: 92px;
+  padding: 10px 12px;
+}
+
+/* --- 側欄 ------------------------------------------------------------ */
+.desktop-app .desktop-shell {
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.desktop-app .desktop-sidebar {
+  gap: 14px;
+  padding: 16px 12px 14px;
+}
+
+.desktop-app .desktop-brand {
+  padding: 6px 10px 12px;
+  font-size: 17px;
+  letter-spacing: .01em;
+  border-bottom: 1px solid var(--cloud-border);
+}
+
+.desktop-app .desktop-nav {
+  gap: 2px;
+}
+
+.desktop-app .desktop-nav button {
+  padding: 10px 12px;
+  border-radius: var(--desktop-radius-control);
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-nav button:hover {
+  background: var(--cloud-sky);
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-app .desktop-nav button.is-active {
+  background: var(--cloud-primary-gradient);
+  color: #fff;
+  box-shadow: var(--cloud-shadow-btn);
+}
+
+.desktop-app .desktop-trip-nav h3 {
+  padding-left: 4px;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+/* 目前旅程改成「淺藍底 + 左側藍條」，跟導覽的實心漸層分層：導覽是主要
+   動作，旅程只是選取狀態。左側條用 inset box-shadow 畫，不佔版面，所以
+   切換旅程時文字不會左右抖動（padding-left 一律 14px）。 */
+.desktop-app .desktop-trip-list-item {
+  padding: 9px 12px 9px 14px;
+  border-radius: 12px;
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-trip-list-item.is-active {
+  background: var(--cloud-sky);
+  color: var(--cloud-primary-strong);
+  box-shadow: inset 3px 0 0 var(--cloud-primary);
+}
+
+.desktop-app .desktop-trip-list-item.is-active span {
+  color: var(--cloud-muted);
+  opacity: 1;
+}
+
+.desktop-app .desktop-trip-create-btn {
+  border-radius: var(--desktop-radius-control);
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-trip-create-btn:hover {
+  background: var(--cloud-sky);
+  border-color: var(--cloud-primary);
+}
+
+/* --- 標頭 -------------------------------------------------------------
+   ::after 是 cloud-theme 104-117 的雲朵裝飾，在滿版長條標頭裡會擠在右下角
+   變成一團髒點，桌面關掉。這裡只動裝飾，不碰 h1 的文字或顯示
+   （prep-checklist.js 靠 .app-header h1 的 textContent 找目前旅程）。 */
+.desktop-app .desktop-header {
+  min-height: 64px;
+  padding: 12px 28px;
+  box-shadow: var(--cloud-shadow-soft) !important;
+}
+
+.desktop-app .desktop-header::after {
+  display: none;
+}
+
+.desktop-app .desktop-header h1 {
+  font-size: 19px;
+  letter-spacing: .01em;
+}
+
+.desktop-app .desktop-header p {
+  font-size: 12px;
+  opacity: .88;
+}
+
+/* 第二行改成「Day 資訊 + 天氣」同一列。刻意維持兩行：.desktop-shell 的
+   header 那一列是 auto（desktop.css:45），標頭長高就直接吃掉 .desktop-main
+   的高度，而 .desktop-main 裡最吃高度的就是地圖。 */
+.desktop-app .desktop-header-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.desktop-app .desktop-header-meta p {
+  margin: 0;
+}
+
+/* 天氣：藍底上的一顆半透明白色藥丸。刻意不放大 —— 它是輔助資訊，
+   字級跟同一列的 Day 資訊一樣 12px。白色是中性色，不受
+   tests/run.js「桌面 CSS 沒有寫死品牌色」限制。 */
+.desktop-app .desktop-header-weather {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktop-app .desktop-header-weather strong {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「實測」＝這一天已經過去，資料是實際觀測值不是預報。 */
+.desktop-app .desktop-header-weather em {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .22);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* --- 內容區留白 -------------------------------------------------------
+   .desktop-itinerary 自己是 height:100% + overflow:hidden 的兩欄版面，
+   多給下緣留白會直接壓縮地圖高度，所以排除它。 */
+.desktop-app .desktop-pane:not(.desktop-itinerary) {
+  padding: 24px 28px 34px;
+}
+
+/* --- 列動作按鈕：平常淡化、滑到該列才上色 -----------------------------
+   1. 只用 opacity / filter 淡化，絕不用 display:none / visibility /
+      pointer-events —— 按鈕永遠可點、鍵盤永遠 tab 得到。
+   2. 淡化整段包在 @media (hover: hover) 內，方向是「基準彩色 →
+      有滑鼠才淡化」。反過來寫（基準淡化 + hover:none 還原）在不支援
+      hover media query 的瀏覽器會直接把按鈕變灰且沒有還原機會。
+   3. 觸發條件同時掛 :hover 與 :focus-within，鍵盤操作也看得到。
+   4. :not(:disabled) 是必要的：上面 .desktop-place-actions button:disabled
+      的 opacity:.45 權重只有 (0,2,1)，沒有排除的話 hover 規則會把停用中的
+      按鈕點亮，失去「處理中」的提示。 */
+.desktop-app .desktop-icon-btn,
+.desktop-app .desktop-member-row > button {
+  border-radius: var(--desktop-radius-control);
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-icon-btn:active:not(:disabled) {
+  transform: scale(.94);
+}
+
+@media (hover: hover) {
+  .desktop-app .desktop-icon-btn,
+  .desktop-app .desktop-member-row > button {
+    opacity: var(--desktop-action-idle-opacity);
+    filter: var(--desktop-action-idle-filter);
+  }
+
+  .desktop-app .desktop-place-card:hover .desktop-icon-btn:not(:disabled),
+  .desktop-app .desktop-place-card:focus-within .desktop-icon-btn:not(:disabled),
+  .desktop-app .desktop-tr:hover .desktop-icon-btn:not(:disabled),
+  .desktop-app .desktop-tr:focus-within .desktop-icon-btn:not(:disabled),
+  .desktop-app .desktop-member-row:hover > button:not(:disabled),
+  .desktop-app .desktop-member-row:focus-within > button:not(:disabled),
+  .desktop-app .desktop-icon-btn:hover:not(:disabled),
+  .desktop-app .desktop-icon-btn:focus-visible {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+/* 指到按鈕本身再加一層底色。刻意不宣告 color：.desktop-icon-danger（琥珀）
+   與 .desktop-icon-promote/demote（深藍）的語意色要留著。 */
+.desktop-app .desktop-icon-btn:hover:not(:disabled),
+.desktop-app .desktop-icon-btn:focus-visible,
+.desktop-app .desktop-member-row > button:hover:not(:disabled) {
+  background: var(--cloud-sky);
+  border-color: var(--cloud-primary);
+}
+
+/* 表格列也要有 hover 回饋，使用者才知道「圖示是滑上來才出現」。
+   .desktop-th 是表頭（同時帶 .desktop-tr），排除。 */
+.desktop-app .desktop-table .desktop-tr:not(.desktop-th) {
+  transition: background-color .15s ease;
+}
+
+.desktop-app .desktop-table .desktop-tr:not(.desktop-th):hover {
+  background: var(--cloud-sky);
+}
+
+/* --- 按鈕基調 ---------------------------------------------------------
+   .desktop-sync 絕對不要補 background / color：app.js 會依同步狀態掛上
+   sync-badge-*，再加一層只會讓狀態色更難救。這裡只給圓角與 hover 邊框。 */
+.desktop-app .desktop-primary {
+  border-radius: var(--desktop-radius-control);
+  background: var(--cloud-primary-gradient);
+  box-shadow: var(--cloud-shadow-btn);
+  transition: var(--desktop-action-transition), transform .1s ease;
+}
+
+.desktop-app .desktop-primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.desktop-app .desktop-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.desktop-app .desktop-primary:disabled {
+  box-shadow: none;
+}
+
+.desktop-app .desktop-sync,
+.desktop-app .desktop-ghost,
+.desktop-app .desktop-version-refresh {
+  border-radius: var(--desktop-radius-control);
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-ghost:hover,
+.desktop-app .desktop-version-refresh:hover,
+.desktop-app .desktop-sync:hover {
+  border-color: var(--cloud-primary);
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-app .desktop-map-actions button,
+.desktop-app .desktop-probe-item {
+  border-radius: var(--desktop-radius-control);
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-map-actions button:hover,
+.desktop-app .desktop-probe-item:hover {
+  background: var(--cloud-sky);
+  border-color: var(--cloud-primary);
+}
+
+/* --- 鍵盤焦點與動態偏好 -----------------------------------------------
+   刻意不選 [tabindex]：.desktop-modal-mask 帶 tabindex="-1"，選到的話開
+   modal 時整片遮罩會被畫上藍框。input/select 也不加，cloud-theme.css
+   150-153 已經用 !important 給了 focus 的 box-shadow。 */
+.desktop-app button:focus-visible,
+.desktop-app a:focus-visible {
+  outline: 2px solid var(--cloud-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-app .desktop-icon-btn,
+  .desktop-app .desktop-member-row > button,
+  .desktop-app .desktop-nav button,
+  .desktop-app .desktop-trip-list-item,
+  .desktop-app .desktop-trip-create-btn,
+  .desktop-app .card.desktop-place-card,
+  .desktop-app .desktop-table .desktop-tr,
+  .desktop-app .desktop-primary,
+  .desktop-app .desktop-sync,
+  .desktop-app .desktop-ghost,
+  .desktop-app .desktop-version-refresh,
+  .desktop-app .desktop-map-actions button,
+  .desktop-app .desktop-probe-item {
+    transition: none;
+  }
+}
+
+/* ================================= 分帳分頁 · 重繪（主欄 + 結算 rail）
+   放在「通用外觀重繪」之後：同權重時後出現者勝，才蓋得掉上面那組
+   .desktop-app .card / .desktop-app input 的通用值。會跟通用區撞名的
+   選擇器一律補 .desktop-app 前綴把權重拉到同級以上。
+   顏色一律取 cloud-theme.css 的 --cloud-*。 */
+
+/* 主欄（沿用 .desktop-money-grid 的 2 欄內部排版）+ 右側 336px 結算面板。
+   .desktop-money-grid 原本自己置中，進到 layout 後改由外層負責。 */
+.desktop-money-layout {
+  width: min(1240px, 100%);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  gap: 16px;
+  align-items: start;
+}
+
+.desktop-money-layout > .desktop-money-grid {
+  width: 100%;
+  margin-inline: 0;
+}
+
+.desktop-money-rail {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+/* 分帳卡片比通用卡片再寬鬆一點；(0,3,0) 才壓得過通用區的
+   `.desktop-app .card:not(.itinerary-route-card)`。 */
+.desktop-app .desktop-money-layout .card {
+  padding: 18px 20px;
+  margin-bottom: 0;
+  border-radius: 18px !important;
+}
+
+/* ---- 模式切換與錢包開關 ---- */
+
+.desktop-money .desktop-money-mode,
+.desktop-money .desktop-money-submode {
+  padding: 5px;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, .92);
+  background: rgba(255, 255, 255, .86);
+  box-shadow: var(--cloud-shadow-soft);
+}
+
+.desktop-money .desktop-money-mode button,
+.desktop-money .desktop-money-submode button {
+  border-radius: 999px;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.desktop-money .desktop-money-mode button.is-active,
+.desktop-money .desktop-money-submode button.is-active {
+  background: var(--cloud-primary-gradient);
+  color: #fff;
+  box-shadow: var(--cloud-shadow-btn);
+}
+
+.desktop-money .desktop-wallet-toggle {
+  padding: 8px 14px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .86);
+}
+
+/* ---- 總消費支出大數字卡 ---- */
+
+.desktop-app .desktop-money-layout .desktop-money-hero {
+  background: var(--cloud-hero-gradient) !important;
+  border-color: var(--cloud-border-strong) !important;
+  padding: 22px 24px;
+}
+
+.desktop-money-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.desktop-money-hero-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-money-hero-label {
+  color: var(--cloud-muted);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.desktop-money-hero-value {
+  color: var(--cloud-text);
+  font-size: 44px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-money-hero-sub {
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.desktop-money-layout .desktop-money-mode-status {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border-color: var(--cloud-border-strong);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* ---- 個人 vs. 共同支出對比卡 ---- */
+
+.desktop-money-bars {
+  display: grid;
+  gap: 16px;
+}
+
+.desktop-money-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.desktop-money-bar-label {
+  min-width: 0;
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.desktop-money-bar-value {
+  color: var(--cloud-text);
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-money-bar-pct {
+  min-width: 44px;
+  text-align: right;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-money-bar-track {
+  grid-column: 1 / -1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cloud-track);
+  overflow: hidden;
+}
+
+.desktop-money-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+
+.desktop-money-bar-fill.is-personal {
+  background: linear-gradient(90deg, var(--cloud-primary), var(--cloud-primary-soft));
+}
+
+.desktop-money-bar-fill.is-shared {
+  background: linear-gradient(90deg, var(--cloud-teal), var(--cloud-teal-2));
+}
+
+.desktop-money-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.desktop-money-chips > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 12px;
+  background: var(--cloud-sky-2);
+}
+
+.desktop-money-chips span {
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.desktop-money-chips strong {
+  color: var(--cloud-text);
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 分類：圓形圖示按鈕 ----
+   .desktop-people > button 是膠囊樣式，權重 (0,2,1)；
+   這裡一律用 .desktop-money 前綴到 (0,3,1) 以上，確定蓋得掉。 */
+
+.desktop-money .desktop-people.desktop-category-options {
+  gap: 12px;
+}
+
+.desktop-money .desktop-people.desktop-category-options > button {
+  width: 74px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  color: var(--cloud-muted);
+  white-space: nowrap;
+}
+
+.desktop-money .desktop-people.desktop-category-options > button .desktop-cat-icon {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--cloud-border);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .05);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease;
+}
+
+.desktop-money .desktop-people.desktop-category-options > button .desktop-cat-label {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-money .desktop-people.desktop-category-options > button:hover .desktop-cat-icon {
+  border-color: var(--cloud-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--cloud-shadow-btn);
+}
+
+.desktop-money .desktop-people.desktop-category-options > button.is-active {
+  background: transparent;
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-money .desktop-people.desktop-category-options > button.is-active .desktop-cat-icon {
+  border: 2px solid var(--cloud-primary);
+  background: var(--cloud-tint-blue);
+  box-shadow: 0 0 0 4px var(--cloud-sky), var(--cloud-shadow-btn);
+}
+
+.desktop-money .desktop-people.desktop-category-options > button:focus-visible {
+  outline: 2px solid var(--cloud-primary);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+/* ---- 表單欄位（分帳頁專用高度／圓角） ----
+   (0,3,1) 才壓得過通用區的 `.desktop-app input:not(...)`。 */
+
+.desktop-app .desktop-money-layout .desktop-form-field input,
+.desktop-app .desktop-money-layout .desktop-form-field select {
+  height: 44px;
+  font-size: 14px;
+  border-radius: 12px !important;
+}
+
+.desktop-app .desktop-money-layout .desktop-form-submit {
+  min-height: 44px;
+  border-radius: 999px;
+  background: var(--cloud-primary-gradient);
+  box-shadow: var(--cloud-shadow-btn);
+}
+
+/* ---- 個人分帳紀錄表格 ---- */
+
+.desktop-table-expense .desktop-tr {
+  min-width: 706px;
+  grid-template-columns: 78px minmax(110px, 1fr) 72px 96px 96px 96px 82px;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--cloud-line);
+  border-radius: 10px;
+}
+
+.desktop-table-expense .desktop-th {
+  border-bottom: 1px solid var(--cloud-border);
+  color: var(--cloud-muted);
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+/* (0,5,0) 與通用區的表格 hover 同權重，靠排在後面取勝 */
+.desktop-app .desktop-table-expense .desktop-tr:not(.desktop-th):hover {
+  background: var(--cloud-tint-sky-soft);
+}
+
+.desktop-table-expense .desktop-tr:last-child {
+  border-bottom: 0;
+}
+
+.desktop-td-date,
+.desktop-td-payer,
+.desktop-td-involved {
+  min-width: 0;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-td-title {
+  min-width: 0;
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-td-cat {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--cloud-text);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.desktop-td-cat-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.desktop-td-amount {
+  text-align: right;
+  color: var(--cloud-text);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-th .desktop-td-amount {
+  color: var(--cloud-muted);
+  font-weight: 800;
+}
+
+/* 只調分帳表格內的動作欄對齊，不動 .desktop-place-actions / .desktop-icon-btn 的通用規則 */
+.desktop-table-expense .desktop-place-actions,
+.desktop-table-wallet .desktop-place-actions {
+  justify-content: flex-end;
+}
+
+/* ---- 右欄 rail 共用 ---- */
+
+.desktop-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.desktop-rail-head h3 {
+  margin: 0;
+  color: var(--cloud-text);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.desktop-rail-badge {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--cloud-sky);
+  color: var(--cloud-primary-strong);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.desktop-rail-subhead {
+  margin: 18px 0 8px;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+/* rail 兩張卡與對比卡的內距要跟主欄一致（.card 的通用 padding 已由
+   .desktop-money-layout .card 統一，這裡只補它們各自的內部節奏）。 */
+.desktop-money-compare .desktop-money-section-head {
+  margin-bottom: 16px;
+}
+
+.desktop-settle-card .desktop-rail-subhead:first-of-type {
+  margin-top: 20px;
+}
+
+.desktop-analysis-card .desktop-rail-head {
+  margin-bottom: 8px;
+}
+
+/* 共同錢包模式的右欄卡。跟個人分帳模式的 .desktop-settle-card 佔同一個位置，
+   兩種模式的右欄結構才對稱；列樣式沿用 .desktop-balance-list，不另立一套。 */
+.desktop-wallet-balance-card .desktop-rail-head {
+  margin-bottom: 10px;
+}
+
+/* ---- 結算狀態 ---- */
+
+.desktop-settle-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cloud-track);
+  overflow: hidden;
+}
+
+.desktop-settle-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cloud-positive-2), var(--cloud-positive-3));
+  transition: width .35s ease;
+}
+
+.desktop-settle-progress-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.desktop-settle-progress-note strong {
+  color: var(--cloud-text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-balance-list {
+  display: grid;
+  gap: 3px;
+}
+
+.desktop-balance-list p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--cloud-sky-2);
+}
+
+.desktop-balance-name {
+  min-width: 0;
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-balance-list strong {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 不能用 Tailwind 的 text-green-600 / text-red-600：cloud-theme.css 會用
+   !important 把它們全部染成藍色 */
+.desktop-balance-pos { color: var(--cloud-positive); }
+.desktop-balance-neg { color: var(--cloud-negative); }
+.desktop-balance-zero { color: var(--cloud-muted); }
+
+.desktop-settle-list {
+  display: grid;
+  gap: 8px;
+}
+
+/* 刻意「不」放結清勾選：app.js 沒有結清狀態，勾了不會存、換頁就沒了，
+   而且 v-for 的 :key 不含金額，資料變動時還會殘留上一筆的勾選。 */
+.desktop-settle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.desktop-settle-people {
+  min-width: 0;
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-settle-people em {
+  padding: 0 6px;
+  color: var(--cloud-primary);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.desktop-settle-amount {
+  flex: 0 0 auto;
+  color: var(--cloud-primary-strong);
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-balance-list p.desktop-empty,
+.desktop-settle-list p.desktop-empty {
+  padding: 12px 2px;
+  background: transparent;
+}
+
+/* ---- 消費分析（rail 版：名稱 + 金額 / 百分比 + 細進度條） ----
+   .desktop-analysis-list p 是 flex + 底線，權重 (0,1,1)；這裡 (0,2,1) 蓋掉。 */
+
+.desktop-money-rail .desktop-analysis-list {
+  margin-top: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-money-rail .desktop-analysis-list p {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 10px;
+  margin: 0;
+  padding: 9px 2px;
+  border-bottom: 0;
+}
+
+.desktop-analysis-name {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-analysis-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.desktop-analysis-figure {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.desktop-analysis-figure strong {
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-analysis-figure em {
+  color: var(--cloud-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-analysis-bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--cloud-track);
+  overflow: hidden;
+}
+
+.desktop-analysis-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cloud-primary), var(--cloud-sky-strong));
+  transition: width .35s ease;
+}
+
+/* ---- 響應式 ---- */
+
+/* 主欄要容得下 706px 的表格 + 40px 卡片內距，rail 336 + gap 16，
+   再加上側欄 244 與 .desktop-pane 的 28px*2 內距 → 1360px 以下收成單欄。 */
+@media (max-width: 1360px) {
+  .desktop-money-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-money-rail {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .desktop-money-hero-value {
+    font-size: 34px;
+  }
+
+  .desktop-money .desktop-people.desktop-category-options {
+    gap: 8px;
+  }
+
+  .desktop-money .desktop-people.desktop-category-options > button {
+    width: 62px;
+  }
+
+  .desktop-money .desktop-people.desktop-category-options > button .desktop-cat-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-money-bar-fill,
+  .desktop-settle-progress > span,
+  .desktop-analysis-bar > span,
+  .desktop-money .desktop-money-mode button,
+  .desktop-money .desktop-money-submode button,
+  .desktop-money .desktop-people.desktop-category-options > button .desktop-cat-icon {
+    transition: none;
+  }
+}
+
+/* ================================= 行程分頁 · 重繪（密度 + 層級）
+   放在「分帳分頁 · 重繪」之後：同權重時後出現者勝。
+
+   所有選擇器一律加 .desktop-app + .desktop-itinerary 兩層前綴 ——
+   .desktop-place-card / .desktop-place-actions / .desktop-hotel-row /
+   .desktop-icon-btn 被分帳頁與設定頁共用，少了這層限定會波及那兩頁。
+
+   本區沒有新增任何 cloud token，顏色全部取自 cloud-theme.css 的 --cloud-*。
+   動作按鈕的「平常淡化、滑到該列才上色」已由通用區涵蓋，
+   這裡只調整幾何（欄位配置／最小高度），不重寫淡化邏輯。
+   ===================================================================== */
+
+.desktop-app .desktop-itinerary {
+  /* 左欄區塊間距。備案空區塊的負 margin 要跟它同值，所以抽成變數。 */
+  --desktop-itin-gap: 12px;
+  /* 圖示鈕尺寸＝全頁最小點擊區。只給圖示鈕與 min-height 對齊用。 */
+  --desktop-itin-row-h: 34px;
+  /* 行程頁刻意收窄的表單控制項高度。
+     ★ 跨頁契約仍是 --desktop-control-h: 42px（通用區），兩者不可互換：
+     這一頁的輸入框、下拉、主要鈕、ghost 鈕、路線鈕全部統一吃這個值，
+     同一列的上下緣才會齊平（原本 input 42 / primary 39 / ghost 35 各自為政）。 */
+  --desktop-itin-control-h: 36px;
+  width: min(1640px, 100%);
+  margin-inline: auto;
+  /* 左欄連續縮放而不是階梯式。用 min(560px, 47%) 而非固定 560px：
+     固定值配 @media 會讓「視窗加寬 1px、地圖反而縮小 155px」——
+     斷點內 1180px 右欄 465px，斷點外 1181px 只剩 313px，1280px 這種
+     最常見的筆電寬度正好落在這個反向區間裡。% 對 grid 容器 content box
+     解析，全程單調遞增。 */
+  grid-template-columns: minmax(0, min(560px, 47%)) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 24px 18px;
+}
+
+.desktop-app .desktop-itinerary-left {
+  gap: var(--desktop-itin-gap);
+  /* 左邊刻意不留白：這是捲動容器，任何 padding-left 都會讓 sticky 日期列
+     蓋不滿左緣。卡片陰影在左右被裁切的問題改用 hover 底色補償。 */
+  padding: 0 6px 14px 0;
+  /* 日期列是 sticky，鍵盤 Tab 捲動時不要把目標藏到它下面。 */
+  scroll-padding-top: 132px;
+}
+
+.desktop-app .desktop-itinerary-right {
+  /* 這裡的 position:sticky（desktop.css:334）其實是死碼——祖先
+     .desktop-itinerary 是 overflow:hidden，沒有可捲動的祖先。
+     但刻意「不」改成 static：那會移除本欄唯一的 positioned ancestor，
+     而 Google Maps 注入的節點以它當定位基準。純視覺重繪不附帶結構語意變更。 */
+  gap: 8px;
+}
+
+/* --- Day 列：sticky 換行藥丸牆 ---------------------------------------
+   原本會跟著左欄一起捲走，換日期得先捲回頂端。改成黏在左欄捲動容器頂端。
+
+   ★ 刻意「不」做成單行橫向捲動帶。橫捲的話 8 天以上就開始溢出，而且
+     scrollLeft 初始永遠是 0 —— 全專案沒有任何 scrollIntoView / scrollLeft
+     的程式（grep 過 app.js 與 js/*.js，零命中），第 18 天進站時 is-active
+     那顆會在畫面外 1200px 處，使用者看不出目前在第幾天。修那個要動 app.js。
+     換行 + 限高則保留原本「所有天數依閱讀順序排列」的可掃視性：
+     max-height 132px ≈ 3 列 ≈ 21 天以內完全不捲。 */
+.desktop-app .desktop-itinerary .desktop-day-bar {
+  position: sticky;
+  top: 0;
+  /* ★ 這個數字必須低於 .desktop-modal-mask 的 80（desktop.css:1520），
+     否則 sticky 日期列會蓋在 modal 遮罩上面；也必須低於 cloud-theme.css 的
+     `.card:has(.suggestions-list) { z-index: 6500 }`，搜尋下拉本來就該在最上層。
+     代價是「下拉展開時捲動，搜尋卡會蓋過日期列」——罕見且無害，
+     比破壞 modal 遮罩划算太多。 */
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 0 8px;
+  /* 與 .desktop-app 的頁底同色，看起來像頁面背景延續；不用 backdrop-filter，
+     它會讓元素變成 fixed 子孫的 containing block。 */
+  background: var(--cloud-sky-2);
+  border-bottom: 1px solid var(--cloud-border);
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+  /* 左右 6px：2px outline + 1px offset 的焦點環才不會貼著裁切邊。 */
+  padding: 4px 6px;
+  max-height: 132px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cloud-muted-2) transparent;
+}
+
+/* 標準的 scrollbar-width/-color 與 ::-webkit-scrollbar 是兩套互斥實作：
+   Firefox 吃前者，WebKit/Blink 吃後者，兩邊都寫才能一致。 */
+.desktop-app .desktop-itinerary .desktop-day-tabs::-webkit-scrollbar {
+  width: 6px;
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--cloud-track);
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs button {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  /* 999px 是全頁唯一沒有引用圓角 token 的控制項，收回 --desktop-radius-control。 */
+  border-radius: var(--desktop-radius-control);
+  line-height: 1.15;
+  transition: var(--desktop-action-transition);
+}
+
+/* 捲動帶只留 4px 內距，通用區的 outline-offset:2px 會被 overflow 裁掉。 */
+.desktop-app .desktop-itinerary .desktop-day-tabs button:focus-visible {
+  outline-offset: 1px;
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs button strong {
+  font-size: 12px;
+  letter-spacing: .01em;
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs button em {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs button:hover:not(.is-active):not(:disabled) {
+  background: var(--cloud-tint-sky-soft);
+  border-color: var(--cloud-border-strong);
+}
+
+/* 選取態沿用側欄「目前旅程」的選取語彙（淺藍底 + 主色字 + 主色框），
+   不要用實心漸層 —— 那是主要動作（側欄導覽、新增鈕）的語彙。原本的扁平
+   實心 --cloud-primary 是全畫面飽和度最高的一塊，跟資訊層級剛好相反。 */
+.desktop-app .desktop-itinerary .desktop-day-tabs button.is-active {
+  background: var(--cloud-sky);
+  border-color: var(--cloud-primary);
+  color: var(--cloud-primary-strong);
+  box-shadow: inset 0 0 0 1px var(--cloud-primary);
+}
+
+.desktop-app .desktop-itinerary .desktop-day-tabs button.is-active em {
+  color: var(--cloud-primary);
+  opacity: 1;
+}
+
+/* ＋ 新增天數：搬出捲動帶後沒有任何規則可繼承（原本只是借
+   .desktop-day-tabs button 的藥丸樣式，跟真正的日期長得一模一樣）。
+   改用準備頁已建立的「虛線 ghost 新增」語彙，並固定 34px 點擊區。 */
+.desktop-app .desktop-itinerary .desktop-day-add {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  width: var(--desktop-itin-row-h);
+  height: var(--desktop-itin-row-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px dashed var(--cloud-line-dashed);
+  border-radius: var(--desktop-radius-control);
+  background: transparent;
+  color: var(--cloud-primary-strong);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-itinerary .desktop-day-add:hover:not(:disabled) {
+  border-style: solid;
+  border-color: var(--cloud-primary);
+  background: var(--cloud-sky);
+}
+
+/* --- 內容卡 vs. 工具卡：兩種表面 --------------------------------------
+   行程列是「這一天的內容」，搜尋／路線／探點三張是「操作工具」。
+   工具卡改成淡藍平面（無陰影、實邊框），內容卡維持白玻璃浮空，
+   一眼分得出哪些是資料、哪些是操作。這三個 class 全站只出現在行程頁。 */
+.desktop-app .card.desktop-add-place,
+.desktop-app .card.itinerary-route-card,
+.desktop-app .card.desktop-probe {
+  background: var(--cloud-tint-blue) !important;
+  border-color: var(--cloud-border-strong) !important;
+  box-shadow: none !important;
+}
+
+/* --- 新增地點卡：兩列 42px 併成一列 36px -----------------------------
+   .desktop-add-row-fields 改成 display:contents，它的三個子元素（時間／
+   類型／新增）直接升格成外層 .desktop-itinerary-add-row 的 grid 欄位，
+   跟搜尋框排成同一列。卡片高度從約 128px 收成 62px。
+
+   注意：tests/run.js 讀的是 .desktop-add-row-fields 的「第一條」規則
+   （desktop.css:394），那條原封不動保留 width:100% 與三欄值，這裡是後面
+   另外追加的一條，不影響該斷言。 */
+.desktop-app .desktop-itinerary-left > .card.desktop-add-place {
+  padding: 12px 14px;
+}
+
+.desktop-app .desktop-itinerary .desktop-itinerary-add-row {
+  /* 時間欄 124px 是為了容納 en-US 語系的 input[type=time]（多一個 AM/PM
+     欄位，min-content 約 104px）；zh-TW 只要 76px。 */
+  grid-template-columns: minmax(0, 1fr) 124px 92px 76px;
+  gap: 8px;
+  /* .desktop-add-row-fields 的 align-items:center 會隨 display:contents 一起
+     失效，接手的這一條必須自己宣告，否則 grid 預設 stretch，
+     任何一個高度變 auto 的欄位就會被拉伸。 */
+  align-items: center;
+}
+
+/* display:contents 讓三個欄位變成外層 grid item，min-width:auto 會讓它們
+   撐破固定軌道疊到隔壁欄（不是被裁掉）。這裡明確歸零。 */
+.desktop-app .desktop-itinerary .desktop-itinerary-add-row > * {
+  min-width: 0;
+}
+
+.desktop-app .desktop-itinerary .desktop-add-row-fields {
+  display: contents;
+}
+
+/* 控制項密度：行程頁的輸入框從跨頁的 42px 收成 36px（仍高於 34px 的最小
+   點擊區），四類控制項全部吃同一個變數，同一列的邊緣才會齊平。 */
+.desktop-app .desktop-itinerary input:not([type="checkbox"]):not([type="radio"]),
+.desktop-app .desktop-itinerary select {
+  height: var(--desktop-itin-control-h);
+  font-size: 13px;
+}
+
+.desktop-app .desktop-itinerary .desktop-primary {
+  height: var(--desktop-itin-control-h);
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.desktop-app .desktop-itinerary .desktop-ghost {
+  height: var(--desktop-itin-control-h);
+  padding: 0 12px;
+}
+
+.desktop-app .desktop-itinerary .desktop-hint {
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+/* 搜尋候選：cloud-theme.css 用 !important 鎖了 18px 圓角，是頁面上第四套
+   圓角；這裡用更高權重收回 14px。
+   分隔線必須寫完整縮寫：desktop.css:290 的 `button.suggestion-item{border:0}`
+   已經把 border-style 設成 none、width 設成 0，只宣告 border-bottom-color
+   永遠畫不出線。
+   suggestions-list / suggestion-item / font-bold / truncate / text-green-*
+   這些 class 一個都沒有動 —— search-zh-label.js 靠它們找節點。 */
+.desktop-app .desktop-itinerary .suggestions-list {
+  border-radius: var(--desktop-radius-card) !important;
+  border: 1px solid var(--cloud-border) !important;
+}
+
+.desktop-app .desktop-itinerary .suggestion-item {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--cloud-line);
+}
+
+.desktop-app .desktop-itinerary .suggestion-item:last-child {
+  border-bottom: 0;
+}
+
+.desktop-app .desktop-itinerary .suggestion-item:hover:not(:disabled) {
+  background-color: var(--cloud-sky);
+}
+
+/* --- 路線查詢卡 -------------------------------------------------------
+   整組 .route-* 住在 style.css 682-778，全是寫死色碼的手機規格，桌面完全
+   沒有 override。這裡只換色與高度，不動 .itinerary-route-card 的
+   padding:0 / overflow:visible（整片點擊區靠它）。 */
+.desktop-app .desktop-itinerary .route-panel-toggle {
+  padding: 10px 14px;
+  border-radius: var(--desktop-radius-card);
+  color: var(--cloud-text);
+  font-size: 13px;
+  font-weight: 800;
+  transition: var(--desktop-action-transition);
+}
+
+/* 展開時那顆按鈕是滿版的，下緣不收圓角會在卡片中段畫出一塊圓底色。 */
+.desktop-app .desktop-itinerary .itinerary-route-card:has(.route-panel-body) .route-panel-toggle {
+  border-radius: var(--desktop-radius-card) var(--desktop-radius-card) 0 0;
+}
+
+/* 這是行程頁唯一「整張卡就是一顆按鈕」的元件，原本零 hover 回饋。 */
+.desktop-app .desktop-itinerary .route-panel-toggle:hover:not(:disabled) {
+  background: var(--cloud-tint-sky-soft);
+}
+
+/* 按鈕邊界與卡片邊界重合，通用區的 outline-offset:2px 會在 14px 圓角外面
+   畫出一個方角框，又因為 overflow:visible 直接溢出卡片。改成往內畫。 */
+.desktop-app .desktop-itinerary .route-panel-toggle:focus-visible {
+  outline-offset: -2px;
+}
+
+.desktop-app .desktop-itinerary .route-panel-caret {
+  color: var(--cloud-muted-2);
+}
+
+.desktop-app .desktop-itinerary .route-panel-body {
+  padding: 0 14px 12px;
+  gap: 8px;
+}
+
+.desktop-app .desktop-itinerary .route-field-label {
+  color: var(--cloud-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-app .desktop-itinerary .route-mode-switch {
+  border-color: var(--cloud-border-strong);
+  border-radius: var(--desktop-radius-control);
+}
+
+.desktop-app .desktop-itinerary .route-mode-btn {
+  height: var(--desktop-itin-control-h);
+  color: var(--cloud-text-2);
+  font-size: 12px;
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-itinerary .route-mode-btn:hover:not(:disabled):not(.route-mode-btn-active) {
+  background: var(--cloud-tint-sky-soft);
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-app .desktop-itinerary .route-mode-btn + .route-mode-btn {
+  border-left-color: var(--cloud-border-strong);
+}
+
+.desktop-app .desktop-itinerary .route-mode-btn-active {
+  background: var(--cloud-primary-gradient);
+  color: #fff;
+}
+
+.desktop-app .desktop-itinerary .route-open-btn {
+  height: var(--desktop-itin-control-h);
+  border-radius: var(--desktop-radius-control);
+  background: var(--cloud-primary-gradient);
+  box-shadow: var(--cloud-shadow-btn);
+  font-size: 13px;
+  transition: var(--desktop-action-transition);
+}
+
+.desktop-app .desktop-itinerary .route-open-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.desktop-app .desktop-itinerary .route-open-btn:disabled {
+  background: var(--cloud-tint-gray);
+  color: var(--cloud-muted-2);
+  box-shadow: none;
+}
+
+/* --- 清單區塊：標題色條 + 卡片左條 -----------------------------------
+   原本 6px 上 margin + 15px 行高 + 8px 下 margin 約 29px，三個區塊共 87px。
+   收成 19px，同時用「標題左側 3px 色條 + 卡片左側 3px inset 條」承載區塊
+   身分：藍＝正式行程、琥珀＝備案、青綠＝住宿，跟手機版 cloud-theme 的
+   卡片左色條是同一套語意。
+   用 inset box-shadow 畫卡片左條：不佔版面、不需要 overflow，切日期時
+   文字不會左右抖動。 */
+.desktop-app .desktop-itinerary .desktop-block-plan {
+  --itin-tone: var(--cloud-primary);
+}
+
+.desktop-app .desktop-itinerary .desktop-block-alt {
+  --itin-tone: var(--cloud-accent);
+}
+
+/* 當日住宿那一塊的 div.desktop-list-block 必須逐字保留
+   （tests/run.js 拿它當備案區塊的切片終止符），不能加 class；
+   它是 .desktop-itinerary-left 的最後一個子元素，用 :last-child 選。 */
+.desktop-app .desktop-itinerary-left > .desktop-list-block:last-child {
+  --itin-tone: var(--cloud-teal);
+}
+
+.desktop-app .desktop-itinerary .desktop-list-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  color: var(--cloud-text-2);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+/* --itin-tone 只宣告在三個特定的 .desktop-list-block 上，任何第四個區塊
+   都要有 fallback，否則 box-shadow / background 整條宣告會被視為無效。 */
+.desktop-app .desktop-itinerary .desktop-list-block h3::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 3px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--itin-tone, var(--cloud-muted-2));
+}
+
+.desktop-app .desktop-itinerary .desktop-block-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cloud-tint-sky);
+  color: var(--cloud-primary-strong);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* 沒有備案時 .desktop-list-block 高度是 0，但兩側的 flex gap 照樣生效，
+   正式行程與住宿之間會多出 24px 的空洞。用負 margin 收掉其中一段。
+   刻意不用 v-if：app.js 的 initSortable 兩個 ref 缺一就整段 destroySortable()，
+   備案容器一消失，正式行程的拖曳排序會一起壞掉。 */
+.desktop-app .desktop-itinerary .desktop-block-alt:not(:has(> .card)) {
+  margin-top: calc(var(--desktop-itin-gap) * -1);
+}
+
+/* 列距：卡片變矮之後 10px 的間隔顯得太鬆。:last-child 那條要一起重寫，
+   否則同權重的通用規則會被這條後出現的蓋掉。 */
+.desktop-app .desktop-itinerary .desktop-list-block > .card {
+  margin-bottom: 6px;
+}
+
+.desktop-app .desktop-itinerary .desktop-list-block > .card:last-child {
+  margin-bottom: 0;
+}
+
+/* --- 正式行程列：兩列 grid → 單列 ------------------------------------
+   舊版把動作按鈕獨佔第二列，每張卡固定多吃 6px row-gap + 34px 按鈕列，
+   而那三顆按鈕在沒有 hover 時只有 .38 不透明度（通用區契約）—— 版面成本
+   照付、視覺回報是零。改成單列後，一張「分類＋名稱」的卡從約 100px 收成
+   52px，一天 8 個點省下約 400px 的捲動。
+
+   欄位名稱 handle / time / icon / main / actions 全部沿用，子元素的
+   grid-area 宣告不必改。三個變體各自給完整的 columns + areas，
+   且全部限定在 .desktop-itinerary 底下，設定頁的住宿列完全不受影響。 */
+.desktop-app .desktop-itinerary .desktop-place-card {
+  grid-template-columns: 16px 40px 22px minmax(0, 1fr) auto;
+  grid-template-areas: "handle time icon main actions";
+  column-gap: 8px;
+  row-gap: 0;
+  align-items: start;
+}
+
+.desktop-app .desktop-itinerary .card.desktop-place-card {
+  padding: 8px 12px;
+  transition: box-shadow .15s ease, background-color .15s ease;
+}
+
+/* 卡片左條。基準與 hover 兩條都要寫完整的 box-shadow，只寫一條的話另一個
+   狀態會把左條吃掉。hover 版本必須帶 :not(.desktop-alt-row)：備案列沒有
+   @click，讓它整張浮起等於給出假的可點提示。 */
+.desktop-app .desktop-itinerary .desktop-list-block > .card.desktop-place-card {
+  box-shadow: inset 3px 0 0 var(--itin-tone, var(--cloud-muted-2)), var(--cloud-shadow-soft) !important;
+}
+
+.desktop-app .desktop-itinerary .desktop-list-block > .card.desktop-place-card:not(.desktop-alt-row):hover {
+  box-shadow: inset 3px 0 0 var(--itin-tone, var(--cloud-muted-2)), var(--cloud-shadow) !important;
+}
+
+/* 列 hover 補上底色。卡片陰影往外糊 28~38px，全部撞上 .desktop-itinerary-left
+   的捲動裁切邊界，只靠 box-shadow 幾乎看不出「這一列被指到」，三顆動作鈕
+   卻會同時從灰階變彩色，顯得沒有來由。
+   .card 的背景被 cloud-theme.css 用 !important 鎖住，所以這裡也要 !important。
+   用 -soft（.55）不是 --cloud-tint-sky（.92）：這裡的列卡是疊在頁底上的
+   半透明玻璃，不是分帳頁白底上的表格列。 */
+.desktop-app .desktop-itinerary .card.desktop-place-card:not(.desktop-alt-row):hover {
+  background: var(--cloud-tint-sky-soft) !important;
+}
+
+/* 整張卡都有 @click（正式行程 focusItineraryMapPoint、住宿 openHotelMap），
+   但 cursor:pointer 原本只寫在 .desktop-place-main 上。備案列沒有 @click，
+   維持預設游標，避免給出假的可點提示。 */
+.desktop-app .desktop-itinerary .desktop-list-block .desktop-place-card:not(.desktop-alt-row) {
+  cursor: pointer;
+}
+
+/* 備案卡改灰底：「白＝已排進行程，灰＝還沒排進去」是零成本的層級訊號，
+   也讓「備案卡不可點」這件事有視覺根據。 */
+.desktop-app .desktop-itinerary .desktop-block-alt > .card.desktop-place-card {
+  background: var(--cloud-tint-gray) !important;
+}
+
+/* 四個附屬欄位一律用 34px 的最小高度置中，貼齊第一行文字。不要用
+   align-items:center —— 多行卡（交通摘要／備註）時它們會漂到卡片中線，
+   離要對應的標題愈來愈遠（住宿列的圖示已經為了同一個病灶修過一次）。 */
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-drag-handle,
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-place-time,
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-place-icon,
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-place-actions {
+  align-self: start;
+  min-height: var(--desktop-itin-row-h);
+  display: flex;
+  align-items: center;
+}
+
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-drag-handle,
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-place-icon {
+  justify-content: center;
+}
+
+.desktop-app .desktop-itinerary .desktop-place-card > .desktop-place-actions {
+  gap: 4px;
+}
+
+/* 時間欄原本沒宣告 font-size，繼承 body 的 16px，比 15px 的地點名稱還大，
+   層級顛倒。靠右對齊讓 09:30 / 未定 都貼著圖示欄。 */
+.desktop-app .desktop-itinerary .desktop-place-time {
+  justify-content: flex-end;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--cloud-text-2);
+}
+
+/* 一天的行程常常大半沒填時間，「未定」不該跟真正的時間一樣重。 */
+.desktop-app .desktop-itinerary .desktop-place-time.is-unset {
+  color: var(--cloud-muted-2);
+  font-weight: 600;
+}
+
+.desktop-app .desktop-itinerary .desktop-place-icon {
+  font-size: 17px;
+}
+
+/* main 用上下 7px 內距讓「單行內容 + 內距」剛好 34px，跟右側按鈕同高、
+   視覺中線對齊；多行時自然往下長，附屬欄位仍固定貼齊第一行。 */
+.desktop-app .desktop-itinerary .desktop-place-main {
+  padding: 7px 0;
+  line-height: 1.35;
+}
+
+/* 分類標籤從「名稱上方獨佔一行」改成「名稱前的行內前綴」，一張卡少一行
+   （約 16px）。刻意不覆寫 color：style.css 的八個 tone 是分類語意色，
+   手機版用同一套，改掉會讓兩端不一致。 */
+.desktop-app .desktop-itinerary .desktop-place-main .itinerary-category {
+  display: inline;
+  margin: 0 5px 0 0;
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: 1px;
+}
+
+.desktop-app .desktop-itinerary .desktop-place-main strong {
+  display: inline;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cloud-text);
+}
+
+.desktop-app .desktop-itinerary .desktop-place-main em {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* tailwind preflight 的 a { color: inherit; text-decoration: inherit } 排在
+   最後載入，備註裡 linkifyMessage 產生的 a 在桌面看起來就是一段灰字。
+   handleItineraryContentClick 的 closest('a') 守門靠的是標籤不是樣式，
+   這裡只改外觀。 */
+.desktop-app .desktop-itinerary .desktop-place-main em a {
+  color: var(--cloud-primary-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 交通摘要在桌面沒有任何 override，style.css 是寫死的青色 chip。 */
+.desktop-app .desktop-itinerary .transport-summary {
+  gap: 4px;
+  margin: 4px 0 0;
+}
+
+.desktop-app .desktop-itinerary .transport-summary span {
+  padding: 1px 6px;
+  border-color: var(--cloud-border-strong);
+  border-radius: 6px;
+  background: var(--cloud-tint-sky-soft);
+  color: var(--cloud-teal);
+  font-size: 10px;
+}
+
+/* 備案列：裸 strong 不在 .desktop-place-main 裡，吃不到 15px/800，
+   繼承 body 的 16px + tailwind 的 strong{font-weight:bolder} → 次要的備案
+   名稱比主要的正式行程名稱還大。收成 14px/800。 */
+.desktop-app .desktop-itinerary .desktop-place-card.desktop-alt-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main actions";
+  column-gap: 8px;
+  align-items: center;
+}
+
+.desktop-app .desktop-itinerary .desktop-place-card.desktop-alt-row > strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--cloud-text);
+}
+
+.desktop-app .desktop-itinerary .desktop-place-card.desktop-alt-row > .desktop-place-actions {
+  align-self: center;
+}
+
+/* 當日住宿：沒有時間欄，也沒有動作按鈕，但 areas 仍保留 actions 那一格
+   （空的就是 0 高），跟基準變體的契約一致。 */
+.desktop-app .desktop-itinerary .desktop-place-card.desktop-hotel-row {
+  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-areas:
+    "icon main"
+    "icon actions";
+  column-gap: 8px;
+  align-items: start;
+}
+
+/* 空狀態沿用準備頁已建立的「淡虛線佔位框」語彙，不要是一段裸灰字
+   （看起來像渲染漏了東西）。只限定行程頁，側欄的「尚無旅程」共用
+   .desktop-empty，不能被改到。 */
+.desktop-app .desktop-itinerary .desktop-empty {
+  padding: 9px 12px;
+  border: 1px dashed var(--cloud-line-dashed);
+  border-radius: var(--desktop-radius-control);
+  color: var(--cloud-muted-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* --- 右欄 ------------------------------------------------------------ */
+
+/* 標頭做成與左欄卡片同級的實體長條，左右欄的視覺重量才對等。
+   flex-wrap + nowrap 是必要的：標頭最小內容寬約 264px，右欄在窄視窗會低於
+   這個值，沒有 wrap 的話 flex 會改走「壓縮子項」，把「全部」拆成「全／部」
+   兩行，整條標頭變成碎字。 */
+.desktop-app .desktop-itinerary .desktop-map-head {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-height: var(--desktop-itin-row-h);
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--cloud-border);
+  border-radius: var(--desktop-radius-card);
+  background: var(--cloud-surface);
+  box-shadow: var(--cloud-shadow-soft);
+}
+
+.desktop-app .desktop-itinerary .desktop-map-head h3 {
+  color: var(--cloud-text-2);
+  font-size: 13px;
+  letter-spacing: .02em;
+}
+
+.desktop-app .desktop-itinerary .desktop-map-actions {
+  flex: 0 0 auto;
+}
+
+/* 三顆地圖鈕原本 padding:5px 10px + 12px 字約 26px 高，是整個桌面版最小的
+   點擊目標，卻控制畫面上最大的一塊區域。收齊到 34px。 */
+.desktop-app .desktop-itinerary .desktop-map-actions button {
+  min-height: var(--desktop-itin-row-h);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 「探點」是開關（下方面板會開合），原本沒有任何 active 樣式，面板開著
+   時按鈕看起來跟沒開一樣。沿用分帳頁模式切換的 is-active 語彙。 */
+.desktop-app .desktop-itinerary .desktop-map-actions button.is-active {
+  background: var(--cloud-primary-gradient);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--cloud-shadow-btn);
+}
+
+/* cloud-theme.css 用 #map (1,0,0) + !important 鎖了 24px，是全頁唯一
+   不遵守 --desktop-radius-card 的元素（desktop.css:568 的 14px 是死碼）。 */
+.desktop-app .desktop-itinerary #map.desktop-map {
+  border-radius: var(--desktop-radius-card) !important;
+}
+
+.desktop-app .desktop-itinerary .desktop-map-boot {
+  padding: 0;
+}
+
+.desktop-app .desktop-itinerary .card.desktop-probe {
+  padding: 12px 14px;
+  gap: 5px;
+}
+
+.desktop-app .desktop-itinerary .desktop-probe-item {
+  min-height: var(--desktop-itin-row-h);
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.desktop-app .desktop-itinerary .desktop-probe-selected {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+}
+
+/* 通用區的減動效名單權重只有 (0,3,0)，蓋不掉本區的 (0,4,0)/(0,5,0)，
+   必須自己再列一次。 */
+@media (prefers-reduced-motion: reduce) {
+  .desktop-app .desktop-itinerary .desktop-day-tabs button,
+  .desktop-app .desktop-itinerary .desktop-day-add,
+  .desktop-app .desktop-itinerary .route-panel-toggle,
+  .desktop-app .desktop-itinerary .route-mode-btn,
+  .desktop-app .desktop-itinerary .route-open-btn,
+  .desktop-app .desktop-itinerary .card.desktop-place-card {
+    transition: none;
+  }
+}
+
+/* --- 響應式：行程頁原本一條寬度型 @media 都沒有 ---------------------- */
+
+/* 左欄寬度本身已由 min(560px, 47%) 連續縮放，這個斷點只負責「一列式的
+   新增列與行程列改回兩列」，不再重設 grid-template-columns —— 重設會製造
+   「加寬 1px、地圖縮小 155px」的反向區間。 */
+@media (max-width: 1180px) {
+  .desktop-app .desktop-itinerary {
+    gap: 12px;
+    padding: 14px 18px 16px;
+  }
+
+  .desktop-app .desktop-itinerary .desktop-itinerary-add-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .desktop-app .desktop-itinerary .desktop-add-row-fields {
+    display: grid;
+  }
+
+  .desktop-app .desktop-itinerary .desktop-place-card {
+    grid-template-columns: 16px 40px 22px minmax(0, 1fr);
+    grid-template-areas:
+      "handle time icon main"
+      "handle time icon actions";
+    row-gap: 4px;
+  }
+}
+
+/* 1020px 以下：右欄已經窄到地圖無法使用（.desktop-map 只鎖 min-height，
+   寬度隨右欄一路塌向 0；app.js 的 initGoogleMap 不讀寬高、沒有
+   ResizeObserver，塌掉不會報錯，只會是一片灰）。改成上下堆疊。
+   ★ 這個寬度是走得到的：js/device-router.js 只在載入當下判斷一次，
+     沒有任何 resize 重新導向，所以在 1440 開了桌面版再把視窗貼到半邊
+     （960px）就會停在這裡。
+   連帶效果三個，都是好的方向但要知道它變了：
+   1. .desktop-day-bar 的 sticky scrollport 從左欄換成 .desktop-itinerary，
+      sticky 仍然有效，top:0 不用改。
+   2. .suggestions-list 的裁切祖先消失，下拉不再被左欄切掉。
+   3. 左欄不再有自己的捲軸。 */
+@media (max-width: 1020px) {
+  .desktop-app .desktop-itinerary {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .desktop-app .desktop-itinerary-left,
+  .desktop-app .desktop-itinerary-right {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  /* flex:1 在高度不確定的父層下會塌成 0，這裡必須給確定高度。 */
+  .desktop-app .desktop-itinerary .desktop-map {
+    min-height: 340px;
+  }
+}
+
+/* 1366x768：右欄的最小內容高（標頭 + 地圖 420 + 探點面板 240 + gap）
+   會超過可用高度，被 .desktop-itinerary 的 overflow:hidden 切掉，連帶讓
+   左欄的 height:100% 撐過視窗、overflow-y:auto 產生不了捲軸，清單底部
+   直接消失且捲不到。把地圖高度下限降下來即可解開。 */
+@media (max-height: 860px) {
+  .desktop-app .desktop-itinerary .desktop-map {
+    min-height: 240px;
+  }
+
+  .desktop-app .desktop-itinerary .card.desktop-probe {
+    max-height: 190px;
+  }
+
+  .desktop-app .desktop-itinerary .desktop-day-tabs {
+    max-height: 94px;
+  }
+}
+
+/* 2K 以上：整頁已有 1640px 上限，左欄的 47% 在此區間會超過 560px 上限，
+   放寬到 640px 讓清單不至於是一條細長條。 */
+@media (min-width: 1700px) {
+  .desktop-app .desktop-itinerary {
+    grid-template-columns: minmax(0, min(640px, 47%)) minmax(0, 1fr);
+  }
 }

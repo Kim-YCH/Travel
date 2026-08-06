@@ -1,20 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260802.8 -->
+<!-- version: 20260806.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260802.8" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260806.2" />
 
-  <script src="../js/device-router.js?v=20260802.8" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../js/device-router.js?v=20260806.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260802.8" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260802.8" />
-  <link rel="stylesheet" href="./desktop.css?v=20260802.8" />
+  <link rel="stylesheet" href="../style.css?v=20260806.2" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260806.2" />
+  <link rel="stylesheet" href="./desktop.css?v=20260806.2" />
+  <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260806.2" />
 </head>
 <body class="desktop-body">
 
@@ -32,14 +33,6 @@
         <button type="button" :class="{ 'is-active': currentTab === 'prep' }" @click="switchTab('prep')">🎒 準備</button>
         <button type="button" :class="{ 'is-active': currentTab === 'settings' }" @click="switchTab('settings')">⚙️ 設定</button>
       </nav>
-
-      <div v-if="tripWeather.status === 'ready'" class="desktop-weather">
-        <span class="desktop-weather-icon">{{ tripWeather.icon }}</span>
-        <div>
-          <strong>{{ tripWeather.max }}° / {{ tripWeather.min }}°</strong>
-          <em>{{ tripWeather.title }}</em>
-        </div>
-      </div>
 
       <!-- 原本大廳的旅程清單，現在住在側欄的空白區塊；中間可捲動，兩端維持固定大小 -->
       <div class="desktop-trip-nav">
@@ -85,7 +78,18 @@
          這裡給一個不會撞名真實旅程的預設字串，而不是留空。 -->
     <header class="app-header desktop-header">
       <h1>{{ currentTrip ? currentTrip.name : '尚未選擇旅程' }}</h1>
-      <p v-if="currentTrip">Day {{ currentDay }} · {{ dayLabel(currentDay) }} · {{ currentTrip.city }}</p>
+      <div class="desktop-header-meta">
+        <p v-if="currentTrip">Day {{ currentDay }} · {{ dayLabel(currentDay) }} · {{ currentTrip.city }}</p>
+        <!-- 天氣只在 status === 'ready' 時出現。沒有資料就整塊留白 ——
+             不要顯示「預報尚早／X 月 X 日後可查」這種佔位字，等真的有資料再說。
+             過去的日子由 js/weather.js 去抓實測資料，也會走到 ready。 -->
+        <span v-if="tripWeather.status === 'ready'" class="desktop-header-weather">
+          <span aria-hidden="true">{{ tripWeather.icon }}</span>
+          <strong>{{ tripWeather.max }}° / {{ tripWeather.min }}°</strong>
+          <span>{{ tripWeather.title }}</span>
+          <em v-if="tripWeather.kind === 'history'">實測</em>
+        </span>
+      </div>
     </header>
 
     <main class="desktop-main">
@@ -94,19 +98,31 @@
       <template v-if="currentTrip">
       <section v-show="currentTab === 'itinerary'" class="desktop-pane desktop-itinerary">
         <div class="desktop-itinerary-left">
-          <div class="desktop-day-tabs">
-            <button
-              v-for="d in totalDays"
-              :key="'day-' + d"
-              type="button"
-              :class="{ 'is-active': currentDay === d }"
-              @click="onDayClick(d)"
-              @dblclick="onDayDblClick(d)"
-            >
-              <strong>Day {{ d }}</strong>
-              <em>{{ dayLabel(d) || '—' }}</em>
-            </button>
-            <button type="button" class="desktop-day-add" @click="addNewDay">＋</button>
+          <!-- Day 列黏在左欄捲動容器頂端，天數再多也不用捲回頂端換日期。
+               ＋ 留在捲動帶外面，長行程才不用先捲到底才點得到。
+               日期只留月日與星期：dayLabel（app.js）回 "YYYY/MM/DD (週)"，
+               年份在同一趟旅程裡永遠相同，slice(5) 去掉 "YYYY/" 這 5 個字元。
+               只呼叫一次 dayLabel：它每次都會跑 parseYMD + addDays，而且空字串
+               與任何過短的格式都會自動退回 "—"。
+               title 依日別分支：onDayDblClick 對 Day 1 開的是「設定起始日」
+               （applyDay1Date 會改寫整趟旅程的 start_date），對其他天開的是
+               「交換／刪除這一天」。寫成同一句會把使用者導去平移整趟行程。 -->
+          <div class="desktop-day-bar">
+            <div class="desktop-day-tabs">
+              <button
+                v-for="d in totalDays"
+                :key="'day-' + d"
+                type="button"
+                :class="{ 'is-active': currentDay === d }"
+                :title="d === 1 ? '點一下切換這一天，連點兩下可設定 Day 1 日期' : '點一下切換這一天，連點兩下可交換或刪除這一天'"
+                @click="onDayClick(d)"
+                @dblclick="onDayDblClick(d)"
+              >
+                <strong>Day {{ d }}</strong>
+                <em>{{ (dayLabel(d) || '').slice(5) || '—' }}</em>
+              </button>
+            </div>
+            <button type="button" class="desktop-day-add" title="新增天數" aria-label="新增天數" @click="addNewDay">＋</button>
           </div>
 
           <div class="card desktop-add-place relative">
@@ -186,8 +202,8 @@
             </div>
           </div>
 
-          <div class="desktop-list-block" ref="itineraryListEl">
-            <h3>正式行程</h3>
+          <div class="desktop-list-block desktop-block-plan" ref="itineraryListEl">
+            <h3>正式行程<span class="desktop-block-count">{{ filteredItinerary.length }}</span></h3>
             <article
               v-for="place in filteredItinerary"
               :key="place.id"
@@ -196,7 +212,7 @@
               @click="focusItineraryMapPoint(currentDayMapPoints.find(p => p.kind === 'itinerary' && p.id === place.id))"
             >
               <div class="drag-handle desktop-drag-handle select-none" @click.stop>≡</div>
-              <span class="desktop-place-time">{{ place.time ? formatTime(place.time) : '未定' }}</span>
+              <span class="desktop-place-time" :class="{ 'is-unset': !place.time }">{{ place.time ? formatTime(place.time) : '未定' }}</span>
               <span class="desktop-place-icon">{{ getItineraryIcon(place) }}</span>
               <div class="desktop-place-main" @click="handleItineraryContentClick($event, place)">
                 <span class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">{{ getItineraryCategoryLabel(place) }}</span>
@@ -215,7 +231,7 @@
             <p v-if="!filteredItinerary.length" class="desktop-empty">這一天還沒有行程</p>
           </div>
 
-          <div class="desktop-list-block" ref="alternativeListEl">
+          <div class="desktop-list-block desktop-block-alt" ref="alternativeListEl">
             <h3 v-if="filteredAlternatives.length">備案</h3>
             <article v-for="alt in filteredAlternatives" :key="alt.id" :data-id="alt.id" class="card desktop-place-card desktop-alt-row">
               <strong>{{ alt.name }}</strong>
@@ -246,7 +262,7 @@
             <div class="desktop-map-actions">
               <button type="button" @click="fitBoundsToTrip">全部</button>
               <button type="button" @click="showAllCurrentDayMapPoints">本日</button>
-              <button type="button" @click="toggleProbeSearch">探點</button>
+              <button type="button" :class="{ 'is-active': probeSearchOpen }" :aria-pressed="probeSearchOpen" @click="toggleProbeSearch">探點</button>
             </div>
           </div>
 
@@ -303,20 +319,57 @@
           </label>
         </div>
 
+        <!-- 主欄（.desktop-money-grid）+ 右欄結算 rail（.desktop-money-rail）。
+             .desktop-money-grid 內部仍是原本的 2 欄 grid，desktop-span-2 照舊。 -->
+        <div class="desktop-money-layout">
         <div class="desktop-money-grid">
-          <article class="card desktop-money-summary desktop-span-2">
-            <div class="desktop-money-summary-head">
-              <div>
-                <span>旅程實際支出</span>
-                <strong>${{ Math.round(actualTripExpense) }}</strong>
+          <article class="card desktop-money-hero desktop-span-2">
+            <div class="desktop-money-hero-top">
+              <div class="desktop-money-hero-main">
+                <span class="desktop-money-hero-label">總消費支出</span>
+                <strong class="desktop-money-hero-value">${{ Math.round(actualTripExpense).toLocaleString() }}</strong>
+                <span class="desktop-money-hero-sub">個人分帳與共同錢包支出合計，即旅程實際支出</span>
               </div>
               <span class="desktop-money-mode-status">{{ moneyDisplayMode === 'personal' ? '個人分帳' : '共同錢包' }}</span>
             </div>
-            <div class="desktop-money-metrics">
-              <div v-if="moneyDisplayMode === 'personal'">
-                <span>個人分帳支出</span>
-                <strong>${{ Math.round(totalExpense) }}</strong>
+          </article>
+
+          <article class="card desktop-money-compare desktop-span-2">
+            <div class="desktop-money-section-head">
+              <div>
+                <h3>個人 vs. 共同支出</h3>
+                <p>兩條加總即為總消費支出</p>
               </div>
+              <span class="desktop-rail-badge">{{ sharedWalletEnabled ? '已啟用共同錢包' : '僅個人分帳' }}</span>
+            </div>
+
+            <div class="desktop-money-bars">
+              <div class="desktop-money-bar-row">
+                <span class="desktop-money-bar-label">個人分帳支出</span>
+                <span class="desktop-money-bar-value">${{ Math.round(totalExpense).toLocaleString() }}</span>
+                <span class="desktop-money-bar-pct">{{ actualTripExpense ? Math.round(totalExpense / actualTripExpense * 100) : 0 }}%</span>
+                <span class="desktop-money-bar-track" aria-hidden="true">
+                  <span
+                    class="desktop-money-bar-fill is-personal"
+                    :style="{ width: (actualTripExpense ? Math.min(100, totalExpense / actualTripExpense * 100) : 0) + '%' }"
+                  ></span>
+                </span>
+              </div>
+
+              <div class="desktop-money-bar-row">
+                <span class="desktop-money-bar-label">共同錢包支出</span>
+                <span class="desktop-money-bar-value">${{ Math.round(sharedWalletEnabled ? sharedWalletPaymentTotal : 0).toLocaleString() }}</span>
+                <span class="desktop-money-bar-pct">{{ actualTripExpense && sharedWalletEnabled ? Math.round(sharedWalletPaymentTotal / actualTripExpense * 100) : 0 }}%</span>
+                <span class="desktop-money-bar-track" aria-hidden="true">
+                  <span
+                    class="desktop-money-bar-fill is-shared"
+                    :style="{ width: (actualTripExpense && sharedWalletEnabled ? Math.min(100, sharedWalletPaymentTotal / actualTripExpense * 100) : 0) + '%' }"
+                  ></span>
+                </span>
+              </div>
+            </div>
+
+            <div class="desktop-money-chips">
               <div v-if="moneyDisplayMode === 'personal'">
                 <span>待結算筆數</span>
                 <strong>{{ settlementPlan.length }}</strong>
@@ -330,12 +383,12 @@
                 <strong>${{ Math.round(sharedWalletDepositTotal) }}</strong>
               </div>
               <div v-if="moneyDisplayMode === 'wallet'">
-                <span>共同支出</span>
-                <strong>${{ Math.round(sharedWalletPaymentTotal) }}</strong>
-              </div>
-              <div v-if="moneyDisplayMode === 'wallet'">
                 <span>目前餘額</span>
                 <strong>${{ Math.round(sharedWalletBalance) }}</strong>
+              </div>
+              <div v-if="moneyDisplayMode === 'wallet'">
+                <span>旅伴人數</span>
+                <strong>{{ people.length }}</strong>
               </div>
             </div>
           </article>
@@ -374,8 +427,13 @@
                       :key="'d-cat-' + cat"
                       type="button"
                       :class="{ 'is-active': newExpense.category === cat }"
+                      :aria-pressed="newExpense.category === cat"
+                      :title="cat"
                       @click="newExpense.category = cat"
-                    >{{ cat }}</button>
+                    >
+                      <span class="desktop-cat-icon" aria-hidden="true">{{ getExpenseCategoryIcon(cat) }}</span>
+                      <span class="desktop-cat-label">{{ cat }}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -402,15 +460,17 @@
                   <p>可檢查付款人、分類與參與成員</p>
                 </div>
               </div>
-              <div class="desktop-table">
-                <div class="desktop-tr desktop-th"><span>日期</span><span>項目</span><span>付款人</span><span>分類</span><span>參與</span><span>金額</span><span></span></div>
+              <div class="desktop-table desktop-table-expense">
+                <div class="desktop-tr desktop-th">
+                  <span>日期</span><span>項目</span><span>付款人</span><span>分類</span><span>參與</span><span class="desktop-td-amount">金額</span><span></span>
+                </div>
                 <div v-for="item in filteredExpenses" :key="item.id" class="desktop-tr">
-                  <span>{{ expenseDateLabel(item) }}</span>
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.payer }}</span>
-                  <span>{{ getExpenseCategoryIcon(item.category) }} {{ item.category }}</span>
-                  <span>{{ formatInvolved(item.involved) }}</span>
-                  <span>${{ Math.round(item.amount) }}</span>
+                  <span class="desktop-td-date">{{ expenseDateLabel(item) }}</span>
+                  <strong class="desktop-td-title">{{ item.title }}</strong>
+                  <span class="desktop-td-payer">{{ item.payer }}</span>
+                  <span class="desktop-td-cat"><span class="desktop-td-cat-icon" aria-hidden="true">{{ getExpenseCategoryIcon(item.category) }}</span>{{ item.category }}</span>
+                  <span class="desktop-td-involved">{{ formatInvolved(item.involved) }}</span>
+                  <span class="desktop-td-amount">${{ Math.round(item.amount) }}</span>
                   <span class="desktop-place-actions">
                     <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯個人分帳" @click="openEditExpenseModal(item)" :disabled="isSavingExpense">✏️</button>
                     <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除個人分帳" @click="removeExpense(item.id)" :disabled="isSavingExpense">✕</button>
@@ -504,8 +564,13 @@
                         :key="'d-wc-' + cat"
                         type="button"
                         :class="{ 'is-active': newSharedWalletPayment.category === cat }"
+                        :aria-pressed="newSharedWalletPayment.category === cat"
+                        :title="cat"
                         @click="newSharedWalletPayment.category = cat"
-                      >{{ cat }}</button>
+                      >
+                        <span class="desktop-cat-icon" aria-hidden="true">{{ getExpenseCategoryIcon(cat) }}</span>
+                        <span class="desktop-cat-label">{{ cat }}</span>
+                      </button>
                     </div>
                   </div>
 
@@ -519,7 +584,7 @@
               </template>
 
               <div class="desktop-table desktop-table-wallet">
-                <div class="desktop-tr desktop-th"><span>類型</span><span>項目</span><span>對象</span><span>金額</span><span></span></div>
+                <div class="desktop-tr desktop-th"><span>類型</span><span>項目</span><span>對象</span><span class="desktop-td-amount">金額</span><span></span></div>
                 <div v-for="tx in sharedWalletRecords" :key="tx.id" class="desktop-tr">
                   <span>{{ tx.type === 'deposit' ? '存入' : '支出' }}</span>
                   <strong>{{ tx.type === 'deposit' ? (tx.person || '存入') : tx.title }}</strong>
@@ -532,45 +597,89 @@
                 </div>
                 <p v-if="!sharedWalletRecords.length" class="desktop-empty">尚無共同錢包紀錄</p>
               </div>
-
-              <div class="desktop-wallet-balances">
-                <h3>成員錢包餘額</h3>
-                <div class="desktop-money-summary">
-                  <p v-for="res in sharedWalletMemberBalances" :key="'d-wb-' + res.name">
-                    <span>{{ res.name }}</span>
-                    <strong>${{ Math.round(res.balance) }}</strong>
-                  </p>
-                </div>
-              </div>
             </article>
           </template>
 
-          <article class="card">
-            <h3>旅程消費分析</h3>
+        </div>
+
+        <aside class="desktop-money-rail">
+          <article v-if="moneyDisplayMode === 'personal'" class="card desktop-settle-card">
+            <div class="desktop-rail-head">
+              <h3>結算狀態</h3>
+              <span class="desktop-rail-badge">待結算 {{ settlementPlan.length }} 筆</span>
+            </div>
+
+            <div class="desktop-settle-progress" aria-hidden="true">
+              <span :style="{ width: (balanceSheet.length ? balanceSheet.filter(r => Math.round(r.balance) === 0).length / balanceSheet.length * 100 : 0) + '%' }"></span>
+            </div>
+            <p class="desktop-settle-progress-note">
+              <span>帳目已平</span>
+              <strong>{{ balanceSheet.filter(r => Math.round(r.balance) === 0).length }} / {{ balanceSheet.length }} 人</strong>
+            </p>
+
+            <h4 class="desktop-rail-subhead">每人餘額</h4>
+            <div class="desktop-balance-list">
+              <p v-for="res in balanceSheet" :key="'d-bs-' + res.name">
+                <span class="desktop-balance-name">{{ res.name }}</span>
+                <strong :class="Math.round(res.balance) === 0 ? 'desktop-balance-zero' : (res.balance > 0 ? 'desktop-balance-pos' : 'desktop-balance-neg')">{{ res.balance > 0 ? '+' : '' }}{{ Math.round(res.balance) }}</strong>
+              </p>
+              <p v-if="!balanceSheet.length" class="desktop-empty">尚未有旅伴資料</p>
+            </div>
+
+            <h4 class="desktop-rail-subhead">誰付給誰</h4>
+            <div class="desktop-settle-list">
+              <div
+                v-for="row in settlementPlan"
+                :key="'d-sp-' + row.from + row.to"
+                class="desktop-settle-row"
+              >
+                <span class="desktop-settle-people">{{ row.from }}<em>→</em>{{ row.to }}</span>
+                <span class="desktop-settle-amount">${{ row.amount }}</span>
+              </div>
+              <p v-if="!settlementPlan.length" class="desktop-empty">目前不需要轉帳</p>
+            </div>
+          </article>
+
+          <!-- 共同錢包模式的右欄卡。原本這塊在共同錢包卡的最底下，
+               要捲過整張交易表格才看得到；搬到 rail 之後跟個人分帳模式的
+               「結算狀態」佔同一個位置，兩種模式的右欄結構就對稱了。
+               列樣式沿用結算卡的 .desktop-balance-list，不另立一套。 -->
+          <article v-if="sharedWalletEnabled && moneyDisplayMode === 'wallet'" class="card desktop-wallet-balance-card">
+            <div class="desktop-rail-head">
+              <h3>成員錢包餘額</h3>
+              <span class="desktop-rail-badge">共 {{ sharedWalletMemberBalances.length }} 人</span>
+            </div>
+            <div class="desktop-balance-list">
+              <p v-for="res in sharedWalletMemberBalances" :key="'d-wb-' + res.name">
+                <span class="desktop-balance-name">{{ res.name }}</span>
+                <strong :class="Math.round(res.balance) === 0 ? 'desktop-balance-zero' : (res.balance > 0 ? 'desktop-balance-pos' : 'desktop-balance-neg')">${{ Math.round(res.balance) }}</strong>
+              </p>
+              <p v-if="!sharedWalletMemberBalances.length" class="desktop-empty">尚無成員餘額</p>
+            </div>
+          </article>
+
+          <article class="card desktop-analysis-card">
+            <div class="desktop-rail-head">
+              <h3>旅程消費分析</h3>
+              <span class="desktop-rail-badge">{{ categoryAnalysis.length }} 類</span>
+            </div>
             <div class="desktop-analysis-list">
               <p v-for="row in categoryAnalysis" :key="'d-ca-' + row.name">
-                <span>{{ getExpenseCategoryIcon(row.name) }} {{ row.name }}</span>
-                <strong>${{ Math.round(row.total) }}</strong>
+                <span class="desktop-analysis-name">
+                  <span class="desktop-analysis-icon" aria-hidden="true">{{ getExpenseCategoryIcon(row.name) }}</span>{{ row.name }}
+                </span>
+                <span class="desktop-analysis-figure">
+                  <strong>${{ Math.round(row.total) }}</strong>
+                  <em>{{ actualTripExpense ? Math.round(row.total / actualTripExpense * 100) : 0 }}%</em>
+                </span>
+                <span class="desktop-analysis-bar" aria-hidden="true">
+                  <span :style="{ width: (actualTripExpense ? Math.min(100, row.total / actualTripExpense * 100) : 0) + '%' }"></span>
+                </span>
               </p>
               <p v-if="!categoryAnalysis.length" class="desktop-empty">尚無可分析的支出</p>
             </div>
           </article>
-
-          <article v-if="moneyDisplayMode === 'personal'" class="card">
-            <h3>結算</h3>
-            <div class="desktop-money-summary">
-              <p v-for="res in balanceSheet" :key="'d-bs-' + res.name">
-                <span>{{ res.name }}</span>
-                <strong>{{ res.balance > 0 ? '+' : '' }}{{ Math.round(res.balance) }}</strong>
-              </p>
-            </div>
-            <p v-for="row in settlementPlan" :key="'d-sp-' + row.from + row.to" class="desktop-settlement-row">
-              <span>{{ row.from }} → {{ row.to }}</span>
-              <strong>${{ row.amount }}</strong>
-            </p>
-            <p v-if="!settlementPlan.length" class="desktop-empty">目前不需要轉帳</p>
-          </article>
-
+        </aside>
         </div>
       </section>
       <section v-show="currentTab === 'settings'" class="desktop-pane desktop-settings">
@@ -605,8 +714,8 @@
                 <em>{{ hotelDayRangeLabel(hotel) }} · {{ hotel.address }}</em>
               </div>
               <div class="desktop-place-actions">
-                <button type="button" @click="openEditHotelModal(hotel)">編輯</button>
-                <button type="button" @click="removeHotel(hotel.id)" :disabled="isDeletingHotel">刪除</button>
+                <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯住宿" @click="openEditHotelModal(hotel)" :disabled="isSavingHotel">✏️</button>
+                <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除住宿" @click="removeHotel(hotel.id)" :disabled="isDeletingHotel">✕</button>
               </div>
             </article>
           </article>
@@ -855,24 +964,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260802.8"></script>
+<script src="../config.js?v=20260806.2"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260802.8" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260802.8"></script>
-<script src="../js/utils.js?v=20260802.8"></script>
-<script src="../js/api.js?v=20260802.8"></script>
-<script src="../js/cache.js?v=20260802.8"></script>
-<script src="../js/maps.js?v=20260802.8"></script>
-<script src="../js/places.js?v=20260802.8"></script>
-<script src="../js/itinerary.js?v=20260802.8"></script>
-<script src="../js/hotels.js?v=20260802.8"></script>
-<script src="../js/expenses.js?v=20260802.8"></script>
-<script src="../js/weather.js?v=20260802.8"></script>
-<script src="../js/export.js?v=20260802.8"></script>
-<script src="../js/probe-search.js?v=20260802.8"></script>
-<script src="../app.js?v=20260802.8"></script>
-<script src="../search-zh-label.js?v=20260802.8"></script>
-<script src="../prep-checklist.js?v=20260802.8"></script>
+<script src="../cache-refresh.js?v=20260806.2" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260806.2"></script>
+<script src="../js/utils.js?v=20260806.2"></script>
+<script src="../js/api.js?v=20260806.2"></script>
+<script src="../js/cache.js?v=20260806.2"></script>
+<script src="../js/maps.js?v=20260806.2"></script>
+<script src="../js/places.js?v=20260806.2"></script>
+<script src="../js/itinerary.js?v=20260806.2"></script>
+<script src="../js/hotels.js?v=20260806.2"></script>
+<script src="../js/expenses.js?v=20260806.2"></script>
+<script src="../js/weather.js?v=20260806.2"></script>
+<script src="../js/export.js?v=20260806.2"></script>
+<script src="../js/probe-search.js?v=20260806.2"></script>
+<script src="../app.js?v=20260806.2"></script>
+<script src="../search-zh-label.js?v=20260806.2"></script>
+<script src="../prep-checklist.js?v=20260806.2"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

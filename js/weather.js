@@ -30,15 +30,46 @@
   const MAX_FORECAST_DAYS = 16;
   const FORECAST_HORIZON_DAYS = 15;
 
+  // 已經過完的日子改打 archive（ERA5 重分析），拿的是實際觀測值不是預報。
+  // 免費、免金鑰、有 CORS，跟 forecast 同一家。
+  //
+  // 欄位是實測出來的，不要照抄 forecast 那組：
+  //   · uv_index_max 與 precipitation_probability_max 在 archive 一律回 null
+  //     （daily_units 顯示 "undefined"）—— 不會 400，但要了也沒用，所以不要。
+  //   · 改用 precipitation_sum（實際降雨量 mm），比「機率」對過去的日子更有意義。
+  //   · timezone=auto 與 wind_speed_unit=ms 都支援。
+  //
+  // 資料範圍：1940 至今，**沒有 reanalysis 的延遲空窗** —— 實測昨天與今天都拿得到
+  // （Open-Meteo 用預報模型回填最近幾天）。所以不需要「近期用 forecast 的 past_days、
+  // 更早用 archive」那種雙路徑，單一端點就涵蓋所有過去日期。
+  const ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
+  const ARCHIVE_DAILY_FIELDS = 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max';
+
   // 把 Open-Meteo 的 daily 區塊轉成畫面用的物件。純函式，方便單獨驗證。
-  const buildWeatherFromDaily = (daily, idx, { label, dayText, targetDate }) => {
+  //
+  // kind 區分資料來源：
+  //   'forecast' —— 預報。有降雨「機率」(%) 與 UV。
+  //   'history'  —— 已經過完的日子，拿的是實際觀測值。沒有機率也沒有 UV，
+  //                 但有實際降雨「量」(mm)，所以 rainText 兩種來源長得不一樣。
+  // 模板一律讀 rainText，不要自己判斷 % 還是 mm。
+  const buildWeatherFromDaily = (daily, idx, { label, dayText, targetDate, kind = 'forecast' } = {}) => {
     const codeInfo = weatherCodeInfo(daily.weather_code?.[idx]);
     const rain = daily.precipitation_probability_max?.[idx];
+    const rainSum = daily.precipitation_sum?.[idx];
     const uv = daily.uv_index_max?.[idx];
     const wind = daily.wind_speed_10m_max?.[idx];
 
+    const rainValue = rain != null ? Math.round(Number(rain)) : null;
+    const rainMm = rainSum != null && Number.isFinite(Number(rainSum)) ? Number(rainSum) : null;
+
+    // 沒下雨就寫 0 mm，不要「0.0 mm」；10mm 以上也不需要小數位（假精確）。
+    let rainText = '';
+    if (rainValue != null) rainText = `${rainValue}%`;
+    else if (rainMm != null) rainText = `${rainMm.toFixed(rainMm === 0 || rainMm >= 10 ? 0 : 1)} mm`;
+
     return {
       status: 'ready',
+      kind,
       icon: codeInfo.icon,
       title: codeInfo.text,
       subtitle: label,
@@ -46,7 +77,9 @@
       targetDate,
       max: Math.round(Number(daily.temperature_2m_max?.[idx])),
       min: Math.round(Number(daily.temperature_2m_min?.[idx])),
-      rain: rain != null ? Math.round(Number(rain)) : null,
+      rain: rainValue,
+      rainMm,
+      rainText,
       uv: uv != null ? Number(uv).toFixed(0) : '',
       uvLabel: uvLevelLabel(uv),
       wind: wind != null ? Number(wind).toFixed(1) : ''
@@ -134,11 +167,6 @@
         return;
       }
 
-      if (diff < 0) {
-        tripWeather.value = { status: 'unavailable', title: '日期已過', subtitle: targetDate, dayText };
-        return;
-      }
-
       if (diff > FORECAST_HORIZON_DAYS) {
         const availableDate = toYMD(addDays(parseYMD(targetDate), -FORECAST_HORIZON_DAYS));
         tripWeather.value = {
@@ -157,7 +185,13 @@
         return;
       }
 
-      const key = `${currentTrip.value.id}_${currentDay.value}_${targetDate}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}`;
+      // 已經過完的日子走 archive，其餘走 forecast。
+      const isPast = diff < 0;
+
+      // kind 一定要進 cache key：同一天在跨過午夜之後會從「今天的預報」變成
+      // 「昨天的實測」，key 不含 kind 的話會一直吐舊的預報結果。
+      const kind = isPast ? 'history' : 'forecast';
+      const key = `${kind}_${currentTrip.value.id}_${currentDay.value}_${targetDate}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}`;
       if (forecastCache.has(key)) {
         tripWeather.value = forecastCache.get(key);
         return;
@@ -168,21 +202,28 @@
       const params = new URLSearchParams({
         latitude: String(location.lat),
         longitude: String(location.lng),
-        daily: FORECAST_DAILY_FIELDS,
+        daily: isPast ? ARCHIVE_DAILY_FIELDS : FORECAST_DAILY_FIELDS,
         timezone: 'auto',
-        forecast_days: String(Math.min(MAX_FORECAST_DAYS, Math.max(1, diff + 1))),
         wind_speed_unit: 'ms'
       });
 
+      if (isPast) {
+        // archive 用 start_date / end_date 指定單一天，沒有 forecast_days 這個參數。
+        params.set('start_date', targetDate);
+        params.set('end_date', targetDate);
+      } else {
+        params.set('forecast_days', String(Math.min(MAX_FORECAST_DAYS, Math.max(1, diff + 1))));
+      }
+
       try {
-        const res = await fetch(`${FORECAST_URL}?${params.toString()}`);
+        const res = await fetch(`${isPast ? ARCHIVE_URL : FORECAST_URL}?${params.toString()}`);
         if (!res.ok) throw new Error(`weather api ${res.status}`);
         const data = await res.json();
         const times = data?.daily?.time || [];
         const idx = times.indexOf(targetDate);
         if (idx < 0) throw new Error('target date not in forecast');
 
-        const weather = buildWeatherFromDaily(data.daily, idx, { label: location.label, dayText, targetDate });
+        const weather = buildWeatherFromDaily(data.daily, idx, { label: location.label, dayText, targetDate, kind });
         forecastCache.set(key, weather);
         tripWeather.value = weather;
       } catch (err) {

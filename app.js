@@ -131,6 +131,7 @@ createApp({
     let mapElementRef = null;
     let markers = [];
     let mapMarkerByPointKey = new Map();
+    let lastMarkerSignature = '';   // updateMapMarkers() 的重建短路用；地圖重建時要清空
     let mapBounceTimer = null;
     let infoWindow = null;
     let autocompleteService = null;
@@ -151,12 +152,6 @@ createApp({
     const editHotelSelectedPlaceData = ref(null);
     const isSavingHotel = ref(false);
 
-    const newAlternative = ref({ message: '' });
-    const alternativeSearchQuery = ref('');
-    const alternativeSearchResults = ref([]);
-    const alternativeIsSearching = ref(false);
-    const alternativeSelectedPlaceData = ref(null);
-    const isAddingAlternative = ref(false);
     const isDeletingAlternative = ref(false);
     const isPromotingAlternative = ref(false);
 
@@ -1161,6 +1156,13 @@ createApp({
         });
 
         infoWindow = new google.maps.InfoWindow();
+
+        // 地圖換了新實例，舊 marker 還掛在被丟棄的那張地圖上。
+        // 不清掉指紋的話 updateMapMarkers() 會判定「內容沒變」而跳過重建，新地圖會是空的。
+        markers.forEach(m => m.setMap(null));
+        markers = [];
+        mapMarkerByPointKey.clear();
+        lastMarkerSignature = '';
       }
 
       updateMapMarkers();
@@ -1474,8 +1476,45 @@ createApp({
       return positions;
     };
 
+    // 這個函式有 31 個呼叫點，而且每次都把所有 marker 拆掉重建、再 fitBounds 重新置中。
+    // 單一使用者動作常常連續觸發好幾次（樂觀寫入一次、雲端回來再一次、watcher 又一次），
+    // 每次都是完整重建加上地圖跳動。這裡先算出「這次要畫什麼」的指紋，內容沒變就整段跳過。
+    // 只跳過重建，選取高亮與探點 marker 仍然照常套用。
+    const buildMarkerSignature = (displayDay, items, alts, hotelList) => {
+      const one = (o) => [o.id, o.lat, o.lng, o.name, o.day, o.start_day, o.end_day].join('~');
+      return [
+        displayDay || 'all',
+        items.map(one).join('|'),
+        alts.map(one).join('|'),
+        hotelList.map(one).join('|')
+      ].join('#');
+    };
+
     const updateMapMarkers = () => {
       if (!mapInstance || !window.google) return;
+
+      const displayDay = getMapDisplayDay();
+      let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
+
+      if (displayDay) {
+        itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
+      }
+
+      {
+        let altsForSig = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && isAlternativeItem(item));
+        let hotelsForSig = hotels.value.filter(hasMapCoordinates);
+        if (displayDay) {
+          altsForSig = altsForSig.filter(item => (item.day ? parseInt(item.day, 10) : 1) === displayDay);
+          hotelsForSig = hotelsForSig.filter(hotel => isHotelActiveOnDay(hotel, displayDay));
+        }
+        const signature = buildMarkerSignature(displayDay, itemsToRender, altsForSig, hotelsForSig);
+        if (signature === lastMarkerSignature && markers.length) {
+          applyMapMarkerSelection();
+          renderProbeMarker();
+          return;
+        }
+        lastMarkerSignature = signature;
+      }
 
       markers.forEach(m => m.setMap(null));
       markers = [];
@@ -1483,12 +1522,6 @@ createApp({
       if (mapBounceTimer) {
         clearTimeout(mapBounceTimer);
         mapBounceTimer = null;
-      }
-      const displayDay = getMapDisplayDay();
-      let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
-
-      if (displayDay) {
-        itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
       }
 
       const bounds = new google.maps.LatLngBounds();
@@ -2714,142 +2747,6 @@ createApp({
     };
 
 
-    const { search: searchAlternativePlacesInput } = TravelPlaces.createPredictionSearch({
-      query: alternativeSearchQuery,
-      results: alternativeSearchResults,
-      isSearching: alternativeIsSearching,
-      selectedPlaceData: alternativeSelectedPlaceData,
-      ensureService: ensureAutocompleteService,
-      clearSelectionOnType: true,
-      extraCandidates: naverTranslatedCandidates
-    });
-
-    const selectAlternativePlace = (item) => {
-      alternativeSearchQuery.value = item.structured_formatting.main_text;
-      alternativeSelectedPlaceData.value = item;
-      alternativeSearchResults.value = [];
-      alternativeIsSearching.value = false;
-    };
-
-    const addAlternative = async () => {
-      if (isAddingAlternative.value) return;
-      if (!currentTrip.value?.id) return;
-
-      const name = alternativeSearchQuery.value.trim();
-      if (!name) return;
-
-      isAddingAlternative.value = true;
-      setTimeout(() => {
-        isAddingAlternative.value = false;
-      }, 500);
-
-      const id = generateId();
-      const d = currentDay.value || 1;
-      const selectedPlaceSnapshot = alternativeSelectedPlaceData.value ? { ...alternativeSelectedPlaceData.value } : null;
-      const messageSnapshot = newAlternative.value.message || '';
-
-      const alt = {
-        id,
-        trip_id: currentTrip.value.id,
-        day: d,
-        name,
-        type: '景點',
-        order: null,
-        lat: null,
-        lng: null,
-        place_id: selectedPlaceSnapshot?.place_id || '',
-        address: '',
-        message: messageSnapshot,
-        is_alternative: 'v',
-        created_at: new Date().toISOString()
-      };
-
-      itinerary.value.unshift(normalizeItineraryRecord(alt));
-
-      alternativeSearchQuery.value = '';
-      alternativeSearchResults.value = [];
-      alternativeSelectedPlaceData.value = null;
-      alternativeIsSearching.value = false;
-      newAlternative.value = { message: '' };
-
-      scheduleTripCacheSave();
-
-      try {
-        let lat = null;
-        let lng = null;
-        let placeId = alt.place_id || '';
-        let displayName = name;
-        let address = '';
-
-        if (isNaverPlace(selectedPlaceSnapshot)) {
-          const naver = await resolveNaverPlace(selectedPlaceSnapshot);
-          placeId = naver.placeId;
-          displayName = naver.displayName || name;
-          address = naver.address;
-          lat = naver.lat;
-          lng = naver.lng;
-        } else if (selectedPlaceSnapshot?.place_id) {
-          placeId = selectedPlaceSnapshot.place_id;
-
-          const place = await getPlaceDetails(placeId, 'zh-TW');
-          if (place) {
-            displayName = place.name || name;
-            address = place.formatted_address || '';
-            if (place.geometry?.location) {
-              lat = place.geometry.location.lat();
-              lng = place.geometry.location.lng();
-            }
-          }
-        } else if (window.google) {
-          const geocoder = new google.maps.Geocoder();
-          await new Promise((resolve) => {
-            geocoder.geocode(
-              { address: name + (currentTrip.value.city ? " " + currentTrip.value.city : "") },
-              (results, status) => {
-                if (status === 'OK' && results && results[0]) {
-                  lat = results[0].geometry.location.lat();
-                  lng = results[0].geometry.location.lng();
-                  placeId = results[0].place_id || '';
-                  address = results[0].formatted_address || '';
-                }
-                resolve();
-              }
-            );
-          });
-        }
-
-        const updatedAlt = normalizeItineraryRecord({
-          ...alt,
-          name: displayName || name,
-          lat,
-          lng,
-          place_id: placeId,
-          address,
-          is_alternative: 'v'
-        });
-
-        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
-        if (idx !== -1) {
-          itinerary.value.splice(idx, 1, updatedAlt);
-        }
-
-        const res = await postJSON({ action:'add', type:'itinerary', data: updatedAlt });
-        if (res && res.status === 'error') {
-          throw new Error(res.message || 'add alternative failed');
-        }
-
-        scheduleTripCacheSave();
-      } catch (err) {
-        console.error('addAlternative sync failed:', err);
-
-        const idx = itinerary.value.findIndex(x => String(x.id) === String(id));
-        if (idx !== -1) itinerary.value.splice(idx, 1);
-
-        scheduleTripCacheSave();
-        alert('備案新增失敗，已取消剛剛新增的資料，請稍後再試。');
-      }
-    };
-
     const removeAlternative = async (id) => {
       if (isDeletingAlternative.value) return;
       if (!confirm('確定刪除此備案？')) return;
@@ -3183,7 +3080,6 @@ createApp({
         .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
     });
 
-    const legacyPublicAccountExpenseCount = computed(() => expenses.value.filter(isLegacyPublicAccountExpense).length);
 
     const sharedWalletEnabled = computed(() => parseBooleanFlag(currentTrip.value?.shared_wallet_enabled));
 
@@ -3241,34 +3137,6 @@ createApp({
     });
 
     const filteredExpenses = computed(() => normalExpenseRecords.value);
-
-    const filteredCategoryAnalysis = computed(() => {
-      const stats = {};
-      filteredExpenses.value.forEach(e => {
-        const cat = e.category || '未分類';
-        stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
-      });
-      return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
-    });
-
-    const filteredDayExpenseAnalysis = computed(() => {
-      const stats = {};
-      filteredExpenses.value.forEach(e => {
-        const day = e.day ? parseInt(e.day, 10) || 1 : 1;
-        stats[day] = (stats[day] || 0) + (Number(e.amount) || 0);
-      });
-      return Object.entries(stats).map(([day, total]) => ({ day: Number(day), total })).sort((a, b) => a.day - b.day);
-    });
-
-    const filteredPayerExpenseAnalysis = computed(() => {
-      const stats = {};
-      filteredExpenses.value.forEach(e => {
-        const payer = e.payer || '未指定';
-        stats[payer] = (stats[payer] || 0) + (Number(e.amount) || 0);
-      });
-      return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
-    });
-
 
     const {
       search: searchHotelPlacesInput,
@@ -4350,7 +4218,7 @@ createApp({
       currentView, currentTrip, trips, newTripName, newTripCity, showCreateTripModal,
       currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,
       isAddingPlace, isAddingExpense, isSavingSharedWallet, isUpdatingSharedWalletSetting, isSavingExpense,
-      isAddingAlternative, isDeletingAlternative, isPromotingAlternative,
+      isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,
       people, itinerary, expenses, sharedWalletTransactions, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
@@ -4362,7 +4230,6 @@ createApp({
       tripWeather,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
-      newAlternative, alternativeSearchQuery, alternativeSearchResults, alternativeIsSearching,
 
       createTrip, openCreateTripModal, closeCreateTripModal, createTripFromModal, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
@@ -4387,7 +4254,7 @@ createApp({
       searchHotelPlacesInput, selectHotelPlace, addHotel, removeHotel,
       searchEditHotelPlacesInput, selectEditHotelPlace, openEditHotelModal, closeEditHotelModal, saveEditHotel,
       hotelDayRangeLabel, openHotelMap,
-      searchAlternativePlacesInput, selectAlternativePlace, addAlternative, removeAlternative, promoteAlternativeToItinerary, moveItineraryToAlternative,
+      removeAlternative, promoteAlternativeToItinerary, moveItineraryToAlternative,
 
       toggleMoneyDisplayMode, updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
       toggleSharedWalletPaymentPerson, selectAllSharedWalletPaymentPeople, formatSharedWalletUsers,
@@ -4395,10 +4262,9 @@ createApp({
       toggleEditWalletPerson, selectAllEditWalletPeople,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
-      sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
-      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
-      filteredExpenses, filteredCategoryAnalysis,
-      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis,
+      sharedWalletEnabled, sharedWalletRecords,
+      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances,
+      filteredExpenses,
 
       exportItinerary, downloadBackupHtml, isKoreaTrip,
 

@@ -1,24 +1,30 @@
 <!DOCTYPE html>
-<!-- version: 20260802.8 -->
+<!-- version: 20260806.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260802.8" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260802.8" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260802.8" />
-  <link rel="manifest" href="./site.webmanifest?v=20260802.8" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260806.2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260806.2" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260806.2" />
+  <link rel="manifest" href="./site.webmanifest?v=20260806.2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20260802.8" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./js/device-router.js?v=20260806.2" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260802.8" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260802.8" />
+  <link rel="stylesheet" href="./style.css?v=20260806.2" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260806.2" />
+  <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
+       cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
+       而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
+       那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
+       同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
+       等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
+  <link rel="stylesheet" href="./tailwind-static.css?v=20260806.2" />
 </head>
 <body>
 
@@ -104,29 +110,21 @@
         class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95"
       >同步</button>
 
-      <div v-if="tripWeather.status !== 'idle'" class="trip-weather-card" :class="'trip-weather-' + tripWeather.status">
-        <template v-if="tripWeather.status === 'ready'">
-          <div class="trip-weather-icon">{{ tripWeather.icon }}</div>
-          <div class="trip-weather-main">
-            <div class="trip-weather-temp">{{ tripWeather.max }}°</div>
-            <div class="trip-weather-desc">{{ tripWeather.title }}</div>
-            <div class="trip-weather-range">{{ tripWeather.min }}° / {{ tripWeather.max }}°</div>
-          </div>
-          <div class="trip-weather-metrics">
-            <span>💧 {{ tripWeather.rain != null ? tripWeather.rain + '%' : '—' }}</span>
-            <span>☀️ UV {{ tripWeather.uv || '—' }}<em v-if="tripWeather.uvLabel">{{ tripWeather.uvLabel }}</em></span>
-            <span>🌬️ {{ tripWeather.wind || '—' }} m/s</span>
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="trip-weather-icon">🌤️</div>
-          <div class="trip-weather-main">
-            <div class="trip-weather-temp">{{ tripWeather.title }}</div>
-            <div class="trip-weather-desc">{{ tripWeather.subtitle }}</div>
-            <div class="trip-weather-range">{{ tripWeather.dayText }}</div>
-          </div>
-        </template>
+      <!-- 只在真的有資料時才出現。原本 status !== 'idle' 會在沒資料時顯示
+           「預報尚早／X 月 X 日後可查」「日期已過」這類佔位字，改成沒資料就留白。
+           過去的日子由 js/weather.js 去抓實測資料，也會走到 ready。 -->
+      <div v-if="tripWeather.status === 'ready'" class="trip-weather-card" :class="'trip-weather-' + tripWeather.status">
+        <div class="trip-weather-icon">{{ tripWeather.icon }}</div>
+        <div class="trip-weather-main">
+          <div class="trip-weather-temp">{{ tripWeather.max }}°</div>
+          <div class="trip-weather-desc">{{ tripWeather.title }}<em v-if="tripWeather.kind === 'history'" class="trip-weather-kind">實測</em></div>
+          <div class="trip-weather-range">{{ tripWeather.min }}° / {{ tripWeather.max }}°</div>
+        </div>
+        <div class="trip-weather-metrics">
+          <span>💧 {{ tripWeather.rainText || '—' }}</span>
+          <span>☀️ UV {{ tripWeather.uv || '—' }}<em v-if="tripWeather.uvLabel">{{ tripWeather.uvLabel }}</em></span>
+          <span>🌬️ {{ tripWeather.wind || '—' }} m/s</span>
+        </div>
       </div>
     </header>
 
@@ -1307,23 +1305,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260802.8"></script>
-<script src="./cache-refresh.js?v=20260802.8"></script>
-<script src="./keyword-map.js?v=20260802.8"></script>
-<script src="./js/utils.js?v=20260802.8"></script>
-<script src="./js/api.js?v=20260802.8"></script>
-<script src="./js/cache.js?v=20260802.8"></script>
-<script src="./js/maps.js?v=20260802.8"></script>
-<script src="./js/places.js?v=20260802.8"></script>
-<script src="./js/itinerary.js?v=20260802.8"></script>
-<script src="./js/hotels.js?v=20260802.8"></script>
-<script src="./js/expenses.js?v=20260802.8"></script>
-<script src="./js/weather.js?v=20260802.8"></script>
-<script src="./js/export.js?v=20260802.8"></script>
-<script src="./js/probe-search.js?v=20260802.8"></script>
-<script src="./app.js?v=20260802.8"></script>
-<script src="./search-zh-label.js?v=20260802.8"></script>
-<script src="./prep-checklist.js?v=20260802.8"></script>
+<script src="./config.js?v=20260806.2"></script>
+<script src="./cache-refresh.js?v=20260806.2"></script>
+<script src="./keyword-map.js?v=20260806.2"></script>
+<script src="./js/utils.js?v=20260806.2"></script>
+<script src="./js/api.js?v=20260806.2"></script>
+<script src="./js/cache.js?v=20260806.2"></script>
+<script src="./js/maps.js?v=20260806.2"></script>
+<script src="./js/places.js?v=20260806.2"></script>
+<script src="./js/itinerary.js?v=20260806.2"></script>
+<script src="./js/hotels.js?v=20260806.2"></script>
+<script src="./js/expenses.js?v=20260806.2"></script>
+<script src="./js/weather.js?v=20260806.2"></script>
+<script src="./js/export.js?v=20260806.2"></script>
+<script src="./js/probe-search.js?v=20260806.2"></script>
+<script src="./app.js?v=20260806.2"></script>
+<script src="./search-zh-label.js?v=20260806.2"></script>
+<script src="./prep-checklist.js?v=20260806.2"></script>
 
 </body>
 </html>
