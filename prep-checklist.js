@@ -1,16 +1,19 @@
-// version: 20260806.1
+// version: 20260814.3
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260806.1';
+  const VERSION = '20260814.3';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
   let currentTripKey = '';
   let selectedOwner = '';
+  // 目前在右欄顯示哪一個分類。純 UI 狀態：不進 state、不進 localStorage，
+  // 也不進 saveLocal / normalizeState 這兩條序列化路徑（進去就會被寫上 Google Sheet）。
+  let selectedSectionId = '';
   let state = null;
   let root = null;
   let embeddedMode = false;
@@ -220,10 +223,34 @@
     return getMemberNames().join('|');
   }
 
-  function renderOwnerOptions(selectedValue, includePlaceholder = true) {
+  // 下拉與方塊共用同一份名單。各算各的就會漂移 —— 例如成員被刪掉時
+  // select 靠 unshift 補得回目前的 owner、方塊卻補不回來，兩邊顯示不一致。
+  function getOwnerChoices(selectedValue) {
     const selected = String(selectedValue || '').trim();
     const names = getMemberNames();
     if (selected && !names.includes(selected)) names.unshift(selected);
+    return names;
+  }
+
+  // 桌面版的「查看對象」方塊列。跟下拉同時渲染：手機吃注入 CSS 的
+  // 隱藏規則，桌面用 desktop.css (1,2,0) 打開。
+  // 切換一律轉呼 changeSelectedOwner()，不複製任何 setOwner 邏輯。
+  //
+  // 刻意沒有「請選擇」方塊（對應 select 的 <option value="">）。
+  // 代價：桌面沒辦法把查看對象清回空值 —— 那是下拉才有的操作，手機仍然可以。
+  // 實務上選了人就不會想清空，換人直接點另一顆即可。
+  function renderOwnerChips(selectedValue) {
+    const selected = String(selectedValue || '').trim();
+    const chips = getOwnerChoices(selected).map(name => {
+      const on = name === selected;
+      return `<button class="prep-owner-chip ${on ? 'is-active' : ''}" type="button" data-owner="${escapeHtml(name)}" aria-pressed="${on ? 'true' : 'false'}">${escapeHtml(name)}</button>`;
+    });
+    return `<div class="prep-owner-chips" role="group" aria-label="查看對象"><span class="prep-owner-chips-label">查看對象</span>${chips.join('')}</div>`;
+  }
+
+  function renderOwnerOptions(selectedValue, includePlaceholder = true) {
+    const selected = String(selectedValue || '').trim();
+    const names = getOwnerChoices(selected);
 
     const options = [];
     if (includePlaceholder) options.push(`<option value=""${selected ? '' : ' selected'}>請選擇</option>`);
@@ -358,11 +385,27 @@
     if (!root || !state) return;
     const area = root.querySelector('.prep-personal-area');
     if (area) {
+      // 換 innerHTML 會讓焦點掉回 body。左欄分類鈕與成員方塊是 <button>，
+      // isEditingChecklistInput() 只認 input/textarea/select 救不到它們，
+      // 所以這裡自己記住再還回去。手機上這些節點是 display:none，
+      // 永遠不會是 activeElement，等於不受影響。
+      const active = document.activeElement;
+      const keepCat = active && active.closest && active.closest('.prep-cat-item');
+      const keepChip = active && active.closest && active.closest('.prep-owner-chip');
+      const keepCatId = keepCat ? keepCat.getAttribute('data-cat-id') : '';
+      const keepChipOwner = keepChip ? keepChip.getAttribute('data-owner') : '';
       area.innerHTML = renderSelectedOwnerBody();
       updateEmptyUI();
       updateStatsUI();
       updateSyncUI();
       initAllThumbSortables();
+      if (keepCatId) {
+        const back = root.querySelector('.prep-cat-item[data-cat-id="' + cssEscape(keepCatId) + '"]');
+        if (back) back.focus({ preventScroll: true });
+      } else if (keepChipOwner) {
+        const back = root.querySelector('.prep-owner-chip[data-owner="' + cssEscape(keepChipOwner) + '"]');
+        if (back) back.focus({ preventScroll: true });
+      }
     } else {
       render();
     }
@@ -660,8 +703,23 @@
       .prep-action-btn.secondary { background: #f1f5f9; color: #475569; }
       .prep-action-btn.danger { background: #fee2e2; color: #b91c1c; }
       .prep-blank { min-height: 220px; }
+
       .prep-offline-note { color:#b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:8px 10px; font-size:12px; font-weight:800; margin-bottom:10px; }
       .prep-disabled button:not(.prep-close), .prep-disabled input[type="checkbox"] { opacity:.55; }
+      /* ↓ 桌面專屬節點。手機只吃這份注入的 style（index.html 不載入 desktop.css，
+         grep 零命中），所以這三條 (0,1,0) 就是手機的最終樣式 —— 節點在 DOM 裡
+         但完全不生成 box，版面與行為零改變。
+         ★ 不准加 !important：加了之後 desktop.css 也得 !important，而該檔的既有
+           約定是只有 background / border / border-radius / box-shadow 四個屬性
+           可以 !important（那是為了蓋 cloud-theme），display 不在其中。
+         ★ 也不要在這裡加 #prep-checklist-root 前綴：變成 (1,1,0) 沒有任何好處，
+           只是把權重競賽往上推。 */
+      .prep-owner-chips { display: none; }
+      .prep-cat-rail { display: none; }
+      .prep-section-progress { display: none; }
+      /* .prep-cat-col 是桌面 grid 儲存格的包裝層，用 contents 不是 none：
+         設成 none 會把裡面的「新增分類」一起藏掉，手機就少一塊功能。 */
+      .prep-cat-col { display: contents; }
     `;
     document.head.appendChild(style);
   }
@@ -701,16 +759,50 @@
     return `<div class="prep-item-images" data-item-id="${id}">${thumbs}${spinners}</div>`;
   }
 
+  // 0/N 與百分比只有這兩支在算。renderSection / renderCategoryItem /
+  // updateSectionCount 三處共用，避免三份算式各自漂移。
+  function formatSectionCount(section) {
+    const items = (section && section.items) || [];
+    return `${items.filter(i => i.checked).length}/${items.length}`;
+  }
+
+  function sectionPercent(section) {
+    const items = (section && section.items) || [];
+    if (!items.length) return 0;
+    return Math.round(items.filter(i => i.checked).length * 100 / items.length);
+  }
+
+  // 「選中的分類被刪掉／換人／遠端重載／一個分類都沒有」四種狀況全部收斂在這裡：
+  // 不在清單裡就退回第一個，沒有分類就清空。
+  function normalizeSelectedSection() {
+    const sections = (state && state.sections) || [];
+    if (!sections.length) { selectedSectionId = ''; return ''; }
+    if (!sections.some(section => String(section.id) === String(selectedSectionId))) {
+      selectedSectionId = String(sections[0].id);
+    }
+    return selectedSectionId;
+  }
+
   function renderSection(section) {
+    // ★ 選中狀態只表現為 class。不可以改成「只 map 選中的那一個」，也不可以
+    //   輸出行內 display:none —— 兩種做法都會讓手機的準備頁只剩一個分類，
+    //   而且行內樣式權重最高，手機沒有任何 CSS 救得回來。
+    const isActive = String(section.id) === String(selectedSectionId);
+    const percent = sectionPercent(section);
+    const count = formatSectionCount(section);
     return `
-      <div class="prep-section" data-section-id="${escapeHtml(section.id)}">
+      <div class="prep-section ${isActive ? 'is-active' : ''}" data-section-id="${escapeHtml(section.id)}">
         <div class="prep-section-title">
           <span class="prep-section-name">${escapeHtml(getSectionDisplayName(section))}</span>
           <span class="prep-section-actions">
-            <span class="prep-section-count" style="font-size:12px;color:#94a3b8;">${section.items.filter(i => i.checked).length}/${section.items.length}</span>
+            <span class="prep-section-count" style="font-size:12px;color:#94a3b8;">${count}</span>
             <button class="prep-icon-btn prep-edit-section" title="編輯" type="button">✏️</button>
             <button class="prep-icon-btn prep-delete-section is-danger" title="刪除" type="button">✕</button>
           </span>
+        </div>
+        <div class="prep-section-progress">
+          <div class="prep-section-progress-track"><div class="prep-section-progress-bar" style="width:${percent}%"></div></div>
+          <span class="prep-section-progress-text">${count} 已完成 · ${percent}%</span>
         </div>
         <div class="prep-items">
           ${section.items.length ? section.items.map(renderItem).join('') : '<div class="prep-muted">尚無項目</div>'}
@@ -722,16 +814,53 @@
       </div>`;
   }
 
+  // 左欄分類選單的單列。emoji 與 title 在 state 裡本來就是兩個欄位
+  //（normalizeState 248-249），不必再解析 getSectionDisplayName() 合成的字串。
+  // ★ class 一律用全新名字：絕不能叫 prep-section / prep-item / prep-section-count /
+  //   prep-item-wrap。左欄排在 .prep-section-list 之前，一旦撞名，
+  //   updateSectionCount() 的 querySelector（只回傳文件順序第一個）會改到左欄，
+  //   右欄卡片的 0/N 從此不再更新；clearChecks() 的三條 root 全域掃也會誤傷。
+  //   display:none 不影響 querySelector，所以手機也會一起壞。
+  function renderCategoryItem(section) {
+    const active = String(section.id) === String(selectedSectionId);
+    return `
+          <button class="prep-cat-item ${active ? 'is-active' : ''}" type="button" data-cat-id="${escapeHtml(section.id)}" aria-pressed="${active ? 'true' : 'false'}">
+            <span class="prep-cat-name">${escapeHtml(getSectionDisplayName(section))}</span>
+            <span class="prep-cat-count">${formatSectionCount(section)}</span>
+          </button>`;
+  }
+
+  function renderCategoryRail() {
+    const sections = (state && state.sections) || [];
+    const list = sections.length
+      ? sections.map(renderCategoryItem).join('')
+      : '<div class="prep-cat-empty">尚無分類</div>';
+    return `
+      <div class="prep-cat-rail">
+        <div class="prep-cat-rail-head">
+          <span class="prep-cat-rail-title">分類</span>
+          <span class="prep-cat-rail-total">${sections.length}</span>
+        </div>
+        <div class="prep-cat-list">${list}</div>
+      </div>`;
+  }
+
   function renderSelectedOwnerBody() {
     if (!selectedOwner) return '<div class="prep-blank"></div>';
+    // 三條重繪路徑（render / refreshPersonalArea / 資料庫刷新的兩次）都會經過
+    // 這裡，正規化寫在這一處就夠，不必在每個呼叫點各補一次。
+    normalizeSelectedSection();
     const hasSections = state && state.sections && state.sections.length > 0;
     const offlineNote = !isBrowserOnline() ? '<div class="prep-offline-note">目前離線，變更會先存在本機，恢復連線後同步。</div>' : '';
     return `
       ${offlineNote}
+      <div class="prep-cat-col">
+      ${renderCategoryRail()}
       <div class="prep-add-box">
         <div style="font-size:13px;font-weight:900;color:#334155;">新增分類</div>
         <div class="prep-add-row"><input class="prep-new-section-title" placeholder="例如 🪪 證件" /></div>
         <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
+      </div>
       </div>
       <div class="prep-section-list">${hasSections ? state.sections.map(renderSection).join('') : ''}</div>
       <div class="prep-bottom-actions" style="${hasSections ? '' : 'display:none;'}">
@@ -763,6 +892,7 @@
             <label for="prep-owner-select">查看對象</label>
             <select id="prep-owner-select" class="prep-owner-select">${renderOwnerOptions(selectedOwner, true)}</select>
           </div>
+          ${renderOwnerChips(selectedOwner)}
         </div>
         <div class="prep-personal-area">${renderSelectedOwnerBody()}</div>`;
       return;
@@ -857,14 +987,83 @@
     if (!root || !state) return;
     const actions = root.querySelector('.prep-bottom-actions');
     if (actions) actions.style.display = state.sections.length ? '' : 'none';
+    // 「分類數量變了」的既有集中點，左欄的總數與空狀態一併掛在這裡：
+    // refreshPersonalArea / addSectionFromInputs / deleteSection / 新增分類
+    // rollback 四條路徑本來就都會呼叫它。
+    const total = root.querySelector('.prep-cat-rail-total');
+    if (total) total.textContent = String(state.sections.length);
+    const catList = root.querySelector('.prep-cat-list');
+    if (catList) {
+      const emptyHint = catList.querySelector('.prep-cat-empty');
+      if (!state.sections.length) {
+        if (!emptyHint) catList.innerHTML = '<div class="prep-cat-empty">尚無分類</div>';
+      } else if (emptyHint) {
+        emptyHint.remove();
+      }
+    }
   }
 
+  // 切換分類的唯一實作：只改 class 與 aria-pressed，完全不碰 innerHTML。
+  // ★ 不要改成 render()：那會整根重寫，銷毀 select 與方塊列、清掉每張卡片
+  //   `新增項目` 未送出的文字，而且 render() 從頭到尾不呼叫
+  //   initAllThumbSortables()，縮圖拖曳會靜默失效。
+  // ★ 也不要改成 refreshPersonalArea()：範圍小一級，但同樣清掉 .prep-personal-area
+  //   內所有 input 的值、焦點與 IME 組字，並把每個 .prep-item-images 換成新節點。
+  // isEditingChecklistInput() 只認 input/textarea/select，救不了按 <button> 的情境。
+  function applySelectedSectionUI() {
+    if (!root) return;
+    const active = String(selectedSectionId);
+    root.querySelectorAll('.prep-section').forEach(el => {
+      el.classList.toggle('is-active', String(el.dataset.sectionId) === active);
+    });
+    root.querySelectorAll('.prep-cat-item').forEach(el => {
+      const on = String(el.dataset.catId) === active;
+      el.classList.toggle('is-active', on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function setSelectedSection(sectionId) {
+    const next = String(sectionId || '');
+    if (!next || next === selectedSectionId) return;
+    selectedSectionId = next;
+    applySelectedSectionUI();
+  }
+
+  function updateCategoryLabel(section) {
+    if (!root || !section) return;
+    const catEl = root.querySelector(`.prep-cat-item[data-cat-id="${cssEscape(section.id)}"]`);
+    if (!catEl) return;
+    const nameEl = catEl.querySelector('.prep-cat-name');
+    // 跟右欄標題用同一支 getSectionDisplayName()，兩邊永遠顯示同一個字串
+    if (nameEl) nameEl.textContent = getSectionDisplayName(section);
+  }
+
+  // 右欄卡片的 0/N、右欄進度條、左欄的 0/N 三處一起更新。
+  // 左欄用 .prep-cat-item[data-cat-id]，跟 .prep-section[data-section-id] 是
+  // 完全不同的 class 與屬性，兩支 querySelector 不會互相選錯。
   function updateSectionCount(sectionId) {
-    const sectionEl = root && root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
+    if (!root || !state) return;
     const section = findSection(sectionId);
-    if (!sectionEl || !section) return;
-    const count = sectionEl.querySelector('.prep-section-count');
-    if (count) count.textContent = `${section.items.filter(i => i.checked).length}/${section.items.length}`;
+    if (!section) return;
+    const label = formatSectionCount(section);
+    const percent = sectionPercent(section);
+
+    const sectionEl = root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
+    if (sectionEl) {
+      const count = sectionEl.querySelector('.prep-section-count');
+      if (count) count.textContent = label;
+      const bar = sectionEl.querySelector('.prep-section-progress-bar');
+      if (bar) bar.style.width = `${percent}%`;
+      const progressText = sectionEl.querySelector('.prep-section-progress-text');
+      if (progressText) progressText.textContent = `${label} 已完成 · ${percent}%`;
+    }
+
+    const catEl = root.querySelector(`.prep-cat-item[data-cat-id="${cssEscape(sectionId)}"]`);
+    if (catEl) {
+      const catCount = catEl.querySelector('.prep-cat-count');
+      if (catCount) catCount.textContent = label;
+    }
   }
 
   function refreshItemMuted(sectionEl, section) {
@@ -886,6 +1085,8 @@
     remoteLoadRequestId += 1;
     isLoadingRemote = false;
     selectedOwner = next;
+    // 不同 owner 的分類 id 完全不同，留著舊的只會讓右欄第一幀是空的。
+    selectedSectionId = '';
     storeOwner(selectedOwner);
     syncStatus = selectedOwner ? '讀取資料庫' : '';
     lastSyncedAt = '';
@@ -912,8 +1113,14 @@
     state.sections.push(section);
     saveLocal(true);
 
+    // 新分類直接成為右欄顯示的那一個。少了這行，桌面按「＋ 新增分類」
+    // 會因為新卡片沒有 is-active 而完全看不出有反應。
+    selectedSectionId = sectionId;
     const sectionList = root.querySelector('.prep-section-list');
     if (sectionList) sectionList.insertAdjacentHTML('beforeend', renderSection(section));
+    const catList = root.querySelector('.prep-cat-list');
+    if (catList) catList.insertAdjacentHTML('beforeend', renderCategoryItem(section));
+    applySelectedSectionUI();
     if (titleInput) titleInput.value = '';
     updateEmptyUI();
     updateStatsUI();
@@ -932,6 +1139,10 @@
         saveLocal(false);
         const sectionEl = root && root.querySelector(`.prep-section[data-section-id="${cssEscape(sectionId)}"]`);
         if (sectionEl) sectionEl.remove();
+        const catEl = root && root.querySelector(`.prep-cat-item[data-cat-id="${cssEscape(sectionId)}"]`);
+        if (catEl) catEl.remove();
+        normalizeSelectedSection();
+        applySelectedSectionUI();
         updateEmptyUI();
         updateStatsUI();
       }
@@ -1053,6 +1264,7 @@
 
     const name = sectionEl.querySelector('.prep-section-name');
     if (name) name.textContent = getSectionDisplayName(section);
+    updateCategoryLabel(section);
     updateSyncUI();
 
     mutateChecklist('prep_category_edit', {
@@ -1067,6 +1279,7 @@
         section.emoji = oldEmoji;
         saveLocal(false);
         if (name) name.textContent = getSectionDisplayName(section);
+        updateCategoryLabel(section);
       }
     });
   }
@@ -1084,6 +1297,11 @@
     state.sections = (state.sections || []).filter(x => String(x.id) !== String(categoryId));
     saveLocal(true);
     if (sectionEl) sectionEl.remove();
+    const catEl = root && root.querySelector(`.prep-cat-item[data-cat-id="${cssEscape(categoryId)}"]`);
+    if (catEl) catEl.remove();
+    // 刪掉的正好是右欄那一個就退回第一個；一個都不剩就清空。
+    normalizeSelectedSection();
+    applySelectedSectionUI();
     updateEmptyUI();
     updateStatsUI();
     updateSyncUI();
@@ -1200,6 +1418,7 @@
 
     const backup = cloneState(state);
     state.sections = [];
+    selectedSectionId = '';
     saveLocal(true);
     render();
 
@@ -1226,8 +1445,17 @@
       const overlay = target.classList && target.classList.contains('prep-overlay') ? target : null;
       if (overlay) { panelOpen = false; render(); return; }
       if (target.closest('.prep-refresh-btn')) { refreshChecklistFromDatabase(); return; }
+      // ★ 必須排在下面那道守門之前。守門的意思是「還沒選對象時，除了下拉以外
+      //   一律不理」，而「還沒選對象」正是方塊唯一有用的時機 —— 寫在後面的話
+      //   使用者第一次進來點方塊會完全沒反應，而且是靜默失敗，手機測不出來。
+      const ownerChip = target.closest('.prep-owner-chip');
+      if (ownerChip) { changeSelectedOwner(ownerChip.dataset.owner || ''); return; }
       if (!selectedOwner && !target.closest('.prep-owner-select')) return;
 
+      // 切分類：只改 class，不重繪。放在守門之後是對的 —— 沒選對象時本來就
+      // 沒有分類可切。
+      const catBtn = target.closest('.prep-cat-item');
+      if (catBtn) { setSelectedSection(catBtn.dataset.catId); return; }
       if (target.closest('.prep-add-section-btn')) { addSectionFromInputs(); return; }
       if (target.closest('.prep-add-item-btn')) {
         const sectionEl = target.closest('.prep-section');

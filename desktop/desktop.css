@@ -1089,16 +1089,23 @@ button.suggestion-item {
    cloud-theme.css 對 `#prep-checklist-root .prep-section` 等有 (1,1,0)+
    !important，只有 background / border / border-radius / box-shadow 這四個
    屬性需要在這裡補 !important，其他屬性不要亂加。
-   ★ 不要改 prep-checklist.js。 */
+
+   ★ 版面 = master-detail：左欄 .prep-cat-rail 選分類，右欄只顯示帶
+     .is-active 的那一張 .prep-section。
+   ★ 手機與桌面共用同一支 prep-checklist.js，新節點兩邊都會渲染。
+     .prep-owner-chips / .prep-cat-rail / .prep-section-progress 在它注入的
+     <style> 裡預設 display:none (0,1,0)，只有這裡的 (1,2,0) 打得開；
+     手機不載入本檔，節點在 DOM 裡但完全看不見，版面與行為零改變。
+   ★ 不要改 prep-checklist.js，也不要用行內樣式做平台差異。 */
 
 #prep-checklist-root {
-  /* 1240px 是「最多 3 欄」的上限：4 欄需要 4*300 + 3*16 = 1248px > 1240px，
-     所以下面的 auto-fill 數學上不可能排出第 4 欄。 */
-  max-width: min(1240px, 100%);
+  /* 兩欄之後右欄一次只有一張卡片，不必再留三欄的寬度。
+     1180px 讓右欄大約 890px，項目列不會被拉成一條過長的橫線。 */
+  max-width: min(1180px, 100%);
   margin: 0 auto;
 }
 
-/* ------------------------------------- 頂部：狀態列 / 對象 / 新增分類 */
+/* ------------------------------------- 頂部：狀態列 / 查看對象方塊 */
 
 .desktop-app #prep-checklist-root .prep-status-line {
   margin: 0 4px 12px;
@@ -1120,32 +1127,254 @@ button.suggestion-item {
   box-shadow: var(--cloud-shadow-soft) !important;
 }
 
-/* 「查看對象」收成一列，select 不要橫跨 1240px */
 .desktop-app #prep-checklist-root .prep-owner-box {
   padding: 12px 16px;
   margin-bottom: 12px;
 }
 
+/* 桌面改用方塊選成員：把整列下拉（label + select）藏起來。
+   (1,2,0) 蓋過注入 CSS 的 `.prep-owner-row` (0,1,0)。
+   ★ 只藏不刪 —— select 仍在 DOM 裡、仍帶著 selected，手機吃不到本檔，照舊用下拉。 */
 .desktop-app #prep-checklist-root .prep-owner-row {
-  grid-template-columns: auto minmax(0, 280px);
-  justify-content: start;
-  gap: 12px;
+  display: none;
 }
 
-/* 「新增分類」收成一列：標題 / 輸入框 / 按鈕 */
-.desktop-app #prep-checklist-root .prep-add-box {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+/* (1,2,0) 打開注入 CSS 的 `.prep-owner-chips { display:none }` (0,1,0)。 */
+.desktop-app #prep-checklist-root .prep-owner-chips {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 8px;
+}
+
+.desktop-app #prep-checklist-root .prep-owner-chips-label {
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--cloud-text-2);
+}
+
+/* chip 沿用 .desktop-people > button 的視覺語彙（圓角 999px、選中填 primary），
+   桌面各處的「選人」長得一樣。
+   cloud-theme 的 !important 只打到 .prep-add-box button / .prep-section-add button
+   / .prep-action-btn，這顆三者都不是，所以不必 !important。
+   Tailwind preflight 讓 <button> 預設 background-color: transparent，底色一定要自己給。 */
+.desktop-app #prep-checklist-root .prep-owner-chip {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cloud-muted);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  word-break: keep-all;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease;
+}
+
+.desktop-app #prep-checklist-root .prep-owner-chip.is-active {
+  border-color: var(--cloud-primary);
+  background: var(--cloud-primary);
+  color: #fff;
+}
+
+.desktop-app #prep-checklist-root .prep-owner-chip:focus-visible {
+  outline: 2px solid var(--cloud-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------- master-detail 兩欄骨架 */
+
+/* .prep-personal-area 在注入 CSS 裡完全沒有規則（手機是預設 block），
+   是最乾淨的排版接手點。
+   五個直接子節點全部給明確的 grid-row / grid-column，不依賴自動排版 ——
+   離線提示 .prep-offline-note 是條件輸出的，靠自動排版會讓整欄位移。
+   ★ row-gap 必須是 0：沒有離線提示時第 1 列是 0 高度的空列，有 row-gap
+     就會憑空多出一條縫。列距一律沿用各子節點既有的 margin。 */
+.desktop-app #prep-checklist-root .prep-personal-area {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 0;
+  align-items: start;
+}
+
+.desktop-app #prep-checklist-root .prep-offline-note {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+/* 沒選對象時 .prep-personal-area 只有這一個子節點 */
+.desktop-app #prep-checklist-root .prep-blank {
+  grid-column: 1 / -1;
+}
+
+/* ------------------------------------- 左欄：分類選單 */
+
+/* 這條的 display:flex 同時負責「打開」注入 CSS 的 .prep-cat-rail{display:none}
+   (0,1,0)：本規則 (1,2,0) 勝出。手機沒有本檔，維持隱藏。 */
+/* 左欄整體。分類選單與「新增分類」收進同一格，右欄再高也不會把它們拉開。
+   sticky 讓右欄捲很長時左欄的分類導覽留在畫面上 —— master-detail 的導覽
+   在項目最多的時候最需要，而唯一的捲動容器是 .desktop-pane。 */
+.desktop-app #prep-checklist-root .prep-cat-col {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  min-width: 0;
+}
+
+.desktop-app #prep-checklist-root .prep-cat-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--cloud-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: var(--cloud-shadow-soft);
+}
+
+.desktop-app #prep-checklist-root .prep-cat-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-app #prep-checklist-root .prep-cat-rail-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--cloud-text);
+}
+
+.desktop-app #prep-checklist-root .prep-cat-rail-total {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--cloud-tint-sky);
+  color: var(--cloud-primary-strong);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+/* 分類很多時左欄自己捲，否則 sticky 的元素比視窗高就等於沒有 sticky。
+   220px 概抓：標頭 64 + pane 上下內距 58 + 狀態列與對象方塊列約 98。 */
+.desktop-app #prep-checklist-root .prep-cat-list {
+  max-height: calc(100dvh - 220px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 每一列：emoji / 名稱 / 0-N 三欄。左側的藍條用 border-left 常駐佔位，
+   未選中時 transparent，切換時文字不會左右跳動。 */
+/* ★ 只有兩欄：名稱（emoji 與標題合成的同一個字串）與計數。
+   刻意不留獨立的 emoji 欄 —— 分類本來就常常直接拿 emoji 當名稱，
+   多一欄的結果是：那欄對某些列是空的、對某些列不是（category_emoji 存了
+   空白字元就不算 :empty），每一列各自是獨立的 grid container，
+   auto 軌又不會跨 container 協調（那是 subgrid 才有的能力），
+   於是每列的名稱起點都不一樣。兩欄就沒有這個問題。
+   名稱一律走 getSectionDisplayName()，跟右欄標題永遠是同一個字串。 */
+.desktop-app #prep-checklist-root .prep-cat-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cloud-text-2);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+}
+
+.desktop-app #prep-checklist-root .prep-cat-item.is-active {
+  border-left-color: var(--cloud-primary);
+  background: var(--cloud-tint-sky);
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-app #prep-checklist-root .prep-cat-name {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-app #prep-checklist-root .prep-cat-count {
+  grid-column: 2;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--cloud-muted-2);
+  white-space: nowrap;
+}
+
+.desktop-app #prep-checklist-root .prep-cat-item.is-active .prep-cat-count {
+  color: var(--cloud-primary-strong);
+}
+
+.desktop-app #prep-checklist-root .prep-cat-empty {
+  padding: 12px;
+  border: 1px dashed var(--cloud-line-dashed);
+  border-radius: 12px;
+  color: var(--cloud-muted-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.desktop-app #prep-checklist-root .prep-cat-item:focus-visible {
+  outline: 2px solid var(--cloud-primary);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  /* :not(.is-active) 讓權重升到 (1,4,0)，滑過選中那一列時不會把它的
+     底色沖淡（否則同為 (1,3,0)、排在後面的 hover 會贏）。 */
+  .desktop-app #prep-checklist-root .prep-cat-item:not(.is-active):hover {
+    background: var(--cloud-tint-sky-soft);
+    color: var(--cloud-text);
+  }
+
+  .desktop-app #prep-checklist-root .prep-owner-chip:not(.is-active):hover {
+    border-color: var(--cloud-primary-soft);
+    color: var(--cloud-text-2);
+  }
+}
+
+/* ------------------------------------- 左欄下方：新增分類 */
+
+/* 進了 260px 的左欄，原本「標題 / 輸入框 / 按鈕」一列排不下，改直排。
+   margin-bottom:0：它是第 1 欄最後一塊，底部動作列在第 4 列另有 margin-top。 */
+.desktop-app #prep-checklist-root .prep-add-box {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 0;
 }
 
 /* 高度：style.css 的 `input, select, textarea { height: 54px }` 讓欄位過高。
    ★ 這裡刻意「不」寫 `#prep-checklist-root input`——那會以 (1,2,0) 蓋掉
      `.prep-item input[type="checkbox"]` (0,2,1) 的 20×20，把勾選框撐爛。
-     所以只點名這幾個 class。 */
-.desktop-app #prep-checklist-root .prep-owner-select,
+     所以只點名這個 class。
+   ★ .prep-owner-select 已從這條移除：整列下拉在桌面是 display:none，留著是死規則。 */
 .desktop-app #prep-checklist-root .prep-new-section-title {
   height: 40px;
   padding: 0 12px;
@@ -1162,34 +1391,41 @@ button.suggestion-item {
   cursor: pointer;
 }
 
-/* ------------------------------------- 分類卡片：多欄並排 */
+/* ------------------------------------- 右欄：只顯示選中的那一個分類 */
 
-/* .prep-section-list 在 prep-checklist.js 的注入 CSS 裡完全沒有規則，
-   是最乾淨的排版接手點。
-   auto-fill（不是 auto-fit）：只有 1~2 個分類時空軌道仍佔位，卡片維持
-   一致寬度，不會被撐成超寬。
-   欄數 = floor((容器寬 + 16) / 316)：容器 ≥ 932px → 3 欄 / ≥ 616px → 2 欄
-   / 其他 → 1 欄，由容器實際寬度自動決定，不需要 media query。 */
+/* 原本是 auto-fill 多欄並排；master-detail 之後右欄一次只有一張卡片，
+   多欄沒有意義。跨第 2–3 列，讓右欄的高度不受左欄兩塊影響。 */
 .desktop-app #prep-checklist-root .prep-section-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  gap: 16px;
-  align-items: start;
+  grid-column: 2;
+  grid-row: 2 / 4;
+  display: block;
+}
+
+/* 隱藏其餘分類的唯一機制。
+   權重 (1,4,0) = 1 個 id（#prep-checklist-root）+ 4 個 class
+   （.desktop-app / .prep-section-list / .prep-section / :not() 內的 .is-active），
+   遠高於注入 CSS 對 .prep-section 的 (0,1,0)。
+   ★ 手機沒有這條規則，全部分類照常直式並列 —— 這就是「功能不變」的保證。
+   ★ 絕不可以改成在 renderSection 輸出行內 display:none（行內權重最高，手機救不回來），
+     也不可以改成只 map 選中的那一個（手機會只剩一個分類）。 */
+.desktop-app #prep-checklist-root .prep-section-list > .prep-section:not(.is-active) {
+  display: none;
 }
 
 .desktop-app #prep-checklist-root .prep-section {
-  /* 原本是 block + margin-bottom，進 grid 後會跟 gap 疊加 */
+  /* 注入 CSS 是 block + margin-bottom:12px，這裡只剩一張卡片，不需要間距 */
   margin-bottom: 0;
   padding: 16px;
   min-width: 0;
 }
 
-/* ------------------------------------- 分類標題列 */
+/* ------------------------------------- 右欄標題列與進度 */
 
 .desktop-app #prep-checklist-root .prep-section-title {
   /* 負邊距讓標題帶貼齊卡片邊緣；卡片 padding 是 16px，
-     圓角 18px - 1px 邊框 = 17px 才不會露出直角。 */
-  margin: -16px -16px 10px;
+     圓角 18px - 1px 邊框 = 17px 才不會露出直角。
+     下邊距改成 0：緊接著的是進度列，由它負責與項目列之間的間距。 */
+  margin: -16px -16px 0;
   padding: 12px 14px;
   border-radius: 17px 17px 0 0;
   background: linear-gradient(180deg, var(--cloud-tint-sky-soft), transparent);
@@ -1214,6 +1450,41 @@ button.suggestion-item {
 
 .desktop-app #prep-checklist-root .prep-section-actions {
   gap: 4px;
+}
+
+/* 標題列下方的整份進度。(1,2,0) 打開注入 CSS 的
+   `.prep-section-progress { display:none }` (0,1,0)。 */
+.desktop-app #prep-checklist-root .prep-section-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -16px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--cloud-line);
+}
+
+.desktop-app #prep-checklist-root .prep-section-progress-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cloud-track);
+  overflow: hidden;
+}
+
+/* 寬度由 renderSection 以行內 style 帶入百分比（那是「值」，不是平台差異）。 */
+.desktop-app #prep-checklist-root .prep-section-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cloud-primary-gradient);
+  transition: width .2s ease;
+}
+
+.desktop-app #prep-checklist-root .prep-section-progress-text {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--cloud-muted);
+  white-space: nowrap;
 }
 
 /* ------------------------------------- 項目列 */
@@ -1317,8 +1588,8 @@ button.suggestion-item {
     --prep-btn-filter: grayscale(1);
   }
 
-  /* 滑到「該列」才上色。分類鈕改用 .prep-section:hover 觸發——三欄排版下
-     滑到卡片任一處就顯示，比只 hover 那條標題列好用。 */
+  /* 滑到「該列」才上色。分類鈕改用 .prep-section:hover 觸發——滑到卡片
+     任一處就顯示，比只 hover 那條標題列好用。 */
   .desktop-app #prep-checklist-root .prep-item:hover,
   .desktop-app #prep-checklist-root .prep-item:focus-within,
   .desktop-app #prep-checklist-root .prep-section:hover .prep-section-title,
@@ -1426,6 +1697,8 @@ button.suggestion-item {
 /* ★ 無分類時 prep-checklist.js 會加行內 style="display:none"，
    行內樣式權重最高，這裡的 display:flex 蓋不過它，既有隱藏行為完整保留。 */
 .desktop-app #prep-checklist-root .prep-bottom-actions {
+  grid-column: 1 / -1;
+  grid-row: 4;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -1455,9 +1728,24 @@ button.suggestion-item {
 /* ------------------------------------- 窄桌面回退 */
 
 @media (max-width: 900px) {
-  .desktop-app #prep-checklist-root .prep-owner-row,
+  /* 兩欄擠不下就退回單欄堆疊：分類選單在上、新增分類、再來是選中的分類。
+     改成 display:block 之後，子節點的 grid-column / grid-row 自動失效，
+     不必逐條重設。「只顯示選中的分類」仍然有效。 */
+  /* 單欄之後 sticky 沒有意義（左欄不再與右欄並排），關掉才不會黏在半空中 */
+  .desktop-app #prep-checklist-root .prep-cat-col {
+    position: static;
+  }
+
+  .desktop-app #prep-checklist-root .prep-cat-list {
+    max-height: none;
+  }
+
+  .desktop-app #prep-checklist-root .prep-personal-area {
+    display: block;
+  }
+
   .desktop-app #prep-checklist-root .prep-add-box {
-    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 16px;
   }
 
   .desktop-app #prep-checklist-root .prep-bottom-actions {
@@ -1472,7 +1760,10 @@ button.suggestion-item {
 @media (prefers-reduced-motion: reduce) {
   .desktop-app #prep-checklist-root .prep-icon-btn,
   .desktop-app #prep-checklist-root .prep-item,
-  .desktop-app #prep-checklist-root .prep-section-add {
+  .desktop-app #prep-checklist-root .prep-section-add,
+  .desktop-app #prep-checklist-root .prep-cat-item,
+  .desktop-app #prep-checklist-root .prep-owner-chip,
+  .desktop-app #prep-checklist-root .prep-section-progress-bar {
     transition: none;
   }
 }
