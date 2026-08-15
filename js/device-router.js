@@ -3,8 +3,44 @@
 
   const MOBILE_UA = /Android|iPhone|iPad|iPod|Mobile/i;
   const DESKTOP_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
+  const MIN_DESKTOP_WIDTH = 1024;
+  const VIEW_OVERRIDE_KEY = 'travel_view_override';
+
+  // 逃生門：網址帶 ?view=desktop 或 ?view=mobile 就強制指定，並記進 localStorage
+  // 以後都算數；?view=auto 清掉回到自動判斷。
+  // 裝置判斷本質上是猜的，總會有猜錯的機型 —— 沒有這個入口，猜錯的人完全沒有救。
+  function readViewOverride(env) {
+    let stored = null;
+    try {
+      stored = env.localStorage;
+    } catch (_) {
+      stored = null;
+    }
+
+    const search = String((env && env.location && env.location.search) || '');
+    const matched = /[?&]view=(desktop|mobile|auto)(?:&|$)/.exec(search);
+
+    if (matched) {
+      const wanted = matched[1];
+      try {
+        if (wanted === 'auto') stored.removeItem(VIEW_OVERRIDE_KEY);
+        else stored.setItem(VIEW_OVERRIDE_KEY, wanted);
+      } catch (_) { /* 隱私模式或第三方 cookie 被擋，忽略即可 */ }
+      return wanted === 'auto' ? '' : wanted;
+    }
+
+    try {
+      const saved = stored.getItem(VIEW_OVERRIDE_KEY);
+      if (saved === 'desktop' || saved === 'mobile') return saved;
+    } catch (_) { /* 同上 */ }
+
+    return '';
+  }
 
   function classify(env) {
+    const override = readViewOverride(env || {});
+    if (override) return override;
+
     const nav = (env && env.navigator) || {};
     const ua = String(nav.userAgent || '');
     const platform = String(nav.platform || '');
@@ -28,14 +64,24 @@
     // 走到這裡的裝置一律用「螢幕夠寬 + 有精準指標且支援 hover」判斷。
     // 觸控筆電同時具備觸控與滑鼠，這兩項都會過，所以會正確拿到桌面版；
     // 純觸控的平板則因為 pointer: coarse / hover: none 而留在手機版。
-    const width = Number(env && env.innerWidth) || 0;
+    //
+    // ★ 寬度取「螢幕」與「視窗」兩者的大值，不能只看 innerWidth。
+    //   innerWidth 是當下的視窗寬度，使用者把視窗拉小一點就會變 —— 而「這台是不是
+    //   桌機」是裝置屬性，不該隨視窗大小翻來覆去。實際踩到的案例：1920x1080 筆電、
+    //   Windows 縮放 125%（screen 變成 1536 CSS px，空間綽綽有餘），只因為視窗沒有
+    //   最大化，innerWidth 是 1016，差 8px 就被丟去手機版而且沒有辦法救回來。
+    //   screen.width 已經是 CSS 像素（瀏覽器除過 devicePixelRatio），不必自己換算。
+    //   視窗真的很窄時，桌面版本身有 1180 / 1020 / 900px 的響應式回退接手。
+    const innerWidth = Number(env && env.innerWidth) || 0;
+    const screenWidth = Number(env && env.screen && env.screen.width) || 0;
+    const width = Math.max(innerWidth, screenWidth);
     const hasDesktopPointer = Boolean(
       env
       && typeof env.matchMedia === 'function'
       && env.matchMedia(DESKTOP_POINTER_QUERY).matches
     );
 
-    return width >= 1024 && hasDesktopPointer ? 'desktop' : 'mobile';
+    return width >= MIN_DESKTOP_WIDTH && hasDesktopPointer ? 'desktop' : 'mobile';
   }
 
   function buildTarget(location, relativePath) {
