@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260814.3 -->
+<!-- version: 20260814.4 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260814.3" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260814.4" />
 
-  <script src="../js/device-router.js?v=20260814.3" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../js/device-router.js?v=20260814.4" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260814.3" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260814.3" />
-  <link rel="stylesheet" href="./desktop.css?v=20260814.3" />
+  <link rel="stylesheet" href="../style.css?v=20260814.4" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260814.4" />
+  <link rel="stylesheet" href="./desktop.css?v=20260814.4" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260814.3" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260814.4" />
 </head>
 <body class="desktop-body">
 
@@ -212,7 +212,9 @@
               @click="focusItineraryMapPoint(currentDayMapPoints.find(p => p.kind === 'itinerary' && p.id === place.id))"
             >
               <div class="drag-handle desktop-drag-handle select-none" @click.stop>≡</div>
-              <span class="desktop-place-time" :class="{ 'is-unset': !place.time }">{{ place.time ? formatTime(place.time) : '未定' }}</span>
+              <!-- 沒排時間就留空。欄位本身保留（min-height 撐著），
+                   時間欄才不會因為有沒有填而讓整列左右對不齊。 -->
+              <span class="desktop-place-time">{{ place.time ? formatTime(place.time) : '' }}</span>
               <span class="desktop-place-icon">{{ getItineraryIcon(place) }}</span>
               <div class="desktop-place-main" @click="handleItineraryContentClick($event, place)">
                 <span class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">{{ getItineraryCategoryLabel(place) }}</span>
@@ -964,24 +966,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260814.3"></script>
+<script src="../config.js?v=20260814.4"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260814.3" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260814.3"></script>
-<script src="../js/utils.js?v=20260814.3"></script>
-<script src="../js/api.js?v=20260814.3"></script>
-<script src="../js/cache.js?v=20260814.3"></script>
-<script src="../js/maps.js?v=20260814.3"></script>
-<script src="../js/places.js?v=20260814.3"></script>
-<script src="../js/itinerary.js?v=20260814.3"></script>
-<script src="../js/hotels.js?v=20260814.3"></script>
-<script src="../js/expenses.js?v=20260814.3"></script>
-<script src="../js/weather.js?v=20260814.3"></script>
-<script src="../js/export.js?v=20260814.3"></script>
-<script src="../js/probe-search.js?v=20260814.3"></script>
-<script src="../app.js?v=20260814.3"></script>
-<script src="../search-zh-label.js?v=20260814.3"></script>
-<script src="../prep-checklist.js?v=20260814.3"></script>
+<script src="../cache-refresh.js?v=20260814.4" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260814.4"></script>
+<script src="../js/utils.js?v=20260814.4"></script>
+<script src="../js/api.js?v=20260814.4"></script>
+<script src="../js/cache.js?v=20260814.4"></script>
+<script src="../js/maps.js?v=20260814.4"></script>
+<script src="../js/places.js?v=20260814.4"></script>
+<script src="../js/itinerary.js?v=20260814.4"></script>
+<script src="../js/hotels.js?v=20260814.4"></script>
+<script src="../js/expenses.js?v=20260814.4"></script>
+<script src="../js/weather.js?v=20260814.4"></script>
+<script src="../js/export.js?v=20260814.4"></script>
+<script src="../js/probe-search.js?v=20260814.4"></script>
+<script src="../app.js?v=20260814.4"></script>
+<script src="../search-zh-label.js?v=20260814.4"></script>
+<script src="../prep-checklist.js?v=20260814.4"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

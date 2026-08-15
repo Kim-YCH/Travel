@@ -3404,18 +3404,12 @@ button.suggestion-item {
 }
 
 /* 時間欄原本沒宣告 font-size，繼承 body 的 16px，比 15px 的地點名稱還大，
-   層級顛倒。靠右對齊讓 09:30 / 未定 都貼著圖示欄。 */
+   層級顛倒。靠右對齊讓時間貼著圖示欄；沒排時間的項目留空，欄位仍在。 */
 .desktop-app .desktop-itinerary .desktop-place-time {
   justify-content: flex-end;
   font-size: 12px;
   font-weight: 800;
   color: var(--cloud-text-2);
-}
-
-/* 一天的行程常常大半沒填時間，「未定」不該跟真正的時間一樣重。 */
-.desktop-app .desktop-itinerary .desktop-place-time.is-unset {
-  color: var(--cloud-muted-2);
-  font-weight: 600;
 }
 
 .desktop-app .desktop-itinerary .desktop-place-icon {

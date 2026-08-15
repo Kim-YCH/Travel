@@ -1204,7 +1204,9 @@ createApp({
         id: item.id,
         name: item.name || '未命名行程',
         address: item.address || '',
-        timeLabel: item.time ? formatTime(item.time) : '未定',
+        // 沒排時間就留空，不要放「未定」佔位字（一天大半項目都沒填時間，
+        // 滿版的「未定」比空白更吵，也讓真正有時間的項目不好掃）
+        timeLabel: item.time ? formatTime(item.time) : '',
         category: getItineraryCategoryLabel(item),
         tone: getItineraryTypeTone(item),
         icon: getItineraryIcon(item),
