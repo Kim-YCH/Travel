@@ -1483,7 +1483,11 @@ createApp({
     // 每次都是完整重建加上地圖跳動。這裡先算出「這次要畫什麼」的指紋，內容沒變就整段跳過。
     // 只跳過重建，選取高亮與探點 marker 仍然照常套用。
     const buildMarkerSignature = (displayDay, items, alts, hotelList) => {
-      const one = (o) => [o.id, o.lat, o.lng, o.name, o.day, o.start_day, o.end_day].join('~');
+      // ★ order 與 time 一定要進指紋。
+      // 單日模式下 marker 的標籤是「在清單中的第幾個」，而清單順序由
+      // sortDayItemsByStoredOrder（order → time → name）決定。指紋漏掉這兩個欄位，
+      // 拖曳排序或改時間之後指紋不變 → 短路生效 → marker 不重建 → 數字停在舊的。
+      const one = (o) => [o.id, o.lat, o.lng, o.name, o.day, o.order, o.time, o.start_day, o.end_day].join('~');
       return [
         displayDay || 'all',
         items.map(one).join('|'),
@@ -1500,6 +1504,11 @@ createApp({
 
       if (displayDay) {
         itemsToRender = itemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
+        // ★ 單日模式的 marker 標籤是 index + 1，所以這裡的排序必須跟左邊清單一致。
+        // itinerary.value 是後端回來的原始順序，不是顯示順序 —— 少了這一行，
+        // 地圖上的 1~6 跟清單的第 1~6 筆對不起來（拖曳排序過的旅程一定會錯開）。
+        // 「全部」模式標籤是天數，與順序無關，所以不必排。
+        itemsToRender = sortDayItemsByStoredOrder(itemsToRender);
       }
 
       {
