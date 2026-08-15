@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<!-- 暫時的診斷頁，不進版控、不發佈。用完就刪。
+     刻意不帶 data-current-view，所以載入 device-router.js 不會觸發任何轉址。 -->
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>裝置判斷診斷</title>
+  <style>
+    body { font: 14px/1.6 system-ui, sans-serif; margin: 0; padding: 20px; background: #f8fbff; color: #0f172a; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .verdict { margin: 14px 0; padding: 14px 16px; border-radius: 12px; font-size: 20px; font-weight: 800; }
+    .desktop { background: #dcfce7; color: #15803d; }
+    .mobile { background: #fee2e2; color: #b91c1c; }
+    table { border-collapse: collapse; width: 100%; max-width: 720px; }
+    td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    td:first-child { width: 210px; color: #475569; font-weight: 700; white-space: nowrap; }
+    td:last-child { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+    .yes { color: #15803d; font-weight: 800; }
+    .no { color: #b91c1c; font-weight: 800; }
+    .why { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0; max-width: 720px; }
+  </style>
+</head>
+<body>
+  <h1>裝置判斷診斷</h1>
+  <div id="ver" style="color:#64748b;font-size:12px"></div>
+  <div id="verdict" class="verdict">判斷中…</div>
+  <table id="facts"></table>
+  <div class="why" id="why"></div>
+
+  <script>
+    // 帶時間戳繞過 Service Worker 的 cache-first（sw.js:147 對一般同源請求是
+    // 先查快取再打網路，一旦這個沒有 ?v= 的網址被快取住就永遠不會更新，
+    // 診斷頁就會拿舊檔說謊）。動態插入才能塞得進時間戳。
+    document.write('<scr' + 'ipt src="./js/device-router.js?nocache=' + Date.now() + '"></scr' + 'ipt>');
+  </script>
+  <script>
+    (function () {
+      var nav = navigator;
+      var MOBILE_UA = /Android|iPhone|iPad|iPod|Mobile/i;
+      var Q = '(hover: hover) and (pointer: fine)';
+
+      var uaMobile = MOBILE_UA.test(nav.userAgent || '');
+      var uadMobile = !!(nav.userAgentData && nav.userAgentData.mobile);
+      var touch = Number(nav.maxTouchPoints || 0);
+      var platform = String(nav.platform || '');
+      var ipadFake = platform === 'MacIntel' && touch > 1;
+      var w = window.innerWidth;
+      var mmAll = window.matchMedia(Q).matches;
+      var mmHover = window.matchMedia('(hover: hover)').matches;
+      var mmFine = window.matchMedia('(pointer: fine)').matches;
+
+      var verdict = window.TravelDeviceRouter
+        ? window.TravelDeviceRouter.classify(window)
+        : '（device-router.js 沒載到）';
+
+      // 這個字串只有新版才有，用來確認瀏覽器拿到的不是 Service Worker 的舊快取
+      var isNewRouter = window.TravelDeviceRouter
+        && /isIpadPretendingToBeMac/.test(window.TravelDeviceRouter.classify.toString());
+
+      document.getElementById('ver').textContent =
+        '伺服器上的 device-router.js：' + (isNewRouter ? '新版（含 iPad 專用判斷）' : '★ 舊版')
+        + '　｜　這頁繞過了快取，所以測的是伺服器現在的檔案';
+
+      var el = document.getElementById('verdict');
+      el.textContent = '判定結果：' + verdict;
+      el.className = 'verdict ' + (verdict === 'desktop' ? 'desktop' : 'mobile');
+
+      function yn(b) { return '<span class="' + (b ? 'yes' : 'no') + '">' + b + '</span>'; }
+
+      var rows = [
+        ['判定結果', verdict],
+        ['—— 以下四項任一為 true 就直接判手機 ——', ''],
+        ['userAgentData.mobile', yn(uadMobile)],
+        ['UA 含 Android/iPhone/iPad/iPod/Mobile', yn(uaMobile)],
+        ['iPad 偽裝成 Mac (MacIntel + 多點觸控)', yn(ipadFake)],
+        ['—— 以上都 false 才看下面兩項，兩項都要 true 才是桌面 ——', ''],
+        ['window.innerWidth', w + '　（需要 >= 1024）' + (w >= 1024 ? ' ✅' : ' ❌ 這就是原因')],
+        ['matchMedia(hover:hover and pointer:fine)', yn(mmAll)],
+        ['　├ hover: hover', yn(mmHover)],
+        ['　└ pointer: fine', yn(mmFine)],
+        ['—— 參考資訊 ——', ''],
+        ['navigator.userAgent', nav.userAgent],
+        ['navigator.platform', platform || '(空)'],
+        ['navigator.maxTouchPoints', touch],
+        ['screen.width x height', screen.width + ' x ' + screen.height],
+        ['devicePixelRatio（縮放倍率）', window.devicePixelRatio],
+        ['outerWidth（含瀏覽器外框）', window.outerWidth],
+        ['視窗有沒有最大化', yn(Math.abs(window.outerWidth - screen.availWidth) < 20)]
+      ];
+
+      document.getElementById('facts').innerHTML = rows.map(function (r) {
+        return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>';
+      }).join('');
+
+      var why = '';
+      if (uadMobile) why = 'userAgentData.mobile 是 true —— 瀏覽器自己宣稱是行動裝置。';
+      else if (uaMobile) why = 'User-Agent 字串裡含有 Android / iPhone / iPad / iPod / Mobile 其中之一。看上面的 userAgent 全文。';
+      else if (ipadFake) why = '被判成偽裝成 Mac 的 iPad（platform 是 MacIntel 且有多點觸控）。';
+      else if (w < 1024) why = 'window.innerWidth 是 ' + w + '，小於 1024。注意這是 CSS 像素，不是螢幕解析度 —— Windows 顯示縮放設 150% 時，1920 的螢幕只有 1280；設 200% 只剩 960。把視窗最大化、或把縮放調低就會變桌面版。';
+      else if (!mmAll) why = 'matchMedia 說沒有「精準指標 + 支援 hover」。hover:hover = ' + mmHover + '，pointer:fine = ' + mmFine + '。';
+      else why = '所有條件都通過，應該是桌面版。如果你還是被導去手機版，代表瀏覽器拿到的是 Service Worker 快取的舊 device-router.js —— 看最上面那行版本標示。';
+      document.getElementById('why').innerHTML = '<b>為什麼是這個結果：</b><br>' + why;
+    })();
+  </script>
+</body>
+</html>
