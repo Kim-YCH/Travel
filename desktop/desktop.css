@@ -3068,12 +3068,22 @@ button.suggestion-item {
   background: var(--cloud-sky);
 }
 
+/* 新增行程與路線查詢改成按鈕（內容在彈窗），左欄因此多出約 200px 給清單。 */
+.desktop-app .desktop-itinerary .desktop-itinerary-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.desktop-app .desktop-itinerary .desktop-itinerary-actions button {
+  height: var(--desktop-itin-control-h);
+  font-size: 13px;
+}
+
 /* --- 內容卡 vs. 工具卡：兩種表面 --------------------------------------
-   行程列是「這一天的內容」，搜尋／路線／探點三張是「操作工具」。
-   工具卡改成淡藍平面（無陰影、實邊框），內容卡維持白玻璃浮空，
-   一眼分得出哪些是資料、哪些是操作。這三個 class 全站只出現在行程頁。 */
-.desktop-app .card.desktop-add-place,
-.desktop-app .card.itinerary-route-card,
+   行程列是「這一天的內容」，探點是僅存的「操作工具」常駐卡片——搜尋／路線
+   兩張工具卡在 Task 3、4 都搬進彈窗，改吃 .desktop-modal 的白玻璃浮空樣式，
+   不再需要淡藍平面這套視覺區分，這裡只剩 .desktop-probe 一個 class。 */
 .desktop-app .card.desktop-probe {
   background: var(--cloud-tint-blue) !important;
   border-color: var(--cloud-border-strong) !important;
@@ -3087,11 +3097,12 @@ button.suggestion-item {
 
    注意：tests/run.js 讀的是 .desktop-add-row-fields 的「第一條」規則
    （desktop.css:394），那條原封不動保留 width:100% 與三欄值，這裡是後面
-   另外追加的一條，不影響該斷言。 */
-.desktop-app .desktop-itinerary-left > .card.desktop-add-place {
-  padding: 12px 14px;
-}
+   另外追加的一條，不影響該斷言。
 
+   Task 3：.desktop-add-place 搬進彈窗後不再是 .desktop-itinerary-left 的
+   直接子元素，原本靠 > 子選擇器蓋掉的 12px/14px 內距規則已經失效、刪除，
+   改吃通用區 .desktop-app .card:not(.itinerary-route-card) 的 18px 內距，
+   跟其他彈窗（showDayModal 等）的內距一致。 */
 .desktop-app .desktop-itinerary .desktop-itinerary-add-row {
   /* 時間欄 124px 是為了容納 en-US 語系的 input[type=time]（多一個 AM/PM
      欄位，min-content 約 104px）；zh-TW 只要 76px。 */
@@ -3162,41 +3173,15 @@ button.suggestion-item {
   background-color: var(--cloud-sky);
 }
 
-/* --- 路線查詢卡 -------------------------------------------------------
-   整組 .route-* 住在 style.css 682-778，全是寫死色碼的手機規格，桌面完全
-   沒有 override。這裡只換色與高度，不動 .itinerary-route-card 的
-   padding:0 / overflow:visible（整片點擊區靠它）。 */
-.desktop-app .desktop-itinerary .route-panel-toggle {
-  padding: 10px 14px;
-  border-radius: var(--desktop-radius-card);
-  color: var(--cloud-text);
-  font-size: 13px;
-  font-weight: 800;
-  transition: var(--desktop-action-transition);
-}
-
-/* 展開時那顆按鈕是滿版的，下緣不收圓角會在卡片中段畫出一塊圓底色。 */
-.desktop-app .desktop-itinerary .itinerary-route-card:has(.route-panel-body) .route-panel-toggle {
-  border-radius: var(--desktop-radius-card) var(--desktop-radius-card) 0 0;
-}
-
-/* 這是行程頁唯一「整張卡就是一顆按鈕」的元件，原本零 hover 回饋。 */
-.desktop-app .desktop-itinerary .route-panel-toggle:hover:not(:disabled) {
-  background: var(--cloud-tint-sky-soft);
-}
-
-/* 按鈕邊界與卡片邊界重合，通用區的 outline-offset:2px 會在 14px 圓角外面
-   畫出一個方角框，又因為 overflow:visible 直接溢出卡片。改成往內畫。 */
-.desktop-app .desktop-itinerary .route-panel-toggle:focus-visible {
-  outline-offset: -2px;
-}
-
-.desktop-app .desktop-itinerary .route-panel-caret {
-  color: var(--cloud-muted-2);
-}
-
+/* --- 路線查詢彈窗內部欄位 ----------------------------------------------
+   整組 .route-* 住在 style.css，全是寫死色碼的手機規格，桌面完全沒有
+   override，這裡只換色與高度。展開收合按鈕（切換文案／收合箭頭）連同
+   常駐卡片一起在 Task 4 改成彈窗，已不存在。 */
+/* 左右 14px 原本是補「.itinerary-route-card { padding: 0 }」的缺口，
+   那條規則已刪；現在住在 .desktop-modal 裡，左右內距由外層的 18px
+   （--desktop-card-pad）負責，這裡再留會兩層疊加，故左右歸零、只留底部。 */
 .desktop-app .desktop-itinerary .route-panel-body {
-  padding: 0 14px 12px;
+  padding: 0 0 12px;
   gap: 8px;
 }
 
@@ -3596,7 +3581,6 @@ button.suggestion-item {
 @media (prefers-reduced-motion: reduce) {
   .desktop-app .desktop-itinerary .desktop-day-tabs button,
   .desktop-app .desktop-itinerary .desktop-day-add,
-  .desktop-app .desktop-itinerary .route-panel-toggle,
   .desktop-app .desktop-itinerary .route-mode-btn,
   .desktop-app .desktop-itinerary .route-open-btn,
   .desktop-app .desktop-itinerary .card.desktop-place-card {

@@ -682,7 +682,8 @@ createApp({
       getItineraryCategoryLabel,
       getItineraryIcon,
       normalizeItineraryRecord,
-      normalizeAlternativeRecord
+      normalizeAlternativeRecord,
+      resolveSwipeIntent,
     } = TravelItinerary;
 
     const {
@@ -2023,6 +2024,61 @@ createApp({
       scheduleTripWeatherLoad(250);
     };
 
+    // 左右滑動換天。只在手機的清單模式生效 —— 地圖模式的橫向拖曳屬於地圖平移，
+    // 硬接會兩邊都不好用。
+    //
+    // ★ 只用 touchstart + touchend，不需要 touchmove：
+    //   touchend 的 changedTouches[0] 就是最後位置。少一個高頻事件。
+    // ★ 絕對不呼叫 preventDefault —— 一呼叫垂直捲動就卡住。
+    let itinerarySwipeStart = null;
+
+    const scrollActiveDayTabIntoView = () => {
+      nextTick(() => {
+        const el = document.querySelector('.itinerary-day-tabs .day-tab-active');
+        if (!el || typeof el.scrollIntoView !== 'function') return;
+        // block: 'nearest' 是必要的 —— 少了它瀏覽器會連垂直方向一起捲，把畫面拉走。
+        el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      });
+    };
+
+    const onItineraryTouchStart = (event) => {
+      itinerarySwipeStart = null;
+      if (dayViewMode.value !== 'list') return;
+      // 多指觸控整個放棄追蹤：常見的握法是一手滑動、另一手拇指靠在螢幕邊緣，
+      // 這種情況下 touchend 觸發時 changedTouches[0] 不保證對應到起點記錄的
+      // 那根手指，算出來的 dx/dy 沒有意義，卻有機率湊巧超過門檻而誤觸換天。
+      if (!event || !event.touches || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      itinerarySwipeStart = { x: touch.clientX, y: touch.clientY, el: event.target };
+    };
+
+    const onItineraryTouchEnd = (event) => {
+      const start = itinerarySwipeStart;
+      itinerarySwipeStart = null;
+      if (!start || dayViewMode.value !== 'list') return;
+      // 放開時如果畫面上還有其他手指按著，代表這只是多指觸控裡先放開的那一根，
+      // 理由同 onItineraryTouchStart —— changedTouches[0] 不保證是起點那根手指。
+      if (event && event.touches && event.touches.length > 0) return;
+
+      const touch = event && event.changedTouches && event.changedTouches[0];
+      if (!touch) return;
+
+      const intent = resolveSwipeIntent({
+        dx: touch.clientX - start.x,
+        dy: touch.clientY - start.y,
+        startEl: start.el
+      });
+      if (!intent) return;
+
+      // 邊界不繞回。resolveSwipeIntent 不知道現在第幾天，這兩行是呼叫端的責任。
+      const day = parseInt(currentDay.value, 10) || 1;
+      if (intent === 'prev' && day <= 1) return;
+      if (intent === 'next' && day >= totalDays.value) return;
+
+      onDayClick(intent === 'prev' ? day - 1 : day + 1);
+      scrollActiveDayTabIntoView();
+    };
+
     const onDayDblClick = (d) => {
       modalDay.value = d;
       if (d === 1) {
@@ -2377,11 +2433,56 @@ createApp({
 
     const currentDayHotels = computed(() => getHotelsForDay(currentDay.value));
 
+    // 新增行程與路線查詢改成彈窗。兩者都只是顯示狀態，不影響任何資料。
+    const showAddPlaceModal = ref(false);
+    // 只有桌面版的搜尋框有掛這個 ref（手機版模板沒有），focus 呼叫用 ?. 保護。
+    // 這顆彈窗沒有接 data-desktop-modal-mask，desktop/index.html 檔尾那套
+    // 全域 focus-trap／Esc 攔截腳本認不到它，@keydown.esc 只有在 focus 落在
+    // 彈窗子樹內才會被冒泡到——開窗當下 focus 還停在觸發用的「＋ 新增行程」
+    // 按鈕（跟彈窗是手足關係，不在子樹內），Esc 不會生效，必須自己把 focus
+    // 移進來一次。
+    const desktopAddPlaceInputEl = ref(null);
+
+    const openAddPlaceModal = () => {
+      showAddPlaceModal.value = true;
+      nextTick(() => {
+        desktopAddPlaceInputEl.value?.focus({ preventScroll: true });
+      });
+    };
+
+    const closeAddPlaceModal = () => {
+      showAddPlaceModal.value = false;
+      // 關窗時把還在飛的搜尋取消掉，否則回來的結果會落在已經關掉的下拉上
+      cancelPendingPlaceSearch();
+      searchResults.value = [];
+    };
+
     /* ------------------------------------------------------------ 路線查詢 */
     // 沒有大眾運輸的路線 API 可用（Naver 沒開放、NCP Maps 只有開車），
     // 所以這裡只負責把兩個點組成深層連結，時間與班次由地圖 App 自己算。
 
-    const routePanelOpen = ref(false);
+    // 展開收合的狀態改由彈窗開關取代，模式跟 showAddPlaceModal 一致。
+    const showRouteModal = ref(false);
+    // 只有桌面版的彈窗根節點有掛這個 ref（手機版模板沒有），focus 呼叫用 ?. 保護。
+    // 這顆彈窗跟新增行程彈窗一樣沒有接 data-desktop-modal-mask（背景 inert 的
+    // 選擇器只認 .desktop-main 的直接子元素，這顆彈窗巢狀在 .desktop-itinerary
+    // 底下更深，掛上去會把整個 section 連同彈窗自己設成 inert），@keydown.esc
+    // 只有 focus 落在子樹內才會冒泡經過。.route-panel-body 內部四塊要「一字
+    // 不改」地搬過來，不能在起點 select 上加 ref，所以改成開窗時用 querySelector
+    // 找子樹裡第一個 select（就是起點欄位）撈出來聚焦。
+    const routeModalEl = ref(null);
+
+    const openRouteModal = () => {
+      showRouteModal.value = true;
+      nextTick(() => {
+        routeModalEl.value?.querySelector('select')?.focus({ preventScroll: true });
+      });
+    };
+
+    const closeRouteModal = () => {
+      showRouteModal.value = false;
+    };
+
     const routeMode = ref('transit');
     const routeStartKey = ref('');
     const routeGoalKey = ref('');
@@ -2446,10 +2547,6 @@ createApp({
       if (!canOpenRoute.value) { alert('起點與終點不能是同一個地點'); return; }
 
       openRouteUrl(buildRouteUrl({ start: routeStartPoint.value, goal: routeGoalPoint.value }));
-    };
-
-    const toggleRoutePanel = () => {
-      routePanelOpen.value = !routePanelOpen.value;
     };
 
     let searchTimeout = null;
@@ -2594,6 +2691,11 @@ createApp({
         selectedLng.value = null;
         isCoordinateMode.value = false;
         resolvedCoordName.value = '';
+
+        // 走到這裡代表項目已經進到清單，關窗回去看結果。
+        // 前面每一個驗證失敗都是 return，不會走到這裡 —— 失敗時彈窗會留著，
+        // 錯誤訊息才不會跟著消失。
+        closeAddPlaceModal();
 
         await nextTick();
         scheduleSortableInit();
@@ -4245,12 +4347,15 @@ createApp({
       createTrip, openCreateTripModal, closeCreateTripModal, createTripFromModal, selectTrip, exitTrip, deleteTripTotally, fetchData,
 
       switchTab, switchDayViewMode, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
+      onItineraryTouchStart, onItineraryTouchEnd,
       tripCountdownDays, tripCountdownLabel,
 
       showDayModal, modalDay, dateInput, swapTargetDay, closeDayModal, applyDay1Date, swapWithDay,
 
       searchPlacesInput, useCoordinateInput, selectPlace, isNaverPlace,
-      routePanelOpen, toggleRoutePanel, routeMode, routeModes: ROUTE_MODES,
+      showAddPlaceModal, openAddPlaceModal, closeAddPlaceModal, desktopAddPlaceInputEl,
+      showRouteModal, openRouteModal, closeRouteModal, routeModalEl,
+      routeMode, routeModes: ROUTE_MODES,
       routeStartKey, routeGoalKey, routePointOptions,
       canOpenRoute, openRoute, routeMapLabel,
       addPlace, removePlace, openExternalMap, handleItineraryContentClick, linkifyMessage,

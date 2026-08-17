@@ -185,6 +185,33 @@
     message: String(item?.message || '')
   });
 
+  // 行程頁左右滑動換天的判定。
+  //
+  // ★ 無狀態純函式：只回答「這個手勢想往哪個方向」，不知道目前第幾天、
+  //   也不知道總共幾天 —— 邊界判斷（Day 1 不能再往前）留在呼叫端。
+  //   這樣切才能完整單元測試，不必模擬真實觸控。
+  const SWIPE_MIN_DISTANCE = 60;
+  const SWIPE_HORIZONTAL_RATIO = 1.5;
+  // 起點落在這些元素裡就整個放棄：
+  //   .itinerary-day-tabs —— 它本身就是橫向捲動容器，兩者會互相干擾
+  //   .drag-handle        —— 拖曳排序的把手，屬於 Sortable
+  //   互動元素            —— 手勢應該歸它們自己
+  const SWIPE_IGNORE_SELECTOR = '.itinerary-day-tabs, .drag-handle, input, select, textarea, button, a';
+
+  const resolveSwipeIntent = ({ dx, dy, startEl } = {}) => {
+    const x = Number(dx);
+    const y = Number(dy);
+    if (!Number.isFinite(x)) return null;
+    const vertical = Number.isFinite(y) ? Math.abs(y) : 0;
+
+    if (Math.abs(x) < SWIPE_MIN_DISTANCE) return null;
+    // 嚴格大於：剛好 1.5 倍算斜滑，不換天
+    if (Math.abs(x) <= vertical * SWIPE_HORIZONTAL_RATIO) return null;
+    if (startEl && typeof startEl.closest === 'function' && startEl.closest(SWIPE_IGNORE_SELECTOR)) return null;
+
+    return x < 0 ? 'next' : 'prev';
+  };
+
   window.TravelItinerary = Object.freeze({
     ITINERARY_TYPES,
     normalizeOrderValue,
@@ -205,6 +232,7 @@
     getItineraryCategoryLabel,
     getItineraryIcon,
     normalizeItineraryRecord,
-    normalizeAlternativeRecord
+    normalizeAlternativeRecord,
+    resolveSwipeIntent
   });
 })(window);

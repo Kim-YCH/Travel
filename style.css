@@ -680,35 +680,34 @@ html, body {
       background-color: #f0f9ff;
     }
 
-    /* ------------------------------------------------------------ 路線查詢 */
-
-    .itinerary-route-card {
-      padding: 0;
-      overflow: visible;
-    }
-
-    .route-panel-toggle {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    /* 新增行程改成按鈕 + 彈窗（.itinerary-search-card 本體已搬進檔案下方的 modal）。
+       auto-fit：Task 3 只有一顆按鈕、Task 4 之後兩顆，同一條規則都排得好看 */
+    .itinerary-action-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
       gap: 8px;
-      padding: 12px 14px;
-      background: none;
-      border: 0;
-      font-weight: 800;
+    }
+
+    .itinerary-action-btn {
+      height: 42px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+      color: #334155;
       font-size: 14px;
-      color: #1e3a8a;
-      cursor: pointer;
+      font-weight: 800;
     }
 
-    .route-panel-caret {
-      font-size: 11px;
-      color: #94a3b8;
-    }
+    /* ------------------------------------------------------------ 路線查詢 */
+    /* .itinerary-route-card 那張常駐卡片已經改成彈窗（modal-card 通用樣式），
+       這裡不再需要卡片本身與展開收合按鈕（切換文案／收合箭頭）的樣式，
+       只留彈窗內部欄位共用的規則。 */
 
+    /* 左右 14px 原本是補「.itinerary-route-card { padding: 0 }」的缺口，
+       那條規則已刪；現在住在 .modal-card 裡，左右內距由外層的 16px 負責，
+       這裡再留 14px 會兩層疊加，多縮一截，故左右歸零、只留底部間距。 */
     .route-panel-body {
-      padding: 0 14px 14px;
+      padding: 0 0 14px;
       display: flex;
       flex-direction: column;
       gap: 10px;

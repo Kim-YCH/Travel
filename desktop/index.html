@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260815.3 -->
+<!-- version: 20260816.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260815.3" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260816.1" />
 
-  <script src="../js/device-router.js?v=20260815.3" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../js/device-router.js?v=20260816.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260815.3" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260815.3" />
-  <link rel="stylesheet" href="./desktop.css?v=20260815.3" />
+  <link rel="stylesheet" href="../style.css?v=20260816.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260816.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20260816.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260815.3" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260816.1" />
 </head>
 <body class="desktop-body">
 
@@ -125,81 +125,11 @@
             <button type="button" class="desktop-day-add" title="新增天數" aria-label="新增天數" @click="addNewDay">＋</button>
           </div>
 
-          <div class="card desktop-add-place relative">
-            <div class="desktop-add-row desktop-itinerary-add-row">
-              <input v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '，或貼上地圖網址'" />
-              <div class="desktop-add-row-fields">
-                <input v-model="newTime" type="time" />
-                <select v-model="newPlaceType">
-                  <option v-for="type in itineraryTypes" :key="'type-' + type" :value="type">{{ type }}</option>
-                </select>
-                <button type="button" class="desktop-primary" @click="addPlace" :disabled="isAddingPlace">新增</button>
-              </div>
-            </div>
-
-            <div v-if="isResolvingMapUrl" class="desktop-hint">正在解析地圖網址…</div>
-            <div v-if="mapUrlResolveError" class="desktop-hint desktop-hint-warn">{{ mapUrlResolveError }}</div>
-            <div v-if="translatedSearchHint" class="desktop-hint">🌐 {{ translatedSearchHint }}</div>
-
-            <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
-              <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
-              <div v-if="isCoordinateMode" class="suggestion-item bg-green-50" @click="useCoordinateInput">
-                <span class="text-xl">📍</span>
-                <div>
-                  <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
-                  <div class="text-xs text-green-600">點擊使用</div>
-                </div>
-              </div>
-              <button
-                type="button"
-                v-for="item in searchResults"
-                :key="'d-sug-' + item.place_id"
-                class="suggestion-item hover:bg-blue-50"
-                @click="selectPlace(item)"
-              >
-                <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">📍</span>
-                <div class="overflow-hidden">
-                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
-                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div class="card itinerary-route-card">
-            <button type="button" class="route-panel-toggle" @click="toggleRoutePanel">
-              <span>🧭 路線查詢</span>
-              <span class="route-panel-caret">{{ routePanelOpen ? '▲' : '▼' }}</span>
-            </button>
-            <div v-if="routePanelOpen" class="route-panel-body">
-              <label class="route-field">
-                <span class="route-field-label">起點</span>
-                <select v-model="routeStartKey" class="route-select">
-                  <option value="">請選擇</option>
-                  <option v-for="opt in routePointOptions" :key="'d-rs-' + opt.key" :value="opt.key">{{ opt.label }}</option>
-                </select>
-              </label>
-              <label class="route-field">
-                <span class="route-field-label">終點</span>
-                <select v-model="routeGoalKey" class="route-select">
-                  <option value="">請選擇</option>
-                  <option v-for="opt in routePointOptions" :key="'d-rg-' + opt.key" :value="opt.key">{{ opt.label }}</option>
-                </select>
-              </label>
-              <div class="route-mode-switch">
-                <button
-                  v-for="m in routeModes"
-                  :key="'d-rm-' + m.key"
-                  type="button"
-                  class="route-mode-btn"
-                  :class="routeMode === m.key ? 'route-mode-btn-active' : ''"
-                  @click="routeMode = m.key"
-                >{{ m.label }}</button>
-              </div>
-              <button type="button" class="route-open-btn" :disabled="!canOpenRoute" @click="openRoute">
-                開啟 {{ routeMapLabel }} 路線
-              </button>
-            </div>
+          <!-- 新增行程與路線查詢改成按鈕，內容在彈窗裡（左欄因此多出約 200px 給清單）。
+               路線那顆在 Task 4 加進同一個 .desktop-itinerary-actions。 -->
+          <div class="desktop-itinerary-actions">
+            <button type="button" class="desktop-primary" @click="openAddPlaceModal">＋ 新增行程</button>
+            <button type="button" class="desktop-ghost" @click="openRouteModal">🧭 路線查詢</button>
           </div>
 
           <div class="desktop-list-block desktop-block-plan" ref="itineraryListEl">
@@ -293,6 +223,121 @@
               <span v-if="probePlace.address">{{ probePlace.address }}</span>
             </div>
           </div>
+        </div>
+
+        <!-- 這顆彈窗刻意留在 .desktop-itinerary 底下（不像其他彈窗放在檔尾）：
+             .desktop-add-row-fields 的 display:contents、.desktop-itinerary-add-row
+             的 4 欄 grid、輸入框／select／按鈕的 --desktop-itin-control-h，全部
+             靠 desktop.css「行程分頁 · 重繪」區段的 .desktop-app .desktop-itinerary
+             這個祖先選擇器與同一區塊宣告的 CSS 變數才生效；搬到別的分頁層級會
+             整排跑版。代價是切到分帳／設定分頁時彈窗會跟著 v-show 一起隱藏——
+             使用者不會在新增行程彈窗開著的狀態下去點側欄分頁，可接受。
+             這顆彈窗不接 data-desktop-modal-mask（下方腳本用它認彈窗、做背景
+             inert 與自動 focus），維持在 six desktop dialogs 的既有數量之外——
+             新增行程只是把常駐卡片搬進彈窗，不需要跟編輯類彈窗一樣的完整鍵盤
+             焦點陷阱。但沒有那套系統就不會自動把 focus 移進來：開窗當下
+             focus 還停在「＋ 新增行程」觸發鈕（跟這顆彈窗是手足關係，不在它
+             的子樹內），@keydown.esc 是原生監聽器、只有 focus 落在子樹內才會
+             冒泡經過，不然 Esc 按了沒反應。所以 app.js 的 openAddPlaceModal()
+             自己在 nextTick 之後把 focus 打進搜尋框（ref="desktopAddPlaceInputEl"），
+             不靠那套系統也能讓點外面、按 Esc、按「關閉」三種方式都能收合。 -->
+        <div v-if="showAddPlaceModal" class="desktop-modal-mask" @click.self="closeAddPlaceModal" @keydown.esc="closeAddPlaceModal">
+  <article class="card desktop-modal desktop-add-place relative" role="dialog" aria-modal="true">
+    <h3>新增行程</h3>
+    <div class="desktop-add-row desktop-itinerary-add-row">
+      <input ref="desktopAddPlaceInputEl" v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '，或貼上地圖網址'" />
+      <div class="desktop-add-row-fields">
+        <input v-model="newTime" type="time" />
+        <select v-model="newPlaceType">
+          <option v-for="type in itineraryTypes" :key="'type-' + type" :value="type">{{ type }}</option>
+        </select>
+        <button type="button" class="desktop-primary" @click="addPlace" :disabled="isAddingPlace">新增</button>
+      </div>
+    </div>
+    <div v-if="isResolvingMapUrl" class="desktop-hint">正在解析地圖網址…</div>
+    <div v-if="mapUrlResolveError" class="desktop-hint desktop-hint-warn">{{ mapUrlResolveError }}</div>
+    <div v-if="translatedSearchHint" class="desktop-hint">🌐 {{ translatedSearchHint }}</div>
+    <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isCoordinateMode)" class="suggestions-list">
+      <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+      <div v-if="isCoordinateMode" class="suggestion-item bg-green-50" @click="useCoordinateInput">
+        <span class="text-xl">📍</span>
+        <div>
+          <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
+          <div class="text-xs text-green-600">點擊使用</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        v-for="item in searchResults"
+        :key="'d-sug-' + item.place_id"
+        class="suggestion-item hover:bg-blue-50"
+        @click="selectPlace(item)"
+      >
+        <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">📍</span>
+        <div class="overflow-hidden">
+          <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+          <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+        </div>
+      </button>
+    </div>
+    <div class="desktop-modal-actions">
+      <button type="button" class="desktop-ghost" @click="closeAddPlaceModal">關閉</button>
+    </div>
+  </article>
+        </div>
+
+        <!-- 這顆彈窗跟新增行程彈窗一樣，刻意留在 .desktop-itinerary 底下：
+             .route-panel-body 底下的 --desktop-itin-control-h 與 .route-* 系列
+             樣式全靠 desktop.css「行程分頁 · 重繪」區段的 .desktop-app
+             .desktop-itinerary 這個祖先選擇器才生效，搬到別的分頁層級會整排
+             跑版。代價跟新增行程彈窗一樣：切分頁時彈窗會跟著隱藏，可接受。
+
+             ★ tabindex="-1" + 開窗時把 focus 移進來，兩者缺一 Esc 就關不掉：
+             全域 Escape 攔截只認 [data-desktop-modal-mask]（這個彈窗刻意不掛，
+             因為背景 inert 的選擇器只認 .desktop-main 的直接子元素，掛上去會把
+             整個 .desktop-itinerary 連同彈窗自己設成 inert）；而 @keydown.esc 是
+             掛在這個節點上的原生監聽器，focus 不在子樹內就不會冒泡經過。
+             Task 3 就是漏了聚焦，導致 Esc 實際上關不掉。app.js 的
+             openRouteModal() 會在 nextTick 之後用 routeModalEl 這個 ref 找
+             子樹裡第一個 select（起點欄位）聚焦。 -->
+        <div v-if="showRouteModal" ref="routeModalEl" class="desktop-modal-mask" tabindex="-1" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
+          <article class="card desktop-modal" role="dialog" aria-modal="true">
+            <h3>🧭 路線查詢</h3>
+
+            <div class="route-panel-body">
+              <label class="route-field">
+                <span class="route-field-label">起點</span>
+                <select v-model="routeStartKey" class="route-select">
+                  <option value="">請選擇</option>
+                  <option v-for="opt in routePointOptions" :key="'d-rs-' + opt.key" :value="opt.key">{{ opt.label }}</option>
+                </select>
+              </label>
+              <label class="route-field">
+                <span class="route-field-label">終點</span>
+                <select v-model="routeGoalKey" class="route-select">
+                  <option value="">請選擇</option>
+                  <option v-for="opt in routePointOptions" :key="'d-rg-' + opt.key" :value="opt.key">{{ opt.label }}</option>
+                </select>
+              </label>
+              <div class="route-mode-switch">
+                <button
+                  v-for="m in routeModes"
+                  :key="'d-rm-' + m.key"
+                  type="button"
+                  class="route-mode-btn"
+                  :class="routeMode === m.key ? 'route-mode-btn-active' : ''"
+                  @click="routeMode = m.key"
+                >{{ m.label }}</button>
+              </div>
+              <button type="button" class="route-open-btn" :disabled="!canOpenRoute" @click="openRoute">
+                開啟 {{ routeMapLabel }} 路線
+              </button>
+            </div>
+
+            <div class="desktop-modal-actions">
+              <button type="button" class="desktop-ghost" @click="closeRouteModal">關閉</button>
+            </div>
+          </article>
         </div>
       </section>
       <section v-show="currentTab === 'money'" class="desktop-pane desktop-money">
@@ -966,24 +1011,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260815.3"></script>
+<script src="../config.js?v=20260816.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260815.3" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260815.3"></script>
-<script src="../js/utils.js?v=20260815.3"></script>
-<script src="../js/api.js?v=20260815.3"></script>
-<script src="../js/cache.js?v=20260815.3"></script>
-<script src="../js/maps.js?v=20260815.3"></script>
-<script src="../js/places.js?v=20260815.3"></script>
-<script src="../js/itinerary.js?v=20260815.3"></script>
-<script src="../js/hotels.js?v=20260815.3"></script>
-<script src="../js/expenses.js?v=20260815.3"></script>
-<script src="../js/weather.js?v=20260815.3"></script>
-<script src="../js/export.js?v=20260815.3"></script>
-<script src="../js/probe-search.js?v=20260815.3"></script>
-<script src="../app.js?v=20260815.3"></script>
-<script src="../search-zh-label.js?v=20260815.3"></script>
-<script src="../prep-checklist.js?v=20260815.3"></script>
+<script src="../cache-refresh.js?v=20260816.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260816.1"></script>
+<script src="../js/utils.js?v=20260816.1"></script>
+<script src="../js/api.js?v=20260816.1"></script>
+<script src="../js/cache.js?v=20260816.1"></script>
+<script src="../js/maps.js?v=20260816.1"></script>
+<script src="../js/places.js?v=20260816.1"></script>
+<script src="../js/itinerary.js?v=20260816.1"></script>
+<script src="../js/hotels.js?v=20260816.1"></script>
+<script src="../js/expenses.js?v=20260816.1"></script>
+<script src="../js/weather.js?v=20260816.1"></script>
+<script src="../js/export.js?v=20260816.1"></script>
+<script src="../js/probe-search.js?v=20260816.1"></script>
+<script src="../app.js?v=20260816.1"></script>
+<script src="../search-zh-label.js?v=20260816.1"></script>
+<script src="../prep-checklist.js?v=20260816.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

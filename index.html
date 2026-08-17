@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<!-- version: 20260815.3 -->
+<!-- version: 20260816.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260815.3" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260815.3" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260815.3" />
-  <link rel="manifest" href="./site.webmanifest?v=20260815.3" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260816.1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260816.1" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260816.1" />
+  <link rel="manifest" href="./site.webmanifest?v=20260816.1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20260815.3" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./js/device-router.js?v=20260816.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260815.3" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260815.3" />
+  <link rel="stylesheet" href="./style.css?v=20260816.1" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260816.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20260815.3" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20260816.1" />
 </head>
 <body>
 
@@ -133,10 +133,15 @@
       :class="currentTab === 'itinerary' && dayViewMode === 'map' ? 'content-fixed' : 'content-scroll'"
     >
       <!-- Itinerary -->
+      <!-- 左右滑動換天。只綁 touchstart / touchend，處理函式自己會檢查
+           dayViewMode === 'list'，地圖模式不接手勢（橫向拖曳屬於地圖平移）。
+           刻意不綁 touchmove、也絕不 preventDefault —— 垂直捲動要維持原樣。 -->
       <div
         v-show="currentTab === 'itinerary'"
         class="p-4 space-y-4 pb-24 tab-panel"
         :class="dayViewMode === 'map' ? 'itinerary-map-mode' : ''"
+        @touchstart="onItineraryTouchStart"
+        @touchend="onItineraryTouchEnd"
       >
         <div class="itinerary-day-tabs flex overflow-x-auto pb-2 gap-2 no-scrollbar items-center flex-shrink-0 relative z-50">
           <div v-for="d in totalDays" :key="d" class="day-btn-wrap flex-shrink-0">
@@ -172,6 +177,14 @@
             class="map-mode-btn flex-1 h-[42px]"
             :class="dayViewMode === 'map' ? 'map-mode-btn-active' : ''"
           >地圖</button>
+        </div>
+
+        <!-- 新增行程與路線查詢改成按鈕，內容在彈窗裡。
+             這樣清單模式的可視高度多出約 200px。
+             路線那顆在 Task 4 加進同一列。 -->
+        <div v-show="dayViewMode === 'list'" class="itinerary-action-row flex-shrink-0">
+          <button type="button" class="itinerary-action-btn" @click="openAddPlaceModal">＋ 新增行程</button>
+          <button type="button" class="itinerary-action-btn" @click="openRouteModal">🧭 路線查詢</button>
         </div>
 
         <div v-show="dayViewMode === 'map'" class="itinerary-map-panel w-full flex flex-col flex-1 min-h-0">
@@ -317,106 +330,6 @@
                 <div v-if="probePlace.address">{{ probePlace.address }}</div>
               </div>
             </section>
-          </div>
-        </div>
-
-        <div v-show="dayViewMode === 'list'" class="card itinerary-search-card relative space-y-2 flex-shrink-0">
-          <div class="flex gap-2 relative">
-            <input
-              v-model="newPlace"
-              @input="searchPlacesInput"
-              type="text"
-              :placeholder="'搜尋 ' + currentTrip.city + '...'"
-              class="flex-1 font-bold"
-            >
-            <button
-              @click="addPlace"
-              class="bg-blue-600 text-white w-[54px] h-[54px] rounded-xl text-3xl shadow active:scale-95 transition flex items-center justify-center pb-1 flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-              :disabled="isAddingPlace || isResolvingMapUrl"
-            >+</button>
-
-            <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isResolvingMapUrl || mapUrlResolveError || isCoordinateMode)" class="suggestions-list">
-              <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
-              <div v-if="isResolvingMapUrl" class="p-3 text-center text-gray-500 text-sm">正在解析 {{ mapUrlProvider === 'naver' ? 'Naver Map' : 'Google Maps' }} 網址...</div>
-              <div v-if="!isResolvingMapUrl && mapUrlResolveError" class="p-3 text-sm text-rose-600">網址解析失敗：{{ mapUrlResolveError }}</div>
-              <div v-if="translatedSearchHint" class="px-3 py-2 text-xs text-blue-600 bg-blue-50 border-b border-blue-100">🌐 {{ translatedSearchHint }}</div>
-
-              <div
-                v-if="isCoordinateMode"
-                @click="useCoordinateInput"
-                class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200"
-              >
-                <span class="text-xl">📍</span>
-                <div>
-                  <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
-                  <div class="text-xs text-green-600">點擊使用</div>
-                </div>
-              </div>
-
-              <div
-                v-for="item in searchResults"
-                :key="item.place_id"
-                @click="selectPlace(item)"
-                class="suggestion-item hover:bg-blue-50"
-              >
-                <!-- Naver 在地結果用藍色圖釘，Google 維持紅色。 -->
-                <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">📍</span>
-                <div class="overflow-hidden">
-                  <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
-                  <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
-                  <div v-if="item.from_map_url" class="text-[11px] text-blue-600 mt-0.5">{{ item.source === 'naver' ? 'Naver Map' : 'Google Maps' }}</div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <div class="itinerary-meta-row">
-            <input v-model="newTime" type="time" class="itinerary-time-input text-center font-mono">
-            <select v-model="newPlaceType" class="itinerary-type-select">
-              <option v-for="type in itineraryTypes" :key="'new-place-type-' + type" :value="type">{{ type }}</option>
-            </select>
-          </div>
-
-        </div>
-
-        <div v-show="dayViewMode === 'list'" class="card itinerary-route-card flex-shrink-0">
-          <button type="button" class="route-panel-toggle" @click="toggleRoutePanel">
-            <span>🧭 路線查詢</span>
-            <span class="route-panel-caret">{{ routePanelOpen ? '▲' : '▼' }}</span>
-          </button>
-
-          <div v-if="routePanelOpen" class="route-panel-body">
-            <label class="route-field">
-              <span class="route-field-label">起點</span>
-              <select v-model="routeStartKey" class="route-select">
-                <option value="">請選擇</option>
-                <option v-for="opt in routePointOptions" :key="'route-start-' + opt.key" :value="opt.key">{{ opt.label }}</option>
-              </select>
-            </label>
-
-            <label class="route-field">
-              <span class="route-field-label">終點</span>
-              <select v-model="routeGoalKey" class="route-select">
-                <option value="">請選擇</option>
-                <option v-for="opt in routePointOptions" :key="'route-goal-' + opt.key" :value="opt.key">{{ opt.label }}</option>
-              </select>
-            </label>
-
-            <div class="route-mode-switch">
-              <button
-                v-for="m in routeModes"
-                :key="'route-mode-' + m.key"
-                type="button"
-                class="route-mode-btn"
-                :class="routeMode === m.key ? 'route-mode-btn-active' : ''"
-                @click="routeMode = m.key"
-              >{{ m.label }}</button>
-            </div>
-
-            <button type="button" class="route-open-btn" :disabled="!canOpenRoute" @click="openRoute">
-              開啟 {{ routeMapLabel }} 路線
-            </button>
           </div>
         </div>
 
@@ -1029,6 +942,115 @@
     </nav>
   </div>
 
+  <!-- 新增行程。搜尋下拉住在彈窗裡是既有規劃：cloud-theme.css 已經有
+       .modal-card:has(.suggestions-list) 的 position/z-index/overflow 規則。 -->
+  <div v-if="showAddPlaceModal" class="modal-mask" @click.self="closeAddPlaceModal" @keydown.esc="closeAddPlaceModal">
+    <div class="modal-card itinerary-search-card relative space-y-2" role="dialog" aria-modal="true" tabindex="-1">
+      <div class="font-bold text-gray-800 text-lg">新增行程</div>
+
+      <div class="flex gap-2 relative">
+        <input
+          v-model="newPlace"
+          @input="searchPlacesInput"
+          type="text"
+          :placeholder="'搜尋 ' + currentTrip.city + '...'"
+          class="flex-1 font-bold"
+        >
+        <button
+          @click="addPlace"
+          class="bg-blue-600 text-white w-[54px] h-[54px] rounded-xl text-3xl shadow active:scale-95 transition flex items-center justify-center pb-1 flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+          :disabled="isAddingPlace || isResolvingMapUrl"
+        >+</button>
+
+        <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isResolvingMapUrl || mapUrlResolveError || isCoordinateMode)" class="suggestions-list">
+          <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
+          <div v-if="isResolvingMapUrl" class="p-3 text-center text-gray-500 text-sm">正在解析 {{ mapUrlProvider === 'naver' ? 'Naver Map' : 'Google Maps' }} 網址...</div>
+          <div v-if="!isResolvingMapUrl && mapUrlResolveError" class="p-3 text-sm text-rose-600">網址解析失敗：{{ mapUrlResolveError }}</div>
+          <div v-if="translatedSearchHint" class="px-3 py-2 text-xs text-blue-600 bg-blue-50 border-b border-blue-100">🌐 {{ translatedSearchHint }}</div>
+
+          <div
+            v-if="isCoordinateMode"
+            @click="useCoordinateInput"
+            class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200"
+          >
+            <span class="text-xl">📍</span>
+            <div>
+              <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
+              <div class="text-xs text-green-600">點擊使用</div>
+            </div>
+          </div>
+
+          <div
+            v-for="item in searchResults"
+            :key="item.place_id"
+            @click="selectPlace(item)"
+            class="suggestion-item hover:bg-blue-50"
+          >
+            <!-- Naver 在地結果用藍色圖釘，Google 維持紅色。 -->
+            <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">📍</span>
+            <div class="overflow-hidden">
+              <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
+              <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
+              <div v-if="item.from_map_url" class="text-[11px] text-blue-600 mt-0.5">{{ item.source === 'naver' ? 'Naver Map' : 'Google Maps' }}</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="itinerary-meta-row">
+        <input v-model="newTime" type="time" class="itinerary-time-input text-center font-mono">
+        <select v-model="newPlaceType" class="itinerary-type-select">
+          <option v-for="type in itineraryTypes" :key="'new-place-type-' + type" :value="type">{{ type }}</option>
+        </select>
+      </div>
+
+      <button type="button" class="w-full border text-gray-600 small-btn active:scale-95" @click="closeAddPlaceModal">關閉</button>
+    </div>
+  </div>
+
+  <!-- 路線查詢 modal：內容從常駐卡片搬過來，展開收合狀態改由彈窗開關取代 -->
+  <div v-if="showRouteModal" class="modal-mask" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
+    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+      <div class="font-bold text-gray-800 text-lg">🧭 路線查詢</div>
+
+      <div class="route-panel-body">
+        <label class="route-field">
+          <span class="route-field-label">起點</span>
+          <select v-model="routeStartKey" class="route-select">
+            <option value="">請選擇</option>
+            <option v-for="opt in routePointOptions" :key="'route-start-' + opt.key" :value="opt.key">{{ opt.label }}</option>
+          </select>
+        </label>
+
+        <label class="route-field">
+          <span class="route-field-label">終點</span>
+          <select v-model="routeGoalKey" class="route-select">
+            <option value="">請選擇</option>
+            <option v-for="opt in routePointOptions" :key="'route-goal-' + opt.key" :value="opt.key">{{ opt.label }}</option>
+          </select>
+        </label>
+
+        <div class="route-mode-switch">
+          <button
+            v-for="m in routeModes"
+            :key="'route-mode-' + m.key"
+            type="button"
+            class="route-mode-btn"
+            :class="routeMode === m.key ? 'route-mode-btn-active' : ''"
+            @click="routeMode = m.key"
+          >{{ m.label }}</button>
+        </div>
+
+        <button type="button" class="route-open-btn" :disabled="!canOpenRoute" @click="openRoute">
+          開啟 {{ routeMapLabel }} 路線
+        </button>
+      </div>
+
+      <button type="button" class="w-full border text-gray-600 small-btn active:scale-95" @click="closeRouteModal">關閉</button>
+    </div>
+  </div>
+
   <!-- Day modal -->
   <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal" @keydown.esc="closeDayModal">
     <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
@@ -1306,23 +1328,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260815.3"></script>
-<script src="./cache-refresh.js?v=20260815.3"></script>
-<script src="./keyword-map.js?v=20260815.3"></script>
-<script src="./js/utils.js?v=20260815.3"></script>
-<script src="./js/api.js?v=20260815.3"></script>
-<script src="./js/cache.js?v=20260815.3"></script>
-<script src="./js/maps.js?v=20260815.3"></script>
-<script src="./js/places.js?v=20260815.3"></script>
-<script src="./js/itinerary.js?v=20260815.3"></script>
-<script src="./js/hotels.js?v=20260815.3"></script>
-<script src="./js/expenses.js?v=20260815.3"></script>
-<script src="./js/weather.js?v=20260815.3"></script>
-<script src="./js/export.js?v=20260815.3"></script>
-<script src="./js/probe-search.js?v=20260815.3"></script>
-<script src="./app.js?v=20260815.3"></script>
-<script src="./search-zh-label.js?v=20260815.3"></script>
-<script src="./prep-checklist.js?v=20260815.3"></script>
+<script src="./config.js?v=20260816.1"></script>
+<script src="./cache-refresh.js?v=20260816.1"></script>
+<script src="./keyword-map.js?v=20260816.1"></script>
+<script src="./js/utils.js?v=20260816.1"></script>
+<script src="./js/api.js?v=20260816.1"></script>
+<script src="./js/cache.js?v=20260816.1"></script>
+<script src="./js/maps.js?v=20260816.1"></script>
+<script src="./js/places.js?v=20260816.1"></script>
+<script src="./js/itinerary.js?v=20260816.1"></script>
+<script src="./js/hotels.js?v=20260816.1"></script>
+<script src="./js/expenses.js?v=20260816.1"></script>
+<script src="./js/weather.js?v=20260816.1"></script>
+<script src="./js/export.js?v=20260816.1"></script>
+<script src="./js/probe-search.js?v=20260816.1"></script>
+<script src="./app.js?v=20260816.1"></script>
+<script src="./search-zh-label.js?v=20260816.1"></script>
+<script src="./prep-checklist.js?v=20260816.1"></script>
 
 </body>
 </html>
