@@ -2034,10 +2034,31 @@ createApp({
 
     const scrollActiveDayTabIntoView = () => {
       nextTick(() => {
-        const el = document.querySelector('.itinerary-day-tabs .day-tab-active');
-        if (!el || typeof el.scrollIntoView !== 'function') return;
-        // block: 'nearest' 是必要的 —— 少了它瀏覽器會連垂直方向一起捲，把畫面拉走。
-        el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+        // ★ 只捲膠囊列自己，絕對不要用 el.scrollIntoView()。
+        //
+        // 依 CSSOM-View 規範，scrollIntoView 會由內往外捲動「每一層」祖先捲動容器，
+        // 而 overflow:hidden 也算捲動容器 —— 它只是不讓「使用者」捲，程式照捲不誤。
+        // #app.mobile-container 正是 overflow:hidden，又被裝飾用的雲朵 pseudo-element
+        // 往右撐出橫向可捲範圍。最後一天的膠囊在膠囊列裡捲到底仍無法置中，
+        // inline:'center' 就把剩下的差額推給祖先 —— 整個 App 連同藍色標頭一起左移，
+        // 而且 overflow:hidden 讓使用者沒有任何辦法捲回來，得重新載入才復原。
+        // （block:'nearest' 只保護了垂直軸，水平軸沒有等價的寫法。）
+        const tabs = document.querySelector('.itinerary-day-tabs');
+        const el = tabs && tabs.querySelector('.day-tab-active');
+        if (!tabs || !el || typeof el.getBoundingClientRect !== 'function') return;
+
+        // 不能用 el.offsetLeft：.day-btn-wrap 是 position: relative，它才是 button 的
+        // offsetParent，offsetLeft 幾乎恆為 0，每一天都會算成「捲到最左」。
+        // 改用 rect 差值換算回容器的內容座標，與 offsetParent 無關。
+        const tabsRect = tabs.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const center = (elRect.left - tabsRect.left - tabs.clientLeft) + tabs.scrollLeft + elRect.width / 2;
+
+        // 夾住上下界是這個修法的核心：捲不到的差額就是捲不到，不再外溢給祖先。
+        const max = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+        const left = Math.min(Math.max(center - tabs.clientWidth / 2, 0), max);
+        if (typeof tabs.scrollTo === 'function') tabs.scrollTo({ left, behavior: 'smooth' });
+        else tabs.scrollLeft = left;
       });
     };
 

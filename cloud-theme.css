@@ -73,8 +73,15 @@ html, body {
   z-index: 0;
 }
 
+/* ★ 右緣不可以是負值。
+   .mobile-container 是 overflow: hidden，而 hidden 仍然是「捲動容器」——
+   只是不讓使用者捲，程式（scrollIntoView、focus 的自動捲動）照捲不誤。
+   LTR 下絕對定位子孫往右溢出會計入 scrollable overflow，於是這朵裝飾雲
+   曾經讓 #app 多出 72px 的橫向可捲範圍，被捲到之後整個 App 連同藍色標頭
+   一起左移，使用者還捲不回來（20260816.1 的「滑到最後一天整頁破版」）。
+   左緣維持 -72px：LTR 下左方溢出不會計入，視覺上也需要它蓋住左邊角。 */
 .mobile-container::before {
-  inset: -72px -72px auto -72px;
+  inset: -72px 0 auto -72px;
   height: 380px;
   background:
     radial-gradient(circle at 20% 30%,rgba(255,255,255,.88) 0 38px,transparent 39px),
@@ -86,10 +93,13 @@ html, body {
   opacity: .86;
 }
 
+/* 同上：right 不可以是負值，否則又是一段橫向可捲範圍。
+   改用 left 定位並靠 translate 往右推，transform 不計入 scrollable overflow。 */
 .mobile-container::after {
   width: 160px;
   height: 52px;
-  right: -46px;
+  right: 0;
+  transform: translateX(46px);
   top: 185px;
   border-radius: 999px;
   background: rgba(255,255,255,.64);
@@ -135,10 +145,14 @@ main.bg-gray-50,
   border-bottom: 1px solid rgba(255,255,255,.24);
 }
 
+/* 同型陷阱：.app-header 也是 overflow: hidden，右緣負值同樣會給它 38px 的
+   橫向可捲範圍。目前沒有程式碼會捲標頭，但裡面有可聚焦的按鈕，瀏覽器的
+   focus 自動捲動隨時可能觸發同一種永久位移。先封死。 */
 .app-header::after {
   content: '';
   position: absolute;
-  right: -38px;
+  right: 0;
+  transform: translateX(38px);
   bottom: 18px;
   width: 180px;
   height: 54px;
@@ -401,10 +415,14 @@ button.bg-gray-700,
   border-bottom-right-radius: 28px;
 }
 
+/* 第三處同型陷阱。這段目前在 prep-checklist.js 的死碼分支裡（embeddedMode
+   永遠為 true，overlay 版渲染不到），但同一個 overflow:hidden + 右緣負值的
+   組合一旦復活就會重演整頁位移，一次修乾淨。 */
 #prep-checklist-root .prep-header::after {
   content: '';
   position: absolute;
-  right: -38px;
+  right: 0;
+  transform: translateX(38px);
   bottom: 18px;
   width: 160px;
   height: 46px;
