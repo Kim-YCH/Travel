@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260817.1 -->
+<!-- version: 20260818.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260817.1" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260818.2" />
 
-  <script src="../js/device-router.js?v=20260817.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="../js/device-router.js?v=20260818.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20260818.2"></script>
+  <script src="../vendor/Sortable.min.js?v=20260818.2"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260817.1" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260817.1" />
-  <link rel="stylesheet" href="./desktop.css?v=20260817.1" />
+  <link rel="stylesheet" href="../style.css?v=20260818.2" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260818.2" />
+  <link rel="stylesheet" href="./desktop.css?v=20260818.2" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260817.1" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260818.2" />
 </head>
 <body class="desktop-body">
 
@@ -90,7 +90,50 @@
           <em v-if="tripWeather.kind === 'history'">實測</em>
         </span>
       </div>
+      <!-- 整趟天氣一覽。與手機版共用同一組 class，樣式在 cloud-theme.css。
+           沒有資料的日子留白但保留格子，看得出「這幾天還沒得查」。 -->
+      <div v-if="tripForecast.some(d => d.weather)" class="trip-forecast-strip">
+        <button
+          v-for="d in tripForecast"
+          :key="d.day"
+          type="button"
+          class="trip-forecast-day"
+          :class="{ 'trip-forecast-active': d.day === currentDay, 'trip-forecast-empty': !d.weather }"
+          @click="onDayClick(d.day)"
+        >
+          <span class="trip-forecast-label">D{{ d.day }}</span>
+          <span class="trip-forecast-icon">{{ d.weather ? d.weather.icon : '·' }}</span>
+          <span class="trip-forecast-temp">{{ d.weather ? d.weather.max + '°' : '' }}</span>
+          <span class="trip-forecast-min">{{ d.weather ? d.weather.min + '°' : '' }}</span>
+        </button>
+      </div>
     </header>
+
+    <!-- 列印／PDF 專用。平常 display:none，只有 @media print 才顯示。
+         畫面上的行程列表只渲染「當天」，純 CSS 印不出其他天，
+         所以這裡另外跑一次 v-for 把整趟攤開。 -->
+    <div class="print-sheet" aria-hidden="true">
+      <h1 class="print-title">{{ currentTrip ? currentTrip.name : '' }}</h1>
+      <p class="print-subtitle">{{ currentTrip ? currentTrip.city : '' }}</p>
+
+      <section v-for="pd in printDays" :key="pd.day" class="print-day">
+        <h2 class="print-day-head">Day {{ pd.day }} · {{ pd.label }}</h2>
+
+        <ul v-if="pd.items.length" class="print-list">
+          <li v-for="it in pd.items" :key="it.id" class="print-item">
+            <span class="print-item-time">{{ it.time || '' }}</span>
+            <span class="print-item-name">{{ it.name }}</span>
+            <span v-if="it.address" class="print-item-addr">{{ it.address }}</span>
+          </li>
+        </ul>
+        <p v-else class="print-empty">（未安排）</p>
+
+        <p v-for="h in pd.hotels" :key="h.id" class="print-hotel">
+          🏨 {{ h.name }}<span v-if="h.address"> · {{ h.address }}</span>
+        </p>
+      </section>
+    </div>
+
 
     <main class="desktop-main">
       <!-- 未選旅程時，行程／分帳／設定三個分頁不渲染內容，只顯示引導文字；
@@ -791,6 +834,8 @@
           <article class="card desktop-settings-actions">
             <h3>資料匯出</h3>
             <button type="button" class="desktop-ghost" @click="exportItinerary">複製行程文字</button>
+            <button v-if="canShareItinerary()" type="button" class="desktop-ghost" @click="shareItinerary">分享行程</button>
+            <button type="button" class="desktop-ghost" @click="printItinerary">列印／存成 PDF</button>
             <button type="button" class="desktop-ghost" @click="downloadBackupHtml">下載 HTML 備份</button>
           </article>
 
@@ -1011,24 +1056,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260817.1"></script>
+<script src="../config.js?v=20260818.2"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260817.1" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260817.1"></script>
-<script src="../js/utils.js?v=20260817.1"></script>
-<script src="../js/api.js?v=20260817.1"></script>
-<script src="../js/cache.js?v=20260817.1"></script>
-<script src="../js/maps.js?v=20260817.1"></script>
-<script src="../js/places.js?v=20260817.1"></script>
-<script src="../js/itinerary.js?v=20260817.1"></script>
-<script src="../js/hotels.js?v=20260817.1"></script>
-<script src="../js/expenses.js?v=20260817.1"></script>
-<script src="../js/weather.js?v=20260817.1"></script>
-<script src="../js/export.js?v=20260817.1"></script>
-<script src="../js/probe-search.js?v=20260817.1"></script>
-<script src="../app.js?v=20260817.1"></script>
-<script src="../search-zh-label.js?v=20260817.1"></script>
-<script src="../prep-checklist.js?v=20260817.1"></script>
+<script src="../cache-refresh.js?v=20260818.2" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260818.2"></script>
+<script src="../js/utils.js?v=20260818.2"></script>
+<script src="../js/api.js?v=20260818.2"></script>
+<script src="../js/cache.js?v=20260818.2"></script>
+<script src="../js/maps.js?v=20260818.2"></script>
+<script src="../js/places.js?v=20260818.2"></script>
+<script src="../js/itinerary.js?v=20260818.2"></script>
+<script src="../js/hotels.js?v=20260818.2"></script>
+<script src="../js/expenses.js?v=20260818.2"></script>
+<script src="../js/weather.js?v=20260818.2"></script>
+<script src="../js/export.js?v=20260818.2"></script>
+<script src="../js/probe-search.js?v=20260818.2"></script>
+<script src="../app.js?v=20260818.2"></script>
+<script src="../search-zh-label.js?v=20260818.2"></script>
+<script src="../prep-checklist.js?v=20260818.2"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

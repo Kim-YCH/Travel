@@ -1,13 +1,17 @@
 /* Travel Service Worker
  *
  * Keep this VERSION in sync with config.js APP_VERSION. tests/run.js verifies
- * the local assets and CDN scripts listed in index.html are covered here.
+ * every local asset listed in index.html is covered here.
+ *
+ * Vue 與 Sortable 自 20260818.1 起自家託管（vendor/），不再依賴 CDN。
+ * 舊版把它們放在含版本號的 CDN_CACHE，每次改版都得重新向 jsdelivr 抓一次；
+ * 抓失敗時 install 只 console.warn 不中止，接著 activate 又刪掉舊快取 ——
+ * 人在國外按「刷新版本」剛好連不到 CDN，離線就再也開不起來。
  */
 'use strict';
 
-const VERSION = '20260817.1';
+const VERSION = '20260818.2';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
-const CDN_CACHE = `travel-cdn-${VERSION}`;
 
 const SHELL_ASSETS = [
   './',
@@ -17,6 +21,8 @@ const SHELL_ASSETS = [
   `./tailwind-static.css?v=${VERSION}`,
   `./style.css?v=${VERSION}`,
   `./cloud-theme.css?v=${VERSION}`,
+  `./vendor/vue.global.prod.js?v=${VERSION}`,
+  `./vendor/Sortable.min.js?v=${VERSION}`,
   `./config.js?v=${VERSION}`,
   `./cache-refresh.js?v=${VERSION}`,
   `./keyword-map.js?v=${VERSION}`,
@@ -41,11 +47,6 @@ const SHELL_ASSETS = [
   `./apple-touch-icon.png?v=${VERSION}`,
   './icon-192.png',
   './icon-512.png'
-];
-
-const CDN_ASSETS = [
-  'https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js',
-  'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'
 ];
 
 const NETWORK_ONLY_HOSTS = [
@@ -82,26 +83,6 @@ self.addEventListener('install', (event) => {
     const shell = await caches.open(SHELL_CACHE);
     await shell.addAll(SHELL_ASSETS);
 
-    const cdn = await caches.open(CDN_CACHE);
-    await Promise.all(CDN_ASSETS.map(async (url) => {
-      try {
-        const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'reload' });
-        if (res.ok) {
-          await cdn.put(url, res);
-          return;
-        }
-      } catch (err) {
-        // Some CDN assets do not allow CORS. Fall back to an opaque response.
-      }
-
-      try {
-        const res = await fetch(url, { mode: 'no-cors', cache: 'reload' });
-        await cdn.put(url, res);
-      } catch (err) {
-        console.warn('[sw] CDN precache failed:', url, err);
-      }
-    }));
-
     // 刻意不自動 skipWaiting：新版安裝好後安靜等待，避免在使用者操作到一半時
     // 接手並觸發整頁重載。使用者按「刷新版本」時會送 TRAVEL_SKIP_WAITING 才套用。
   })());
@@ -112,7 +93,8 @@ self.addEventListener('activate', (event) => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter((key) => key.startsWith('travel-') && key !== SHELL_CACHE && key !== CDN_CACHE)
+        // 舊版的 travel-cdn-* 快取也會在這裡一併清掉。
+        .filter((key) => key.startsWith('travel-') && key !== SHELL_CACHE)
         .map((key) => caches.delete(key))
     );
     await self.clients.claim();
@@ -163,22 +145,4 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (CDN_ASSETS.some((asset) => req.url.startsWith(asset))) {
-    event.respondWith((async () => {
-      const cached = await caches.match(req);
-      const usable = cached && !(cached.type === 'opaque' && req.mode === 'cors');
-      if (usable) return cached;
-
-      try {
-        const res = await fetch(req);
-        if (res && (res.ok || res.type === 'opaque')) {
-          const cache = await caches.open(CDN_CACHE);
-          cache.put(req, res.clone());
-        }
-        return res;
-      } catch (err) {
-        return cached || Response.error();
-      }
-    })());
-  }
 });

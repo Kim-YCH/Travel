@@ -92,8 +92,10 @@
    */
   const create = ({
     tripWeather,
+    tripForecast,
     currentTrip,
     currentDay,
+    totalDays,
     dayDateYMD,
     daysFromToday,
     getDayOrderedItems,
@@ -238,6 +240,124 @@
       }
     };
 
+
+    // ── 整趟天氣一覽 ────────────────────────────────────────────────
+    // 行前規劃想看的是整趟走勢（哪天會下雨、要不要把室外行程換一天），
+    // 而不是一次只看一格。
+    //
+    // ★ 座標一律用 trips.city，不用 resolveWeatherLocation 的逐日解析。
+    //   逐日解析會拿「當天第一個有座標的行程點」，多城市行程每天座標不同，
+    //   要打好幾次 API；而天氣是城市尺度的現象，同城內差幾公里沒有意義。
+    //   以城市為準 → 整趟最多兩次呼叫（過去一段 archive、未來一段 forecast）。
+    const resolveCityLocation = async () => {
+      const city = String(currentTrip.value?.city || '').trim();
+      if (!city) return null;
+
+      const key = city.toLowerCase();
+      if (locationCache.has(key)) return locationCache.get(key);
+
+      if (!window.google || !window.google.maps) await loadGoogleMaps();
+      if (!window.google || !window.google.maps?.Geocoder) return null;
+
+      const geocoder = new window.google.maps.Geocoder();
+      const location = await new Promise((resolve) => {
+        geocoder.geocode({ address: city }, (results, status) => {
+          if (status === 'OK' && results?.[0]?.geometry?.location) {
+            resolve({
+              lat: results[0].geometry.location.lat(),
+              lng: results[0].geometry.location.lng(),
+              label: city
+            });
+          } else {
+            resolve(null);
+          }
+        });
+      });
+
+      if (location) locationCache.set(key, location);
+      return location;
+    };
+
+    // 一次抓一整段連續日期，回傳 { 'YYYY-MM-DD': weather } 對照表。
+    const fetchRange = async (location, startYMD, endYMD, kind) => {
+      const isPast = kind === 'history';
+      const params = new URLSearchParams({
+        latitude: String(location.lat),
+        longitude: String(location.lng),
+        daily: isPast ? ARCHIVE_DAILY_FIELDS : FORECAST_DAILY_FIELDS,
+        timezone: 'auto',
+        wind_speed_unit: 'ms'
+      });
+
+      if (isPast) {
+        params.set('start_date', startYMD);
+        params.set('end_date', endYMD);
+      } else {
+        // forecast 沒有 start_date，只能指定「從今天起算幾天」
+        const span = daysFromToday(endYMD);
+        if (span == null) return {};
+        params.set('forecast_days', String(Math.min(MAX_FORECAST_DAYS, Math.max(1, span + 1))));
+      }
+
+      const res = await fetch(`${isPast ? ARCHIVE_URL : FORECAST_URL}?${params.toString()}`);
+      if (!res.ok) throw new Error(`weather api ${res.status}`);
+      const data = await res.json();
+      const times = data?.daily?.time || [];
+
+      const out = {};
+      times.forEach((ymd, idx) => {
+        out[ymd] = buildWeatherFromDaily(data.daily, idx, {
+          label: location.label, dayText: '', targetDate: ymd, kind
+        });
+      });
+      return out;
+    };
+
+    const loadTripForecast = async () => {
+      const trip = currentTrip.value;
+      const days = Math.max(1, parseInt(totalDays.value, 10) || 1);
+      if (!trip) { tripForecast.value = []; return; }
+
+      // 先把骨架排出來：沒有資料的日子留白，不要整條不顯示。
+      const skeleton = [];
+      for (let d = 1; d <= days; d += 1) {
+        const ymd = dayDateYMD(d);
+        skeleton.push({ day: d, date: ymd, weather: null });
+      }
+      tripForecast.value = skeleton;
+
+      if (!trip.start_date) return;          // 沒設日期就沒有「哪一天」可言
+      const location = await resolveCityLocation();
+      if (!location) return;                 // 城市查不到座標，留白
+
+      // 依「相對今天」切成過去段與未來段。太遠的未來（超過預報極限）直接跳過。
+      const past = skeleton.filter((s) => { const n = daysFromToday(s.date); return n != null && n < 0; });
+      const future = skeleton.filter((s) => {
+        const n = daysFromToday(s.date);
+        return n != null && n >= 0 && n <= FORECAST_HORIZON_DAYS;
+      });
+
+      const cacheKey = `trip_${trip.id}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}_${trip.start_date}_${days}`;
+      if (forecastCache.has(cacheKey)) { tripForecast.value = forecastCache.get(cacheKey); return; }
+
+      const byDate = {};
+      const jobs = [];
+      if (past.length) jobs.push(fetchRange(location, past[0].date, past[past.length - 1].date, 'history'));
+      if (future.length) jobs.push(fetchRange(location, future[0].date, future[future.length - 1].date, 'forecast'));
+
+      try {
+        // 一段失敗不該讓另一段跟著不見
+        const settled = await Promise.allSettled(jobs);
+        settled.forEach((r) => { if (r.status === 'fulfilled') Object.assign(byDate, r.value); });
+      } catch (err) {
+        console.warn('loadTripForecast failed:', err);
+      }
+
+      const filled = skeleton.map((s) => ({ ...s, weather: byDate[s.date] || null }));
+      if (Object.values(byDate).length) forecastCache.set(cacheKey, filled);
+      tripForecast.value = filled;
+    };
+
     const scheduleTripWeatherLoad = (delay = 250) => {
       clearTimeout(loadTimer);
       loadTimer = setTimeout(() => {
@@ -245,7 +365,7 @@
       }, delay);
     };
 
-    return Object.freeze({ resolveWeatherLocation, loadTripWeather, scheduleTripWeatherLoad });
+    return Object.freeze({ resolveWeatherLocation, loadTripWeather, loadTripForecast, scheduleTripWeatherLoad });
   };
 
   window.TravelWeather = Object.freeze({

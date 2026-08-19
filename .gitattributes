@@ -1,0 +1,6 @@
+# 第三方原始檔：不做任何行尾轉換。
+#
+# core.autocrlf=true 會在 checkout 時把 LF 換成 CRLF，實測會讓這兩個檔各多 1 byte，
+# 與上游 CDN 的位元組不再相同 —— 發佈 worktree 也會被轉，等於線上放的不是驗證過的檔案。
+# 標成 -text 之後 checkout 拿到的就是入庫時的位元組。
+vendor/** -text

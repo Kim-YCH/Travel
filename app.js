@@ -127,6 +127,8 @@ createApp({
     const probeIsSearching = ref(false);
     const probePlace = ref(null);
     const tripWeather = ref({ status: 'idle' });
+    // 整趟天氣一覽：每天一格，沒有資料的日子 weather 為 null（留白）。
+    const tripForecast = ref([]);
     let mapInstance = null;
     let mapElementRef = null;
     let markers = [];
@@ -1124,10 +1126,12 @@ createApp({
       if (url) window.location.href = url;
     };
 
-    const { resolveWeatherLocation, loadTripWeather, scheduleTripWeatherLoad } = TravelWeather.create({
+    const { resolveWeatherLocation, loadTripWeather, loadTripForecast, scheduleTripWeatherLoad } = TravelWeather.create({
       tripWeather,
+      tripForecast,
       currentTrip,
       currentDay,
+      totalDays,
       dayDateYMD,
       daysFromToday,
       // 這幾個宣告在本行之後，包一層才不會踩到 TDZ。
@@ -2005,7 +2009,11 @@ createApp({
         }
 
         saveTripCache(tripId);
-        if (!options.skipWeather) scheduleTripWeatherLoad(500);
+        if (!options.skipWeather) {
+          scheduleTripWeatherLoad(500);
+          // 整趟一覽只在旅程載入時抓一次；切天不重抓（模組內另有快取）
+          loadTripForecast().catch((err) => console.warn('loadTripForecast failed:', err));
+        }
         lastMoneyRefreshAt = Date.now();
         return true;
       } finally {
@@ -4086,6 +4094,33 @@ createApp({
       getMapExportLinks
     });
 
+    // ── 列印／PDF ─────────────────────────────────────────────────
+    // 入境卡要填住宿地址、飯店櫃檯要看訂房、長輩要一張紙 —— 以前只能截圖。
+    //
+    // ★ 為什麼要另外做一份 printDays，不能只靠 CSS：
+    //   畫面上的行程列表只渲染「當天」（filteredItinerary 是 getDayOrderedItems(currentDay)），
+    //   純 CSS 再怎麼調也印不出其他天。所以列印用的是獨立一塊、v-for 跑完所有天數的
+    //   DOM，平常 display:none，只有 @media print 才顯示。
+    const printDays = computed(() => {
+      const total = Math.max(1, parseInt(totalDays.value, 10) || 1);
+      const out = [];
+      for (let d = 1; d <= total; d += 1) {
+        out.push({
+          day: d,
+          label: dayLabel(d),
+          items: getDayOrderedItems(d, false),
+          hotels: getHotelsForDay(d)
+        });
+      }
+      return out;
+    });
+
+    const printItinerary = () => {
+      // 直接叫瀏覽器的列印，使用者在對話框裡選「另存為 PDF」就有 PDF。
+      // 不自己開新視窗 —— 會被彈窗阻擋，而且新視窗拿不到已載入的樣式。
+      window.print();
+    };
+
     const buildItineraryText = () => TravelExport.buildItineraryText(exportContext());
 
 
@@ -4105,11 +4140,64 @@ createApp({
       setTimeout(() => URL.revokeObjectURL(a.href), 500);
     };
 
+    // navigator.clipboard 只在安全內容（https 或 localhost）存在。
+    // 用 http://<區網 IP>:8000 測試時它是 undefined，直接呼叫會丟 TypeError。
+    // 線上是 https 沒問題，但測試環境會踩到，所以退回舊的 execCommand 作法。
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (err) {
+          console.warn('clipboard.writeText failed:', err);
+        }
+      }
+
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const done = document.execCommand && document.execCommand('copy');
+        ta.remove();
+        return Boolean(done);
+      } catch (err) {
+        console.warn('execCommand copy failed:', err);
+        return false;
+      }
+    };
+
+    // 手機上「下載一個 HTML 檔」很尷尬 —— 存到哪、怎麼傳給旅伴都不直覺。
+    // navigator.share 會叫出系統分享選單，可以直接丟進 LINE。
+    // 桌面瀏覽器多半沒有這個 API，所以一定要保留剪貼簿路徑當退路。
+    const canShareItinerary = () => typeof navigator !== 'undefined'
+      && typeof navigator.share === 'function';
+
+    const shareItinerary = async () => {
+      const text = buildItineraryText();
+      if (!text) return;
+
+      if (canShareItinerary()) {
+        try {
+          await navigator.share({ title: currentTrip.value?.name || '旅遊行程', text });
+          return;
+        } catch (err) {
+          // 使用者自己按取消會丟 AbortError，那不是錯誤，不要跳提示騷擾他
+          if (err && err.name === 'AbortError') return;
+          console.warn('shareItinerary failed:', err);
+        }
+      }
+
+      alert(await copyTextToClipboard(text) ? '已複製到剪貼簿' : '複製失敗，請手動選取');
+    };
+
     const exportItinerary = () => {
       const text = buildItineraryText();
       if (!text) return;
-      navigator.clipboard.writeText(text);
-      alert('已複製到剪貼簿');
+      copyTextToClipboard(text).then((done) => alert(done ? '已複製到剪貼簿' : '複製失敗，請手動選取'));
     };
 
     const canAutoRefreshMoney = () => (
@@ -4403,7 +4491,8 @@ createApp({
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances,
       filteredExpenses,
 
-      exportItinerary, downloadBackupHtml, isKoreaTrip,
+      exportItinerary, shareItinerary, canShareItinerary, downloadBackupHtml, isKoreaTrip,
+      tripForecast, printDays, printItinerary,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace,

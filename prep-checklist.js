@@ -1,10 +1,10 @@
-// version: 20260817.1
+// version: 20260818.2
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260817.1';
+  const VERSION = '20260818.2';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
@@ -705,7 +705,8 @@
       .prep-blank { min-height: 220px; }
 
       .prep-offline-note { color:#b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:8px 10px; font-size:12px; font-weight:800; margin-bottom:10px; }
-      .prep-disabled button:not(.prep-close), .prep-disabled input[type="checkbox"] { opacity:.55; }
+      /* 離線時只淡化「真的沒作用」的東西。勾選框離線可用，所以不列入。 */
+      .prep-disabled button:not(.prep-close) { opacity:.55; }
       /* ↓ 桌面專屬節點。手機只吃這份注入的 style（index.html 不載入 desktop.css，
          grep 零命中），所以這三條 (0,1,0) 就是手機的最終樣式 —— 節點在 DOM 裡
          但完全不生成 box，版面與行為零改變。
@@ -729,7 +730,12 @@
     return `
       <div class="prep-item-wrap" data-item-id="${id}">
         <div class="prep-item ${item.checked ? 'is-checked' : ''}" data-item-id="${id}">
-          <input type="checkbox" ${item.checked ? 'checked' : ''} ${!isBrowserOnline() ? 'disabled' : ''} />
+          <!-- ★ 離線時不鎖勾選。勾選是這頁的核心動作，而機場／飯店／行李旁
+               正是最容易沒網路的地方。整套離線佇列（enqueuePrepPendingMutation
+               → localStorage → online 事件 flushPrepPendingQueue）在
+               20260723.1 就備齊了，updateItemChecked 也是樂觀更新 + 失敗回滾，
+               唯一擋住它的就是這個 disabled。勾選是冪等的，重送不會產生重複資料。 -->
+          <input type="checkbox" ${item.checked ? 'checked' : ''} />
           <span class="prep-item-text">${escapeHtml(item.text)}</span>
           <button class="prep-icon-btn prep-image-add" title="加圖片" type="button">📷</button>
           <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
