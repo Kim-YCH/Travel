@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const VERSION = '20260818.2';
+const VERSION = '20260819.1';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 
 const SHELL_ASSETS = [

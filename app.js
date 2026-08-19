@@ -4094,33 +4094,6 @@ createApp({
       getMapExportLinks
     });
 
-    // ── 列印／PDF ─────────────────────────────────────────────────
-    // 入境卡要填住宿地址、飯店櫃檯要看訂房、長輩要一張紙 —— 以前只能截圖。
-    //
-    // ★ 為什麼要另外做一份 printDays，不能只靠 CSS：
-    //   畫面上的行程列表只渲染「當天」（filteredItinerary 是 getDayOrderedItems(currentDay)），
-    //   純 CSS 再怎麼調也印不出其他天。所以列印用的是獨立一塊、v-for 跑完所有天數的
-    //   DOM，平常 display:none，只有 @media print 才顯示。
-    const printDays = computed(() => {
-      const total = Math.max(1, parseInt(totalDays.value, 10) || 1);
-      const out = [];
-      for (let d = 1; d <= total; d += 1) {
-        out.push({
-          day: d,
-          label: dayLabel(d),
-          items: getDayOrderedItems(d, false),
-          hotels: getHotelsForDay(d)
-        });
-      }
-      return out;
-    });
-
-    const printItinerary = () => {
-      // 直接叫瀏覽器的列印，使用者在對話框裡選「另存為 PDF」就有 PDF。
-      // 不自己開新視窗 —— 會被彈窗阻擋，而且新視窗拿不到已載入的樣式。
-      window.print();
-    };
-
     const buildItineraryText = () => TravelExport.buildItineraryText(exportContext());
 
 
@@ -4491,8 +4464,8 @@ createApp({
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances,
       filteredExpenses,
 
-      exportItinerary, shareItinerary, canShareItinerary, downloadBackupHtml, isKoreaTrip,
-      tripForecast, printDays, printItinerary,
+      exportItinerary, shareItinerary, downloadBackupHtml, isKoreaTrip,
+      tripForecast,
 
       showEditModal, editPlace,
       openEditModal, closeEditModal, saveEditPlace,
