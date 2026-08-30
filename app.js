@@ -4361,6 +4361,8 @@ createApp({
       } else if (currentView.value === 'app') {
         if (pendingSyncQueue.value.length) flushPendingQueue();
         if (canAutoRefreshMoney()) refreshMoneyData({ silent: true });
+        scheduleTripWeatherLoad(250);
+        loadTripForecast().catch((err) => console.warn('loadTripForecast failed:', err));
       }
       updateMoneyAutoRefresh();
     };

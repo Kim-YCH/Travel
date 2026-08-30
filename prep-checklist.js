@@ -1,10 +1,10 @@
-// version: 20260819.1
+// version: 20260830.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260819.1';
+  const VERSION = '20260830.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
@@ -398,7 +398,6 @@
       updateEmptyUI();
       updateStatsUI();
       updateSyncUI();
-      initAllThumbSortables();
       if (keepCatId) {
         const back = root.querySelector('.prep-cat-item[data-cat-id="' + cssEscape(keepCatId) + '"]');
         if (back) back.focus({ preventScroll: true });
@@ -683,11 +682,11 @@
       .prep-item-wrap:first-of-type { border-top: none; }
       .prep-item-wrap .prep-item { border-top: none; }
       .prep-item-images:empty { display: none; }
-      .prep-item-images { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px 30px; scrollbar-width: none; }
+      .prep-item-images { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px 30px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-inline: contain; }
       .prep-item-images::-webkit-scrollbar { display: none; }
       .prep-thumb { position: relative; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; background: #f1f5f9; box-shadow: 0 1px 3px rgba(15,23,42,.12); }
       .prep-thumb.is-uploading { opacity: .55; }
-      .prep-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+      .prep-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; -webkit-user-drag: none; user-select: none; }
       .prep-thumb-delete { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border: none; border-radius: 999px; background: rgba(15,23,42,.62); color: #fff; font-size: 11px; line-height: 20px; padding: 0; cursor: pointer; }
       .prep-thumb-spinner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #475569; background: rgba(255,255,255,.65); }
       .prep-image-add.is-busy { opacity: .5; pointer-events: none; }
@@ -753,7 +752,7 @@
       const url = escapeHtml(img.url || '');
       const imageId = escapeHtml(img.id || '');
       return `<div class="prep-thumb" data-item-id="${id}" data-image-id="${imageId}">
-          <img src="${url}" alt="準備品項圖片" loading="lazy" />
+          <img src="${url}" alt="準備品項圖片" loading="lazy" draggable="false" />
           <button class="prep-thumb-delete" title="刪除圖片" type="button" aria-label="刪除圖片">✕</button>
         </div>`;
     }).join('');
@@ -1011,8 +1010,7 @@
 
   // 切換分類的唯一實作：只改 class 與 aria-pressed，完全不碰 innerHTML。
   // ★ 不要改成 render()：那會整根重寫，銷毀 select 與方塊列、清掉每張卡片
-  //   `新增項目` 未送出的文字，而且 render() 從頭到尾不呼叫
-  //   initAllThumbSortables()，縮圖拖曳會靜默失效。
+  //   `新增項目` 未送出的文字。
   // ★ 也不要改成 refreshPersonalArea()：範圍小一級，但同樣清掉 .prep-personal-area
   //   內所有 input 的值、焦點與 IME 組字，並把每個 .prep-item-images 換成新節點。
   // isEditingChecklistInput() 只認 input/textarea/select，救不了按 <button> 的情境。
@@ -1712,26 +1710,6 @@
     }
   }
 
-  async function reorderImages(itemId, orderedIds) {
-    const before = (imagesByItem[itemId] || []).slice();
-    const byId = {};
-    before.forEach(img => { byId[String(img.id)] = img; });
-    const next = orderedIds.map(id => byId[String(id)]).filter(Boolean);
-    if (next.length !== before.length) return;
-    imagesByItem[itemId] = next;
-    try {
-      const res = await apiPost(Object.assign(buildBasePayload('prep_image_reorder'), { itemId, imageIds: orderedIds }));
-      if (res && res.status === 'success' && Array.isArray(res.images)) {
-        imagesByItem[itemId] = res.images;
-        refreshItemImages(itemId);
-      }
-    } catch (err) {
-      console.warn('prep image reorder failed:', err);
-      imagesByItem[itemId] = before;
-      refreshItemImages(itemId);
-    }
-  }
-
   // 只重繪單一品項的縮圖列，避免整區重render 打斷其他輸入。
   function refreshItemImages(itemId) {
     if (!root) return;
@@ -1743,30 +1721,6 @@
     tmp.innerHTML = renderItemImages(itemId);
     const fresh = tmp.firstElementChild;
     old.replaceWith(fresh);
-    initThumbSortable(fresh, itemId);
-  }
-
-  function initThumbSortable(container, itemId) {
-    if (!container || !window.Sortable) return;
-    if ((imagesByItem[itemId] || []).length < 2) return;
-    if (container._prepSortable) return;
-    container._prepSortable = window.Sortable.create(container, {
-      animation: 150,
-      draggable: '.prep-thumb',
-      filter: '.prep-thumb-delete',
-      onEnd: () => {
-        const ids = Array.from(container.querySelectorAll('.prep-thumb')).map(el => el.dataset.imageId).filter(Boolean);
-        reorderImages(itemId, ids);
-      }
-    });
-  }
-
-  function initAllThumbSortables() {
-    if (!root) return;
-    root.querySelectorAll('.prep-item-images').forEach(container => {
-      const itemId = container.dataset.itemId;
-      if (itemId) initThumbSortable(container, itemId);
-    });
   }
 
   function openImageViewer(itemId, startIndex) {

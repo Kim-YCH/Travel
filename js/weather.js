@@ -29,6 +29,7 @@
   // Open-Meteo 最多提供 16 天預報，超過就不查。
   const MAX_FORECAST_DAYS = 16;
   const FORECAST_HORIZON_DAYS = 15;
+  const WEATHER_CACHE_TTL_MS = 60 * 60 * 1000;
 
   // 已經過完的日子改打 archive（ERA5 重分析），拿的是實際觀測值不是預報。
   // 免費、免金鑰、有 CORS，跟 forecast 同一家。
@@ -101,12 +102,29 @@
     getDayOrderedItems,
     getHotelsForDay,
     loadGoogleMaps,
-    dateUtils
+    dateUtils,
+    now = () => Date.now()
   }) => {
     const { toYMD, parseYMD, addDays } = dateUtils;
     const forecastCache = new Map();
     const locationCache = new Map();
     let loadTimer = null;
+
+    const readForecastCache = (key) => {
+      const entry = forecastCache.get(key);
+      if (!entry) return null;
+
+      const age = Number(now()) - entry.cachedAt;
+      if (!Number.isFinite(age) || age < 0 || age >= WEATHER_CACHE_TTL_MS) {
+        forecastCache.delete(key);
+        return null;
+      }
+      return entry.value;
+    };
+
+    const writeForecastCache = (key, value) => {
+      forecastCache.set(key, { value, cachedAt: Number(now()) });
+    };
 
     const resolveWeatherLocation = async (day = currentDay.value) => {
       const d = parseInt(day, 10) || 1;
@@ -194,8 +212,9 @@
       // 「昨天的實測」，key 不含 kind 的話會一直吐舊的預報結果。
       const kind = isPast ? 'history' : 'forecast';
       const key = `${kind}_${currentTrip.value.id}_${currentDay.value}_${targetDate}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}`;
-      if (forecastCache.has(key)) {
-        tripWeather.value = forecastCache.get(key);
+      const cachedWeather = readForecastCache(key);
+      if (cachedWeather) {
+        tripWeather.value = cachedWeather;
         return;
       }
 
@@ -226,7 +245,7 @@
         if (idx < 0) throw new Error('target date not in forecast');
 
         const weather = buildWeatherFromDaily(data.daily, idx, { label: location.label, dayText, targetDate, kind });
-        forecastCache.set(key, weather);
+        writeForecastCache(key, weather);
         tripWeather.value = weather;
       } catch (err) {
         console.warn('loadTripWeather failed:', err);
@@ -338,23 +357,26 @@
       });
 
       const cacheKey = `trip_${trip.id}_${location.lat.toFixed(3)}_${location.lng.toFixed(3)}_${trip.start_date}_${days}`;
-      if (forecastCache.has(cacheKey)) { tripForecast.value = forecastCache.get(cacheKey); return; }
+      const cachedForecast = readForecastCache(cacheKey);
+      if (cachedForecast) { tripForecast.value = cachedForecast; return; }
 
       const byDate = {};
       const jobs = [];
+      let allRangesLoaded = false;
       if (past.length) jobs.push(fetchRange(location, past[0].date, past[past.length - 1].date, 'history'));
       if (future.length) jobs.push(fetchRange(location, future[0].date, future[future.length - 1].date, 'forecast'));
 
       try {
         // 一段失敗不該讓另一段跟著不見
         const settled = await Promise.allSettled(jobs);
+        allRangesLoaded = settled.every((result) => result.status === 'fulfilled');
         settled.forEach((r) => { if (r.status === 'fulfilled') Object.assign(byDate, r.value); });
       } catch (err) {
         console.warn('loadTripForecast failed:', err);
       }
 
       const filled = skeleton.map((s) => ({ ...s, weather: byDate[s.date] || null }));
-      if (Object.values(byDate).length) forecastCache.set(cacheKey, filled);
+      if (allRangesLoaded && Object.values(byDate).length) writeForecastCache(cacheKey, filled);
       tripForecast.value = filled;
     };
 
