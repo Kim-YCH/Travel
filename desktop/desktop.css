@@ -2032,6 +2032,14 @@ button.suggestion-item {
   margin: 0;
 }
 
+.desktop-app .desktop-trip-weather-card {
+  width: min(100%, 760px);
+  margin-top: 8px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  align-self: flex-start;
+}
+
 /* 天氣：藍底上的一顆半透明白色藥丸。刻意不放大 —— 它是輔助資訊，
    字級跟同一列的 Day 資訊一樣 12px。白色是中性色，不受
    tests/run.js「桌面 CSS 沒有寫死品牌色」限制。 */
