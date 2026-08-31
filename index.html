@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<!-- version: 20260831.5 -->
+<!-- version: 20260831.6 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260831.5" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260831.5" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260831.5" />
-  <link rel="manifest" href="./site.webmanifest?v=20260831.5" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260831.6" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260831.6" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260831.6" />
+  <link rel="manifest" href="./site.webmanifest?v=20260831.6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20260831.5" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20260831.5"></script>
-  <script src="./vendor/Sortable.min.js?v=20260831.5"></script>
+  <script src="./js/device-router.js?v=20260831.6" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20260831.6"></script>
+  <script src="./vendor/Sortable.min.js?v=20260831.6"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260831.5" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260831.5" />
+  <link rel="stylesheet" href="./style.css?v=20260831.6" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260831.6" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20260831.5" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20260831.6" />
 </head>
 <body>
 
@@ -1328,23 +1328,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260831.5"></script>
-<script src="./cache-refresh.js?v=20260831.5"></script>
-<script src="./keyword-map.js?v=20260831.5"></script>
-<script src="./js/utils.js?v=20260831.5"></script>
-<script src="./js/api.js?v=20260831.5"></script>
-<script src="./js/cache.js?v=20260831.5"></script>
-<script src="./js/maps.js?v=20260831.5"></script>
-<script src="./js/places.js?v=20260831.5"></script>
-<script src="./js/itinerary.js?v=20260831.5"></script>
-<script src="./js/hotels.js?v=20260831.5"></script>
-<script src="./js/expenses.js?v=20260831.5"></script>
-<script src="./js/weather.js?v=20260831.5"></script>
-<script src="./js/export.js?v=20260831.5"></script>
-<script src="./js/probe-search.js?v=20260831.5"></script>
-<script src="./app.js?v=20260831.5"></script>
-<script src="./search-zh-label.js?v=20260831.5"></script>
-<script src="./prep-checklist.js?v=20260831.5"></script>
+<script src="./config.js?v=20260831.6"></script>
+<script src="./cache-refresh.js?v=20260831.6"></script>
+<script src="./keyword-map.js?v=20260831.6"></script>
+<script src="./js/utils.js?v=20260831.6"></script>
+<script src="./js/api.js?v=20260831.6"></script>
+<script src="./js/cache.js?v=20260831.6"></script>
+<script src="./js/maps.js?v=20260831.6"></script>
+<script src="./js/places.js?v=20260831.6"></script>
+<script src="./js/itinerary.js?v=20260831.6"></script>
+<script src="./js/hotels.js?v=20260831.6"></script>
+<script src="./js/expenses.js?v=20260831.6"></script>
+<script src="./js/weather.js?v=20260831.6"></script>
+<script src="./js/export.js?v=20260831.6"></script>
+<script src="./js/probe-search.js?v=20260831.6"></script>
+<script src="./app.js?v=20260831.6"></script>
+<script src="./search-zh-label.js?v=20260831.6"></script>
+<script src="./prep-checklist.js?v=20260831.6"></script>
 
 </body>
 </html>
