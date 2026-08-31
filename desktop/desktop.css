@@ -2037,6 +2037,7 @@ button.suggestion-item {
 }
 
 .desktop-app .desktop-trip-weather-card {
+  flex: 0 0 auto !important;
   width: min(100%, 380px);
   margin-top: 8px;
   margin-left: 0 !important;
