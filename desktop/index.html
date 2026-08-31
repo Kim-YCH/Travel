@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260831.1 -->
+<!-- version: 20260831.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260831.1" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260831.2" />
 
-  <script src="../js/device-router.js?v=20260831.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20260831.1"></script>
-  <script src="../vendor/Sortable.min.js?v=20260831.1"></script>
+  <script src="../js/device-router.js?v=20260831.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20260831.2"></script>
+  <script src="../vendor/Sortable.min.js?v=20260831.2"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260831.1" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260831.1" />
-  <link rel="stylesheet" href="./desktop.css?v=20260831.1" />
+  <link rel="stylesheet" href="../style.css?v=20260831.2" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260831.2" />
+  <link rel="stylesheet" href="./desktop.css?v=20260831.2" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260831.1" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260831.2" />
 </head>
 <body class="desktop-body">
 
@@ -89,25 +89,6 @@
           <span>{{ tripWeather.title }}</span>
           <em v-if="tripWeather.kind === 'history'">實測</em>
         </span>
-      </div>
-      <!-- 整趟天氣一覽。與手機版共用同一組 class，樣式在 cloud-theme.css。
-           沒有資料的日子留白但保留格子，看得出「這幾天還沒得查」。 -->
-      <div v-if="tripForecast.some(d => d.weather)" class="trip-forecast-strip">
-        <button
-          v-for="d in tripForecast"
-          :key="d.day"
-          type="button"
-          class="trip-forecast-day"
-          :class="{ 'trip-forecast-active': d.day === currentDay, 'trip-forecast-empty': !d.weather }"
-          @click="onDayClick(d.day)"
-        >
-          <span class="trip-forecast-label">D{{ d.day }}</span>
-          <span class="trip-forecast-values">
-            <span class="trip-forecast-icon">{{ d.weather ? d.weather.icon : '·' }}</span>
-            <span class="trip-forecast-temp">{{ d.weather ? d.weather.max + '°' : '' }}</span>
-            <span class="trip-forecast-min">{{ d.weather ? d.weather.min + '°' : '' }}</span>
-          </span>
-        </button>
       </div>
     </header>
 
@@ -1031,24 +1012,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260831.1"></script>
+<script src="../config.js?v=20260831.2"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260831.1" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260831.1"></script>
-<script src="../js/utils.js?v=20260831.1"></script>
-<script src="../js/api.js?v=20260831.1"></script>
-<script src="../js/cache.js?v=20260831.1"></script>
-<script src="../js/maps.js?v=20260831.1"></script>
-<script src="../js/places.js?v=20260831.1"></script>
-<script src="../js/itinerary.js?v=20260831.1"></script>
-<script src="../js/hotels.js?v=20260831.1"></script>
-<script src="../js/expenses.js?v=20260831.1"></script>
-<script src="../js/weather.js?v=20260831.1"></script>
-<script src="../js/export.js?v=20260831.1"></script>
-<script src="../js/probe-search.js?v=20260831.1"></script>
-<script src="../app.js?v=20260831.1"></script>
-<script src="../search-zh-label.js?v=20260831.1"></script>
-<script src="../prep-checklist.js?v=20260831.1"></script>
+<script src="../cache-refresh.js?v=20260831.2" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260831.2"></script>
+<script src="../js/utils.js?v=20260831.2"></script>
+<script src="../js/api.js?v=20260831.2"></script>
+<script src="../js/cache.js?v=20260831.2"></script>
+<script src="../js/maps.js?v=20260831.2"></script>
+<script src="../js/places.js?v=20260831.2"></script>
+<script src="../js/itinerary.js?v=20260831.2"></script>
+<script src="../js/hotels.js?v=20260831.2"></script>
+<script src="../js/expenses.js?v=20260831.2"></script>
+<script src="../js/weather.js?v=20260831.2"></script>
+<script src="../js/export.js?v=20260831.2"></script>
+<script src="../js/probe-search.js?v=20260831.2"></script>
+<script src="../app.js?v=20260831.2"></script>
+<script src="../search-zh-label.js?v=20260831.2"></script>
+<script src="../prep-checklist.js?v=20260831.2"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';
