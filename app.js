@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260910.3';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260910.4';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -79,6 +79,7 @@ createApp({
     let syncRetryTimer = null;
     let mutationWriteChain = Promise.resolve();
     let pendingMutationWrites = 0;
+    let pendingQueueFlushPromise = null;
     let lastMoneyRefreshAt = 0;
     const MONEY_REFRESH_INTERVAL_MS = 60 * 1000;
     const MONEY_REFRESH_THROTTLE_MS = 15 * 1000;
@@ -929,41 +930,62 @@ createApp({
       });
     };
 
-    const flushPendingQueue = async () => {
-      if (isFlushingQueue.value || !currentTrip.value?.id) return;
+    const assertMutationResponse = (res) => {
+      if (!res || res.status !== 'success') {
+        throw new Error(res?.message || 'invalid sync response');
+      }
+      return res;
+    };
+
+    const flushPendingQueue = () => {
+      if (pendingQueueFlushPromise) return pendingQueueFlushPromise;
+      if (!currentTrip.value?.id) return Promise.resolve(false);
       if (!pendingSyncQueue.value.length) {
         if (pendingMutationWrites === 0) {
           syncStatus.value = 'synced';
           syncMessage.value = '';
         }
-        return;
+        return Promise.resolve(true);
       }
 
-      isFlushingQueue.value = true;
-      syncStatus.value = 'syncing';
+      const tripId = String(currentTrip.value.id);
+      const queueSnapshot = pendingSyncQueue.value.slice();
+      const run = (async () => {
+        isFlushingQueue.value = true;
+        syncStatus.value = 'syncing';
 
-      const remain = [];
-      for (const job of pendingSyncQueue.value) {
-        try {
-          const res = await enqueueMutationWrite(() => rawPostJSON(job.payload));
-          if (res && res.status === 'error') {
-            throw new Error(res.message || 'sync failed');
+        const remain = [];
+        for (const job of queueSnapshot) {
+          try {
+            const res = await enqueueMutationWrite(() => rawPostJSON(job.payload));
+            assertMutationResponse(res);
+          } catch (err) {
+            remain.push({
+              ...job,
+              attempts: (job.attempts || 0) + 1,
+              error: String(err?.message || err || ''),
+              last_try_at: new Date().toISOString()
+            });
           }
-        } catch (err) {
-          remain.push({
-            ...job,
-            attempts: (job.attempts || 0) + 1,
-            error: String(err?.message || err || ''),
-            last_try_at: new Date().toISOString()
-          });
         }
-      }
 
-      pendingSyncQueue.value = remain;
-      savePendingQueue();
-      syncStatus.value = remain.length ? 'queued' : 'synced';
-      syncMessage.value = remain.length ? `${remain.length} 筆待重送` : '已同步';
-      isFlushingQueue.value = false;
+        // 保留同步期間新加入的工作，避免用舊快照覆蓋新資料。
+        if (currentTrip.value?.id && String(currentTrip.value.id) === tripId) {
+          const queuedIds = new Set(queueSnapshot.map(job => job.id));
+          const newJobs = pendingSyncQueue.value.filter(job => !queuedIds.has(job.id));
+          pendingSyncQueue.value = [...remain, ...newJobs];
+          savePendingQueue();
+          syncStatus.value = pendingSyncQueue.value.length ? 'queued' : 'synced';
+          syncMessage.value = pendingSyncQueue.value.length ? `${pendingSyncQueue.value.length} 筆待重送` : '已同步';
+        }
+        isFlushingQueue.value = false;
+        return pendingSyncQueue.value.length === 0;
+      })();
+
+      pendingQueueFlushPromise = run.finally(() => {
+        pendingQueueFlushPromise = null;
+      });
+      return pendingQueueFlushPromise;
     };
 
     const postJSON = async (payload, options = {}) => {
@@ -972,7 +994,7 @@ createApp({
 
       try {
         const res = await enqueueMutationWrite(() => rawPostJSON(payload));
-        if (res && res.status === 'error') throw new Error(res.message || 'sync failed');
+        assertMutationResponse(res);
         if (payload?.action && pendingSyncQueue.value.length === 0 && pendingMutationWrites === 0) {
           syncStatus.value = 'synced';
           syncMessage.value = '已同步';
@@ -4395,7 +4417,7 @@ createApp({
     };
 
     const manualSync = async () => {
-      if (!currentTrip.value?.id || isLoading.value) return false;
+      if (!currentTrip.value?.id) return false;
       syncStatus.value = 'syncing';
       syncMessage.value = '';
 
