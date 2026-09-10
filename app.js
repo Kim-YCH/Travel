@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260910.4';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260910.5';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -84,6 +84,7 @@ createApp({
     const MONEY_REFRESH_INTERVAL_MS = 60 * 1000;
     const MONEY_REFRESH_THROTTLE_MS = 15 * 1000;
     const SYNC_RETRY_INTERVAL_MS = 30 * 1000;
+    const SYNC_MAX_AUTO_RETRIES = 3;
 
     const people = ref([]);
     const itinerary = ref([]);
@@ -895,11 +896,40 @@ createApp({
       } catch (e) {}
     };
 
+    const normalizePendingJob = (job) => {
+      if (!job || typeof job !== 'object') {
+        return {
+          id: generateId(),
+          payload: {},
+          attempts: SYNC_MAX_AUTO_RETRIES,
+          error: '同步佇列資料格式無效',
+          created_at: new Date().toISOString()
+        };
+      }
+      const payload = job.payload && typeof job.payload === 'object' ? job.payload : null;
+      const attempts = Number(job.attempts);
+      return {
+        ...job,
+        id: String(job.id || generateId()),
+        payload: payload || {},
+        attempts: Number.isFinite(attempts) && attempts >= 0 ? attempts : 0,
+        error: String(job.error || (payload?.action ? '' : '同步佇列資料格式無效')),
+        created_at: job.created_at || new Date().toISOString()
+      };
+    };
+
+    const pendingQueueFailureMessage = (jobs) => {
+      const count = Array.isArray(jobs) ? jobs.length : 0;
+      return `有 ${count} 筆資料同步失敗，請按同步重試`;
+    };
+
     const loadPendingQueue = (tripId) => {
       try {
         const raw = localStorage.getItem(pendingQueueKey(tripId));
-        pendingSyncQueue.value = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(pendingSyncQueue.value)) pendingSyncQueue.value = [];
+        const parsed = raw ? JSON.parse(raw) : [];
+        pendingSyncQueue.value = Array.isArray(parsed)
+          ? parsed.map(normalizePendingJob)
+          : [];
         syncStatus.value = pendingSyncQueue.value.length ? 'queued' : 'synced';
       } catch (e) {
         pendingSyncQueue.value = [];
@@ -937,7 +967,7 @@ createApp({
       return res;
     };
 
-    const flushPendingQueue = () => {
+    const flushPendingQueue = (options = {}) => {
       if (pendingQueueFlushPromise) return pendingQueueFlushPromise;
       if (!currentTrip.value?.id) return Promise.resolve(false);
       if (!pendingSyncQueue.value.length) {
@@ -949,7 +979,16 @@ createApp({
       }
 
       const tripId = String(currentTrip.value.id);
-      const queueSnapshot = pendingSyncQueue.value.slice();
+      const force = options.force === true;
+      const queueSnapshot = pendingSyncQueue.value.filter((job) => (
+        force || Number(job?.attempts || 0) < SYNC_MAX_AUTO_RETRIES
+      ));
+      if (!queueSnapshot.length) {
+        syncStatus.value = 'error';
+        syncMessage.value = pendingQueueFailureMessage(pendingSyncQueue.value);
+        return Promise.resolve(false);
+      }
+
       const run = (async () => {
         isFlushingQueue.value = true;
         syncStatus.value = 'syncing';
@@ -957,30 +996,54 @@ createApp({
         const remain = [];
         for (const job of queueSnapshot) {
           try {
+            if (!job?.payload?.action) throw new Error('同步佇列資料格式無效');
             const res = await enqueueMutationWrite(() => rawPostJSON(job.payload));
             assertMutationResponse(res);
           } catch (err) {
-            remain.push({
-              ...job,
+            const failedJob = {
+              ...normalizePendingJob(job),
               attempts: (job.attempts || 0) + 1,
               error: String(err?.message || err || ''),
               last_try_at: new Date().toISOString()
+            };
+            remain.push(failedJob);
+            console.warn('[Travel] pending sync failed', {
+              id: failedJob.id,
+              action: failedJob.payload?.action || '',
+              type: failedJob.payload?.type || '',
+              attempts: failedJob.attempts,
+              error: failedJob.error
             });
           }
         }
 
-        // 保留同步期間新加入的工作，避免用舊快照覆蓋新資料。
         if (currentTrip.value?.id && String(currentTrip.value.id) === tripId) {
           const queuedIds = new Set(queueSnapshot.map(job => job.id));
-          const newJobs = pendingSyncQueue.value.filter(job => !queuedIds.has(job.id));
+          const newJobs = pendingSyncQueue.value.filter(job => !queuedIds.has(job?.id));
           pendingSyncQueue.value = [...remain, ...newJobs];
           savePendingQueue();
-          syncStatus.value = pendingSyncQueue.value.length ? 'queued' : 'synced';
-          syncMessage.value = pendingSyncQueue.value.length ? `${pendingSyncQueue.value.length} 筆待重送` : '已同步';
+          const blockedJobs = pendingSyncQueue.value.filter((job) => (
+            Number(job?.attempts || 0) >= SYNC_MAX_AUTO_RETRIES
+          ));
+          if (blockedJobs.length) {
+            syncStatus.value = 'error';
+            syncMessage.value = pendingQueueFailureMessage(blockedJobs);
+          } else {
+            syncStatus.value = pendingSyncQueue.value.length ? 'queued' : 'synced';
+            syncMessage.value = pendingSyncQueue.value.length
+              ? `${pendingSyncQueue.value.length} 筆待重送`
+              : '已同步';
+          }
         }
-        isFlushingQueue.value = false;
         return pendingSyncQueue.value.length === 0;
-      })();
+      })().catch((err) => {
+        console.error('flushPendingQueue failed:', err);
+        syncStatus.value = 'error';
+        syncMessage.value = String(err?.message || err || '同步失敗');
+        return false;
+      }).finally(() => {
+        isFlushingQueue.value = false;
+      });
 
       pendingQueueFlushPromise = run.finally(() => {
         pendingQueueFlushPromise = null;
@@ -4423,7 +4486,7 @@ createApp({
 
       try {
         await mutationWriteChain;
-        await flushPendingQueue();
+        await flushPendingQueue({ force: true });
         await mutationWriteChain;
         if (pendingSyncQueue.value.length) return false;
 
@@ -4460,8 +4523,8 @@ createApp({
 
     const syncStatusText = computed(() => {
       if (syncStatus.value === 'syncing' || isFlushingQueue.value) return '同步中...';
+      if (syncStatus.value === 'error') return syncMessage.value || '同步失敗';
       if (pendingSyncQueue.value.length > 0) return `待同步 ${pendingSyncQueue.value.length} 筆`;
-      if (syncStatus.value === 'error') return '同步失敗';
       return syncMessage.value || '已同步';
     });
 
