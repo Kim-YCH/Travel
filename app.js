@@ -3792,7 +3792,8 @@ createApp({
       if (!validateTransactionCurrency(currency)) return;
       if (isDeposit && (!person || !validPeople.includes(person))) return;
       if (!isDeposit && !title) return;
-      if (!isDeposit && amount > sharedWalletBalance.value) {
+      const amountInTwd = convertAmountToTwd({ amount, currency }, currentTrip.value);
+      if (!isDeposit && amountInTwd > sharedWalletBalance.value) {
         alert(`共同錢包餘額不足，目前可用 $${Math.round(sharedWalletBalance.value)}。`);
         return;
       }
