@@ -4,12 +4,12 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260910.6';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260911.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
       'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport',
-      'TravelProbeSearch'
+      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -24,6 +24,8 @@ createApp({
     const TravelPlaces = window.TravelPlaces;
     const TravelExport = window.TravelExport;
     const TravelProbeSearch = window.TravelProbeSearch;
+    const TravelSyncQueue = window.TravelSyncQueue;
+    const TravelSyncDebug = window.TravelSyncDebug;
 
     const {
       PUBLIC_ACCOUNT_NAME,
@@ -65,6 +67,8 @@ createApp({
     const syncMessage = ref('');
     const pendingSyncQueue = ref([]);
     const isFlushingQueue = ref(false);
+    const showSyncDebugModal = ref(false);
+    const syncDebugEntries = ref([]);
     const isAddingPlace = ref(false);
     const isAddingExpense = ref(false);
     const isSavingSharedWallet = ref(false);
@@ -80,6 +84,8 @@ createApp({
     let mutationWriteChain = Promise.resolve();
     let pendingMutationWrites = 0;
     let pendingQueueFlushPromise = null;
+    let debugTitleClickCount = 0;
+    let debugTitleClickTimer = null;
     let lastMoneyRefreshAt = 0;
     const MONEY_REFRESH_INTERVAL_MS = 60 * 1000;
     const MONEY_REFRESH_THROTTLE_MS = 15 * 1000;
@@ -889,11 +895,36 @@ createApp({
     const { rawPostJSON } = TravelApi;
     const pendingQueueKey = TravelCache.pendingQueueKey;
 
+    const recordSyncDebug = (event, job, extra = {}) => TravelSyncDebug.record({
+      event,
+      tripId: currentTrip.value?.id || '',
+      tripName: currentTrip.value?.name || '',
+      job,
+      ...extra
+    });
+
     const savePendingQueue = () => {
       if (!currentTrip.value?.id) return;
       try {
         localStorage.setItem(pendingQueueKey(currentTrip.value.id), JSON.stringify(pendingSyncQueue.value));
       } catch (e) {}
+    };
+
+    const reconcilePendingQueueWithCloud = (cloudData) => {
+      if (!pendingSyncQueue.value.length) return false;
+      const result = TravelSyncQueue.reconcilePendingJobs(pendingSyncQueue.value, cloudData);
+      if (!result.confirmed.length) return false;
+
+      pendingSyncQueue.value = result.pending;
+      savePendingQueue();
+      result.confirmed.forEach(job => {
+        recordSyncDebug('cloud_confirmed', job, { previousError: job.error || '' });
+      });
+      syncStatus.value = pendingSyncQueue.value.length ? 'queued' : 'synced';
+      syncMessage.value = pendingSyncQueue.value.length
+        ? `${pendingSyncQueue.value.length} 筆待重送`
+        : '已同步';
+      return true;
     };
 
     const normalizePendingJob = (job) => {
@@ -939,13 +970,15 @@ createApp({
 
     const enqueuePendingWrite = (payload, err) => {
       if (!currentTrip.value?.id || !payload?.action) return;
-      pendingSyncQueue.value.push({
+      const job = {
         id: generateId(),
         payload,
         attempts: 0,
         error: String(err?.message || err || ''),
         created_at: new Date().toISOString()
-      });
+      };
+      pendingSyncQueue.value.push(job);
+      recordSyncDebug('queued', job, { error: job.error });
       syncStatus.value = 'queued';
       syncMessage.value = '已暫存，稍後重送';
       savePendingQueue();
@@ -999,6 +1032,7 @@ createApp({
             if (!job?.payload?.action) throw new Error('同步佇列資料格式無效');
             const res = await enqueueMutationWrite(() => rawPostJSON(job.payload));
             assertMutationResponse(res);
+            recordSyncDebug('retry_succeeded', job, { response: res });
           } catch (err) {
             const failedJob = {
               ...normalizePendingJob(job),
@@ -1007,13 +1041,7 @@ createApp({
               last_try_at: new Date().toISOString()
             };
             remain.push(failedJob);
-            console.warn('[Travel] pending sync failed', {
-              id: failedJob.id,
-              action: failedJob.payload?.action || '',
-              type: failedJob.payload?.type || '',
-              attempts: failedJob.attempts,
-              error: failedJob.error
-            });
+            recordSyncDebug('retry_failed', failedJob, { error: failedJob.error });
           }
         }
 
@@ -2014,9 +2042,7 @@ createApp({
       loadPendingQueue(tripId);
       if (pendingSyncQueue.value.length) {
         flushPendingQueue().then(() => {
-          if (!pendingSyncQueue.value.length) {
-            fetchData({ autoSelectToday: true });
-          }
+          fetchData({ autoSelectToday: true, force: true });
         });
       } else {
         fetchData({ autoSelectToday: true });
@@ -2117,6 +2143,15 @@ createApp({
           currentTrip.value = { ...currentTrip.value, ...trip };
           syncCurrencySettingsFromTrip();
         }
+
+        reconcilePendingQueueWithCloud({
+          trips: trip ? [trip] : [],
+          itinerary: itinerary.value,
+          expenses: expenses.value,
+          people: people.value,
+          hotels: hotels.value,
+          sharedWalletTransactions: walletPayload ? sharedWalletTransactions.value : null
+        });
 
         const maxDay = itinerary.value.reduce((m, it) =>
           Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
@@ -4370,6 +4405,44 @@ createApp({
       }
     };
 
+    const refreshSyncDebugEntries = () => {
+      syncDebugEntries.value = TravelSyncDebug.read();
+    };
+
+    const handleDebugTitleClick = () => {
+      if (!TravelSyncDebug.isEnabled()) return;
+
+      debugTitleClickCount += 1;
+      if (debugTitleClickTimer) clearTimeout(debugTitleClickTimer);
+      if (debugTitleClickCount >= 3) {
+        debugTitleClickCount = 0;
+        debugTitleClickTimer = null;
+        refreshSyncDebugEntries();
+        showSyncDebugModal.value = true;
+        return;
+      }
+      debugTitleClickTimer = setTimeout(() => {
+        debugTitleClickCount = 0;
+        debugTitleClickTimer = null;
+      }, 1200);
+    };
+
+    const closeSyncDebugModal = () => {
+      showSyncDebugModal.value = false;
+    };
+
+    const copySyncDebugLog = async () => {
+      const copied = await copyTextToClipboard(TravelSyncDebug.format(syncDebugEntries.value));
+      alert(copied ? '同步紀錄已複製' : '複製失敗，請手動選取紀錄');
+    };
+
+    const clearSyncDebugLog = () => {
+      TravelSyncDebug.clear();
+      refreshSyncDebugEntries();
+    };
+
+    const formatSyncDebugEntry = (entry) => TravelSyncDebug.format([entry]);
+
     // 手機上「下載一個 HTML 檔」很尷尬 —— 存到哪、怎麼傳給旅伴都不直覺。
     // navigator.share 會叫出系統分享選單，可以直接丟進 LINE。
     // 桌面瀏覽器多半沒有這個 API，所以一定要保留剪貼簿路徑當退路。
@@ -4498,6 +4571,10 @@ createApp({
         if (hasPendingWrites) {
           syncStatus.value = 'error';
           syncMessage.value = pendingQueueFailureMessage(pendingSyncQueue.value);
+          recordSyncDebug('cloud_refreshed_with_pending', pendingSyncQueue.value[0], {
+            error: syncMessage.value,
+            pendingJobs: pendingSyncQueue.value
+          });
         } else if (refreshed) {
           syncStatus.value = 'synced';
           syncMessage.value = '已同步';
@@ -4637,6 +4714,7 @@ createApp({
       stopSyncRetry();
       stopMoneyAutoRefresh();
       if (mapBounceTimer) clearTimeout(mapBounceTimer);
+      if (debugTitleClickTimer) clearTimeout(debugTitleClickTimer);
       probeSearch.dispose();
     });
 
@@ -4644,6 +4722,8 @@ createApp({
       APP_VERSION,
       currentView, currentTrip, trips, newTripName, newTripCity, showCreateTripModal,
       currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,
+      showSyncDebugModal, syncDebugEntries, handleDebugTitleClick, closeSyncDebugModal,
+      copySyncDebugLog, clearSyncDebugLog, formatSyncDebugEntry,
       isAddingPlace, isAddingExpense, isSavingSharedWallet, isUpdatingSharedWalletSetting, isSavingExpense,
       isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,

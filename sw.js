@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const VERSION = '20260910.6';
+const VERSION = '20260911.1';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 
 const SHELL_ASSETS = [
@@ -35,6 +35,8 @@ const SHELL_ASSETS = [
   `./js/itinerary.js?v=${VERSION}`,
   `./js/hotels.js?v=${VERSION}`,
   `./js/expenses.js?v=${VERSION}`,
+  `./js/sync-queue.js?v=${VERSION}`,
+  `./js/sync-debug.js?v=${VERSION}`,
   `./js/weather.js?v=${VERSION}`,
   `./js/export.js?v=${VERSION}`,
   `./js/probe-search.js?v=${VERSION}`,

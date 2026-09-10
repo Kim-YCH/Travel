@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260910.6 -->
+<!-- version: 20260911.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260910.6" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260911.1" />
 
-  <script src="../js/device-router.js?v=20260910.6" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20260910.6"></script>
-  <script src="../vendor/Sortable.min.js?v=20260910.6"></script>
+  <script src="../js/device-router.js?v=20260911.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20260911.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20260911.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260910.6" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260910.6" />
-  <link rel="stylesheet" href="./desktop.css?v=20260910.6" />
+  <link rel="stylesheet" href="../style.css?v=20260911.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260911.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20260911.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260910.6" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260911.1" />
 </head>
 <body class="desktop-body">
 
@@ -25,7 +25,7 @@
   <!-- 工作區：大廳已合併進側欄，殼永遠渲染 -->
   <div class="desktop-shell">
     <aside class="desktop-sidebar">
-      <div class="desktop-brand">✈️ 出發囉</div>
+      <div class="desktop-brand" @click="handleDebugTitleClick">✈️ 出發囉</div>
 
       <nav class="desktop-nav" aria-label="主要導覽">
         <button type="button" :class="{ 'is-active': currentTab === 'itinerary' }" @click="switchTab('itinerary'); switchDayViewMode('map')">📍 行程</button>
@@ -1056,28 +1056,54 @@
           </div>
         </div>
       </div>
+
+      <div v-if="showSyncDebugModal" class="desktop-modal-mask sync-debug-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeSyncDebugModal" @keydown.esc="closeSyncDebugModal">
+        <section class="desktop-modal sync-debug-modal" aria-labelledby="desktop-sync-debug-title">
+          <header class="sync-debug-header">
+            <div>
+              <h2 id="desktop-sync-debug-title">同步診斷紀錄</h2>
+              <p>僅保留這台裝置最近 30 筆事件</p>
+            </div>
+            <button type="button" class="sync-debug-close" title="關閉" aria-label="關閉" @click="closeSyncDebugModal">×</button>
+          </header>
+          <div class="sync-debug-actions">
+            <button type="button" @click="copySyncDebugLog">複製全部</button>
+            <button type="button" class="is-danger" @click="clearSyncDebugLog">清除紀錄</button>
+          </div>
+          <p v-if="!syncDebugEntries.length" class="sync-debug-empty">目前沒有同步診斷紀錄。</p>
+          <ol v-else class="sync-debug-list">
+            <li v-for="(entry, index) in syncDebugEntries" :key="entry.at + '-' + index" class="sync-debug-entry">
+              <strong>{{ entry.event }} · {{ entry.recordName || entry.recordId || entry.jobId || '未知項目' }}</strong>
+              <span>{{ entry.at }} · 重試 {{ entry.attempts || 0 }} 次</span>
+              <pre>{{ formatSyncDebugEntry(entry) }}</pre>
+            </li>
+          </ol>
+        </section>
+      </div>
     </main>
   </div>
 </div>
 
-<script src="../config.js?v=20260910.6"></script>
+<script src="../config.js?v=20260911.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260910.6" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260910.6"></script>
-<script src="../js/utils.js?v=20260910.6"></script>
-<script src="../js/api.js?v=20260910.6"></script>
-<script src="../js/cache.js?v=20260910.6"></script>
-<script src="../js/maps.js?v=20260910.6"></script>
-<script src="../js/places.js?v=20260910.6"></script>
-<script src="../js/itinerary.js?v=20260910.6"></script>
-<script src="../js/hotels.js?v=20260910.6"></script>
-<script src="../js/expenses.js?v=20260910.6"></script>
-<script src="../js/weather.js?v=20260910.6"></script>
-<script src="../js/export.js?v=20260910.6"></script>
-<script src="../js/probe-search.js?v=20260910.6"></script>
-<script src="../app.js?v=20260910.6"></script>
-<script src="../search-zh-label.js?v=20260910.6"></script>
-<script src="../prep-checklist.js?v=20260910.6"></script>
+<script src="../cache-refresh.js?v=20260911.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260911.1"></script>
+<script src="../js/utils.js?v=20260911.1"></script>
+<script src="../js/api.js?v=20260911.1"></script>
+<script src="../js/cache.js?v=20260911.1"></script>
+<script src="../js/maps.js?v=20260911.1"></script>
+<script src="../js/places.js?v=20260911.1"></script>
+<script src="../js/itinerary.js?v=20260911.1"></script>
+<script src="../js/hotels.js?v=20260911.1"></script>
+<script src="../js/expenses.js?v=20260911.1"></script>
+<script src="../js/sync-queue.js?v=20260911.1"></script>
+<script src="../js/sync-debug.js?v=20260911.1"></script>
+<script src="../js/weather.js?v=20260911.1"></script>
+<script src="../js/export.js?v=20260911.1"></script>
+<script src="../js/probe-search.js?v=20260911.1"></script>
+<script src="../app.js?v=20260911.1"></script>
+<script src="../search-zh-label.js?v=20260911.1"></script>
+<script src="../prep-checklist.js?v=20260911.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';
