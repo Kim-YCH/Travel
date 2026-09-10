@@ -14,6 +14,28 @@
 
   const getExpenseCategoryIcon = (category) => expenseCategoryIcons[category] || expenseCategoryIcons['其他'];
 
+  const normalizeCurrency = (value) => (
+    String(value || '').trim().toUpperCase() === 'FOREIGN' ? 'FOREIGN' : 'TWD'
+  );
+
+  const normalizeTripCurrencySettings = (trip) => {
+    const currency = String(trip?.foreign_currency || '').trim().toUpperCase();
+    const rate = Number(trip?.foreign_to_twd_rate);
+    return {
+      currency: /^[A-Z]{3}$/.test(currency) ? currency : '',
+      rate: Number.isFinite(rate) && rate > 0 ? rate : 0
+    };
+  };
+
+  const convertAmountToTwd = (record, trip) => {
+    const amount = Number(record?.amount) || 0;
+    if (amount <= 0 || normalizeCurrency(record?.currency) === 'TWD') return amount;
+
+    const settings = normalizeTripCurrencySettings(trip);
+    if (!settings.currency || settings.rate <= 0) return 0;
+    return amount * settings.rate;
+  };
+
   const normalizeInvolved = (list) => {
     if (Array.isArray(list)) return list.filter(Boolean);
     if (typeof list === 'string') {
@@ -30,6 +52,7 @@
   const normalizeExpenseRecord = (item) => ({
     ...item,
     amount: Number(item?.amount) || 0,
+    currency: normalizeCurrency(item?.currency),
     day: item?.day ? parseInt(item.day, 10) || 1 : 1,
     involved: normalizeInvolved(item?.involved),
     category: item?.category || '其他',
@@ -88,6 +111,7 @@
     title: String(item?.title || '').trim(),
     person: normalizeSharedWalletPeople(item?.person).join(','),
     amount: Number(item?.amount) || 0,
+    currency: normalizeCurrency(item?.currency),
     category: String(item?.category || '其他').trim() || '其他',
     note: String(item?.note || '').trim()
   });
@@ -154,6 +178,9 @@
     PUBLIC_ACCOUNT_NAME,
     expenseCategoryIcons,
     getExpenseCategoryIcon,
+    normalizeCurrency,
+    normalizeTripCurrencySettings,
+    convertAmountToTwd,
     normalizeInvolved,
     formatInvolved,
     normalizeExpenseRecord,

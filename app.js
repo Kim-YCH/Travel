@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260718.5';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260910.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -29,6 +29,9 @@ createApp({
       PUBLIC_ACCOUNT_NAME,
       expenseCategoryIcons,
       getExpenseCategoryIcon,
+      normalizeCurrency,
+      normalizeTripCurrencySettings,
+      convertAmountToTwd,
       normalizeInvolved,
       formatInvolved,
       normalizeExpenseRecord,
@@ -93,15 +96,23 @@ createApp({
     const newPlaceType = ref('景點');
     const newNote = ref('');
     const newPerson = ref('');
-    const newExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
+    const newExpense = ref({ title: '', amount: '', currency: 'TWD', payer: '', involved: [], category: '飲食', day: 1 });
     const walletEntryMode = ref('deposit');
     const defaultWalletDate = () => {
       const now = new Date();
       const offset = now.getTimezoneOffset() * 60000;
       return new Date(now.getTime() - offset).toISOString().slice(0, 10);
     };
-    const newSharedWalletDeposit = ref({ person: '', amount: '', note: '' });
-    const newSharedWalletPayment = ref({ title: '', amount: '', persons: [], category: '飲食', note: '' });
+    const newSharedWalletDeposit = ref({ person: '', amount: '', currency: 'TWD', note: '' });
+    const newSharedWalletPayment = ref({ title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' });
+    const currencyOptions = Object.freeze([
+      { value: 'TWD', label: '台幣 (TWD)' },
+      { value: 'FOREIGN', label: '外幣' }
+    ]);
+    const foreignCurrencyOptions = Object.freeze(['KRW', 'JPY', 'USD', 'EUR', 'CNY', 'THB', 'SGD', 'HKD']);
+    const foreignCurrency = ref('');
+    const foreignToTwdRate = ref('');
+    const isSavingCurrencySettings = ref(false);
     const categories = window.TravelExpenses.EXPENSE_CATEGORIES;
     const itineraryTypes = window.TravelItinerary.ITINERARY_TYPES;
 
@@ -180,17 +191,55 @@ createApp({
 
     const showEditExpenseModal = ref(false);
     const editExpenseId = ref('');
-    const editExpense = ref({ title: '', amount: '', payer: '', involved: [], category: '飲食', day: 1 });
+    const editExpense = ref({ title: '', amount: '', currency: 'TWD', payer: '', involved: [], category: '飲食', day: 1 });
     const isSavingExpense = ref(false);
 
     const showEditWalletModal = ref(false);
     const editWalletId = ref('');
     const editWallet = ref({
       type: 'payment', date: '', title: '', person: '',
-      persons: [], amount: 0, category: '飲食', note: ''
+      persons: [], amount: 0, currency: 'TWD', category: '飲食', note: ''
     });
 
     const generateId = TravelUtils.generateId;
+
+    const syncCurrencySettingsFromTrip = () => {
+      const settings = normalizeTripCurrencySettings(currentTrip.value);
+      foreignCurrency.value = settings.currency || '';
+      foreignToTwdRate.value = settings.rate || '';
+    };
+
+    const getCurrentCurrencySettings = () => normalizeTripCurrencySettings({
+      foreign_currency: foreignCurrency.value,
+      foreign_to_twd_rate: foreignToTwdRate.value
+    });
+
+    const getTransactionCurrencyLabel = (record) => {
+      if (normalizeCurrency(record?.currency) === 'TWD') return 'TWD';
+      return normalizeTripCurrencySettings(currentTrip.value).currency || '外幣';
+    };
+
+    const formatNumber = (value) => {
+      const number = Number(value) || 0;
+      return new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(number);
+    };
+
+    const formatTransactionAmount = (record) => {
+      const currency = normalizeCurrency(record?.currency);
+      const amount = Number(record?.amount) || 0;
+      if (currency === 'TWD') return `NT$${formatNumber(amount)}`;
+      return `${getTransactionCurrencyLabel(record)} ${formatNumber(amount)} ≈ NT$${formatNumber(convertAmountToTwd(record, currentTrip.value))}`;
+    };
+
+    const validateTransactionCurrency = (currency) => {
+      if (normalizeCurrency(currency) === 'TWD') return true;
+      const settings = getCurrentCurrencySettings();
+      if (!settings.currency || settings.rate <= 0) {
+        alert('請先到設定填寫外幣代碼與匯率，再新增外幣分帳。');
+        return false;
+      }
+      return true;
+    };
 
     const isKoreaCity = (city) => {
       const s = String(city || '').trim().toLowerCase();
@@ -1840,13 +1889,14 @@ createApp({
       moneyDisplayMode.value = 'personal';
       lastMoneyRefreshAt = 0;
       currentTrip.value = trip;
+      syncCurrencySettingsFromTrip();
 
       itinerary.value = [];
       expenses.value = [];
       sharedWalletTransactions.value = [];
       people.value = [];
-      newSharedWalletDeposit.value = { person: '', amount: '', note: '' };
-      newSharedWalletPayment.value = { title: '', amount: '', persons: [], category: '飲食', note: '' };
+      newSharedWalletDeposit.value = { person: '', amount: '', currency: 'TWD', note: '' };
+      newSharedWalletPayment.value = { title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
       hotels.value = [];
       hotelSearchQuery.value = '';
       hotelSearchResults.value = [];
@@ -1980,6 +2030,7 @@ createApp({
 
         if (trip) {
           currentTrip.value = { ...currentTrip.value, ...trip };
+          syncCurrencySettingsFromTrip();
         }
 
         const maxDay = itinerary.value.reduce((m, it) =>
@@ -3239,8 +3290,8 @@ createApp({
 
     const sharedWalletDeposits = computed(() => sharedWalletRecords.value.filter(item => item.type === 'deposit'));
     const sharedWalletPayments = computed(() => sharedWalletRecords.value.filter(item => item.type === 'payment'));
-    const sharedWalletDepositTotal = computed(() => sharedWalletDeposits.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
-    const sharedWalletPaymentTotal = computed(() => sharedWalletPayments.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
+    const sharedWalletDepositTotal = computed(() => sharedWalletDeposits.value.reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
+    const sharedWalletPaymentTotal = computed(() => sharedWalletPayments.value.reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
     const sharedWalletBalance = computed(() => sharedWalletDepositTotal.value - sharedWalletPaymentTotal.value);
     const sharedWalletMemberBalances = computed(() => {
       const names = Array.from(new Set(
@@ -3253,7 +3304,7 @@ createApp({
 
       sharedWalletDeposits.value.forEach(item => {
         const person = normalizePersonName(item.person);
-        const amount = Number(item.amount) || 0;
+        const amount = convertAmountToTwd(item, currentTrip.value);
         if (balances[person] === undefined || amount <= 0) return;
         balances[person] += amount;
       });
@@ -3261,7 +3312,7 @@ createApp({
       sharedWalletPayments.value.forEach(item => {
         const selectedPeople = normalizeSharedWalletPeople(item.person)
           .filter(name => balances[name] !== undefined);
-        const amount = Number(item.amount) || 0;
+        const amount = convertAmountToTwd(item, currentTrip.value);
         if (amount <= 0) return;
 
         if (selectedPeople.length) {
@@ -3279,6 +3330,34 @@ createApp({
     });
 
     const filteredExpenses = computed(() => normalExpenseRecords.value);
+
+    const filteredCategoryAnalysis = computed(() => {
+      const stats = {};
+      filteredExpenses.value.forEach(e => {
+        const cat = e.category || '未分類';
+        stats[cat] = (stats[cat] || 0) + convertAmountToTwd(e, currentTrip.value);
+      });
+      return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    });
+
+    const filteredDayExpenseAnalysis = computed(() => {
+      const stats = {};
+      filteredExpenses.value.forEach(e => {
+        const day = e.day ? parseInt(e.day, 10) || 1 : 1;
+        stats[day] = (stats[day] || 0) + convertAmountToTwd(e, currentTrip.value);
+      });
+      return Object.entries(stats).map(([day, total]) => ({ day: Number(day), total })).sort((a, b) => a.day - b.day);
+    });
+
+    const filteredPayerExpenseAnalysis = computed(() => {
+      const stats = {};
+      filteredExpenses.value.forEach(e => {
+        const payer = e.payer || '未指定';
+        stats[payer] = (stats[payer] || 0) + convertAmountToTwd(e, currentTrip.value);
+      });
+      return Object.entries(stats).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    });
+
 
     const {
       search: searchHotelPlacesInput,
@@ -3610,6 +3689,53 @@ createApp({
       }
     };
 
+    const saveCurrencySettings = async () => {
+      if (isSavingCurrencySettings.value || !currentTrip.value?.id) return false;
+
+      const currency = String(foreignCurrency.value || '').trim().toUpperCase();
+      const rate = Number(foreignToTwdRate.value);
+      if (!currency && (!foreignToTwdRate.value || foreignToTwdRate.value === 0)) {
+        // 清空設定代表這趟旅程目前只使用台幣。
+      } else if (!/^[A-Z]{3}$/.test(currency) || !Number.isFinite(rate) || rate <= 0) {
+        alert('請填寫有效的三碼外幣代碼與正數匯率。');
+        return false;
+      }
+
+      const previous = {
+        foreign_currency: currentTrip.value.foreign_currency || '',
+        foreign_to_twd_rate: currentTrip.value.foreign_to_twd_rate || ''
+      };
+      const next = {
+        foreign_currency: currency,
+        foreign_to_twd_rate: currency ? rate : ''
+      };
+      const tripId = currentTrip.value.id;
+      const tripIndex = trips.value.findIndex(item => String(item.id) === String(tripId));
+
+      isSavingCurrencySettings.value = true;
+      currentTrip.value = { ...currentTrip.value, ...next };
+      if (tripIndex !== -1) trips.value[tripIndex] = { ...trips.value[tripIndex], ...next };
+      scheduleTripCacheSave();
+      saveTripsCache();
+
+      try {
+        const res = await postJSON({ action: 'edit', type: 'trips', data: { id: tripId, ...next } });
+        if (res && res.status === 'error') throw new Error(res.message || 'currency settings update failed');
+        return true;
+      } catch (err) {
+        currentTrip.value = { ...currentTrip.value, ...previous };
+        if (tripIndex !== -1) trips.value[tripIndex] = { ...trips.value[tripIndex], ...previous };
+        foreignCurrency.value = previous.foreign_currency;
+        foreignToTwdRate.value = previous.foreign_to_twd_rate;
+        scheduleTripCacheSave();
+        saveTripsCache();
+        alert('匯率設定儲存失敗，已恢復原本設定。');
+        return false;
+      } finally {
+        isSavingCurrencySettings.value = false;
+      }
+    };
+
     const updateSharedWalletSetting = async (eventOrValue) => {
       if (isUpdatingSharedWalletSetting.value || !currentTrip.value?.id) return;
       const enabled = typeof eventOrValue === 'boolean'
@@ -3650,6 +3776,7 @@ createApp({
       const isDeposit = type === 'deposit';
       const form = isDeposit ? newSharedWalletDeposit.value : newSharedWalletPayment.value;
       const amount = Number(form.amount || 0);
+      const currency = normalizeCurrency(form.currency);
       const date = defaultWalletDate();
       const person = normalizePersonName(form.person);
       const selectedPeople = normalizeSharedWalletPeople(form.persons);
@@ -3662,6 +3789,7 @@ createApp({
         : validSelectedPeople.join(',');
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || amount <= 0) return;
+      if (!validateTransactionCurrency(currency)) return;
       if (isDeposit && (!person || !validPeople.includes(person))) return;
       if (!isDeposit && !title) return;
       if (!isDeposit && amount > sharedWalletBalance.value) {
@@ -3678,6 +3806,7 @@ createApp({
         title: isDeposit ? '存入' : title,
         person: transactionPerson,
         amount,
+        currency,
         category: isDeposit ? '' : category,
         note: String(form.note || '').trim(),
         created_at: now,
@@ -3700,9 +3829,9 @@ createApp({
         if (res && res.status === 'error') throw new Error(res.message || 'wallet transaction add failed');
 
         if (isDeposit) {
-          newSharedWalletDeposit.value = { person, amount: '', note: '' };
+          newSharedWalletDeposit.value = { person, amount: '', currency: 'TWD', note: '' };
         } else {
-          newSharedWalletPayment.value = { title: '', amount: '', persons: [], category: '飲食', note: '' };
+          newSharedWalletPayment.value = { title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
         }
       } catch (err) {
         const index = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(transaction.id));
@@ -3727,6 +3856,7 @@ createApp({
         person: normalizePersonName(item.person),
         persons: normalizeSharedWalletPeople(item.person),
         amount: Number(item.amount) || 0,
+        currency: normalizeCurrency(item.currency),
         category: categories.includes(item.category) ? item.category : '其他',
         note: String(item.note || '')
       };
@@ -3748,14 +3878,16 @@ createApp({
       const form = editWallet.value;
       const isDeposit = form.type === 'deposit';
       const amount = Number(form.amount || 0);
+      const currency = normalizeCurrency(form.currency);
       const validPeople = people.value.map(item => normalizePersonName(item.name)).filter(Boolean);
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date) || amount <= 0) return;
+      if (!validateTransactionCurrency(currency)) return;
       if (isDeposit && !validPeople.includes(normalizePersonName(form.person))) return;
       if (!isDeposit && !String(form.title || '').trim()) return;
 
       // 後端會擋餘額變負，前端先算一次才能給出有意義的訊息而不是通用錯誤。
-      const signed = (record) => (record.type === 'deposit' ? 1 : -1) * (Number(record.amount) || 0);
+      const signed = (record) => (record.type === 'deposit' ? 1 : -1) * convertAmountToTwd(record, currentTrip.value);
       const nextRecord = normalizeSharedWalletTransaction({
         ...original,
         type: form.type,
@@ -3765,6 +3897,7 @@ createApp({
           ? normalizePersonName(form.person)
           : normalizeSharedWalletPeople(form.persons).filter(name => validPeople.includes(name)).join(','),
         amount,
+        currency,
         category: isDeposit ? '' : (categories.includes(form.category) ? form.category : '其他'),
         note: String(form.note || '').trim(),
         updated_at: new Date().toISOString()
@@ -3802,7 +3935,7 @@ createApp({
 
     const removeSharedWalletTransaction = async (item) => {
       if (isSavingSharedWallet.value || !item?.id || !currentTrip.value?.id) return;
-      if (item.type === 'deposit' && sharedWalletBalance.value - Number(item.amount || 0) < 0) {
+      if (item.type === 'deposit' && sharedWalletBalance.value - convertAmountToTwd(item, currentTrip.value) < 0) {
         alert('刪除此筆存入後錢包會變成負數，請先調整支出紀錄。');
         return;
       }
@@ -3837,10 +3970,12 @@ createApp({
 
       const title = String(newExpense.value.title || '').trim();
       const amount = Number(newExpense.value.amount || 0);
+      const currency = normalizeCurrency(newExpense.value.currency);
       const payer = normalizePersonName(newExpense.value.payer);
 
       if (!title || amount <= 0 || !payer) return;
       if (!currentTrip.value?.id) return;
+      if (!validateTransactionCurrency(currency)) return;
       const validPeople = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
       const involved = normalizeInvolved(newExpense.value.involved)
         .map(normalizePersonName)
@@ -3855,6 +3990,7 @@ createApp({
         ...newExpense.value,
         title,
         amount,
+        currency,
         payer,
         day: newExpense.value.day || currentDay.value || 1,
         involved,
@@ -3868,6 +4004,7 @@ createApp({
       newExpense.value = {
         title: '',
         amount: '',
+        currency: 'TWD',
         payer: people.value[0]?.name || '',
         involved: people.value.map(p => p.name),
         category: '飲食',
@@ -3909,6 +4046,7 @@ createApp({
       editExpense.value = {
         title: String(exp.title || ''),
         amount: Number(exp.amount) || '',
+        currency: normalizeCurrency(exp.currency),
         payer: String(exp.payer || ''),
         involved: normalizeInvolved(exp.involved),
         category: exp.category || '飲食',
@@ -3937,8 +4075,10 @@ createApp({
 
       const title = String(editExpense.value.title || '').trim();
       const amount = Number(editExpense.value.amount || 0);
+      const currency = normalizeCurrency(editExpense.value.currency);
       const payer = normalizePersonName(editExpense.value.payer);
       if (!title || amount <= 0 || !payer) return;
+      if (!validateTransactionCurrency(currency)) return;
       const validPeople = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
       const involved = normalizeInvolved(editExpense.value.involved)
         .map(normalizePersonName)
@@ -3954,6 +4094,7 @@ createApp({
           id,
           title,
           amount,
+          currency,
           payer,
           day: editExpense.value.day || 1,
           involved,
@@ -4029,7 +4170,7 @@ createApp({
       await postJSON({ action:'del', type:'people', id: item.id });
     };
 
-    const totalExpense = computed(() => normalExpenseRecords.value.reduce((s,i) => s + (Number(i.amount) || 0), 0));
+    const totalExpense = computed(() => normalExpenseRecords.value.reduce((s,i) => s + convertAmountToTwd(i, currentTrip.value), 0));
     const actualTripExpense = computed(() => totalExpense.value + (sharedWalletEnabled.value ? sharedWalletPaymentTotal.value : 0));
 
     const balanceSheet = computed(() => {
@@ -4041,7 +4182,7 @@ createApp({
       });
 
       normalExpenseRecords.value.forEach(expense => {
-        const amount = Number(expense.amount) || 0;
+        const amount = convertAmountToTwd(expense, currentTrip.value);
         const payer = normalizePersonName(expense.payer);
         if (amount <= 0) return;
 
@@ -4071,12 +4212,12 @@ createApp({
       const stats = {};
       normalExpenseRecords.value.forEach(e => {
         const cat = e.category || '其他';
-        stats[cat] = (stats[cat] || 0) + (Number(e.amount) || 0);
+        stats[cat] = (stats[cat] || 0) + convertAmountToTwd(e, currentTrip.value);
       });
       if (sharedWalletEnabled.value) {
         sharedWalletPayments.value.forEach(item => {
           const cat = item.category || '其他';
-          stats[cat] = (stats[cat] || 0) + (Number(item.amount) || 0);
+          stats[cat] = (stats[cat] || 0) + convertAmountToTwd(item, currentTrip.value);
         });
       }
       return Object.entries(stats).map(([name, total]) => ({name, total})).sort((a,b) => b.total - a.total);
@@ -4420,7 +4561,8 @@ createApp({
       people, itinerary, expenses, sharedWalletTransactions, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
       walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
-      categories, itineraryTypes,
+      categories, itineraryTypes, currencyOptions, foreignCurrencyOptions,
+      foreignCurrency, foreignToTwdRate, isSavingCurrencySettings,
       searchResults, translatedSearchHint, isSearching, isResolvingMapUrl, mapUrlResolveError, mapUrlProvider, isCoordinateMode, resolvedCoordName,
       isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
@@ -4456,15 +4598,17 @@ createApp({
       hotelDayRangeLabel, openHotelMap,
       removeAlternative, promoteAlternativeToItinerary, moveItineraryToAlternative,
 
-      toggleMoneyDisplayMode, updateSharedWalletSetting, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
+      toggleMoneyDisplayMode, updateSharedWalletSetting, saveCurrencySettings, addSharedWalletDeposit, addSharedWalletPayment, removeSharedWalletTransaction,
       toggleSharedWalletPaymentPerson, selectAllSharedWalletPaymentPeople, formatSharedWalletUsers,
       showEditWalletModal, editWallet, openEditWalletModal, closeEditWalletModal, saveEditWalletTransaction,
       toggleEditWalletPerson, selectAllEditWalletPeople,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
-      sharedWalletEnabled, sharedWalletRecords,
-      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances,
-      filteredExpenses,
+      getTransactionCurrencyLabel, formatTransactionAmount, convertAmountToTwd,
+      sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
+      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
+      filteredExpenses, filteredCategoryAnalysis,
+      filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis,
 
       exportItinerary, shareItinerary, downloadBackupHtml, isKoreaTrip,
       tripForecast,

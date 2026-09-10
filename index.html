@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<!-- version: 20260831.7 -->
+<!-- version: 20260910.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260831.7" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260831.7" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260831.7" />
-  <link rel="manifest" href="./site.webmanifest?v=20260831.7" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260910.1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260910.1" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260910.1" />
+  <link rel="manifest" href="./site.webmanifest?v=20260910.1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20260831.7" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20260831.7"></script>
-  <script src="./vendor/Sortable.min.js?v=20260831.7"></script>
+  <script src="./js/device-router.js?v=20260910.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20260910.1"></script>
+  <script src="./vendor/Sortable.min.js?v=20260910.1"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260831.7" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260831.7" />
+  <link rel="stylesheet" href="./style.css?v=20260910.1" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260910.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20260831.7" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20260910.1" />
 </head>
 <body>
 
@@ -523,13 +523,13 @@
         >
           <div class="money-summary-total">
             <span>旅程實際支出</span>
-            <strong>${{ Math.round(actualTripExpense) }}</strong>
+            <strong>NT${{ Math.round(actualTripExpense) }}</strong>
           </div>
 
           <template v-if="moneyDisplayMode === 'personal'">
             <div class="money-summary-breakdown">
               <span>個人分帳支出</span>
-              <strong>${{ Math.round(totalExpense) }}</strong>
+              <strong>NT${{ Math.round(totalExpense) }}</strong>
             </div>
 
             <div class="money-summary-members">
@@ -551,7 +551,7 @@
                 <span class="settlement-plan-from">{{ step.from }}</span>
                 <span class="settlement-plan-arrow" aria-hidden="true">→</span>
                 <span class="settlement-plan-to">{{ step.to }}</span>
-                <strong class="settlement-plan-amount">${{ step.amount }}</strong>
+                <strong class="settlement-plan-amount">NT${{ step.amount }}</strong>
               </div>
             </div>
           </template>
@@ -559,9 +559,9 @@
           <template v-else>
             <div class="money-summary-breakdown money-summary-wallet-breakdown">
               <span>共同錢包支出</span>
-              <strong>${{ Math.round(sharedWalletPaymentTotal) }}</strong>
+              <strong>NT${{ Math.round(sharedWalletPaymentTotal) }}</strong>
               <span>共同錢包餘額</span>
-              <strong>${{ Math.round(sharedWalletBalance) }}</strong>
+              <strong>NT${{ Math.round(sharedWalletBalance) }}</strong>
             </div>
 
             <div class="money-summary-members">
@@ -581,7 +581,7 @@
               <span>共同旅費錢包</span>
             </div>
             <div class="shared-wallet-balance-row">
-              <strong>${{ Math.round(sharedWalletBalance) }}</strong>
+              <strong>NT${{ Math.round(sharedWalletBalance) }}</strong>
             </div>
           </div>
 
@@ -616,6 +616,12 @@
               <span>金額</span>
               <input v-model.number="newSharedWalletDeposit.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額" aria-label="存入金額">
             </label>
+            <label class="money-field">
+              <span>幣別</span>
+              <select v-model="newSharedWalletDeposit.currency" aria-label="存入幣別">
+                <option v-for="option in currencyOptions" :key="'wallet-deposit-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+              </select>
+            </label>
             <button
               type="button"
               class="shared-wallet-submit"
@@ -632,6 +638,12 @@
             <label class="money-field">
               <span>金額</span>
               <input v-model.number="newSharedWalletPayment.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額" aria-label="公費支出金額">
+            </label>
+            <label class="money-field">
+              <span>幣別</span>
+              <select v-model="newSharedWalletPayment.currency" aria-label="公費支出幣別">
+                <option v-for="option in currencyOptions" :key="'wallet-payment-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+              </select>
             </label>
             <div class="money-field">
               <span>使用人</span>
@@ -685,7 +697,7 @@
                   </span>
                 </div>
                 <div class="shared-wallet-entry-actions">
-                  <strong>{{ item.type === 'deposit' ? '+' : '-' }}${{ Math.round(item.amount) }}</strong>
+                    <strong>{{ item.type === 'deposit' ? '+' : '-' }}{{ formatTransactionAmount(item) }}</strong>
                   <div class="shared-wallet-entry-buttons">
                     <button type="button" @click="openEditWalletModal(item)" title="編輯錢包紀錄" aria-label="編輯錢包紀錄" :disabled="isSavingSharedWallet">✎</button>
                     <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
@@ -706,10 +718,16 @@
                 <span>項目</span>
                 <input v-model="newExpense.title" placeholder="項目">
               </label>
-              <label class="money-field">
-                <span>金額</span>
-                <input v-model.number="newExpense.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額">
-              </label>
+            <label class="money-field">
+              <span>金額</span>
+              <input v-model.number="newExpense.amount" type="number" min="1" inputmode="decimal" placeholder="$ 金額">
+            </label>
+            <label class="money-field">
+              <span>幣別</span>
+              <select v-model="newExpense.currency" aria-label="個人分帳幣別">
+                <option v-for="option in currencyOptions" :key="'new-exp-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+              </select>
+            </label>
             </div>
 
             <div class="money-field">
@@ -757,12 +775,12 @@
               <div v-if="filteredExpenses.length" class="personal-expense-ledger">
                 <div v-for="exp in filteredExpenses" :key="exp.id" class="personal-expense-entry">
                   <span class="personal-expense-entry-icon" aria-hidden="true">{{ getExpenseCategoryIcon(exp.category) }}</span>
-                  <div class="personal-expense-entry-main">
-                    <strong>{{ exp.title }}</strong>
+                    <div class="personal-expense-entry-main">
+                      <strong>{{ exp.title }}</strong>
                     <span>{{ expenseDateLabel(exp) }}｜{{ exp.payer }}先付｜{{ formatInvolved(exp.involved) }}分攤</span>
                   </div>
                   <div class="personal-expense-entry-actions">
-                    <strong>-${{ Math.round(exp.amount) }}</strong>
+                    <strong>-{{ formatTransactionAmount(exp) }}</strong>
                     <div>
                       <button type="button" @click="openEditExpenseModal(exp)" title="編輯" aria-label="編輯個人分帳" :disabled="isSavingExpense">✏️</button>
                       <button type="button" @click="removeExpense(exp.id)" title="刪除" aria-label="刪除個人分帳" :disabled="isSavingExpense">×</button>
@@ -781,7 +799,7 @@
               <div class="flex justify-between mb-1">
                 <span class="text-gray-600">{{ cat.name }}</span>
                 <span class="font-bold text-gray-800">
-                  ${{ cat.total }} ({{ actualTripExpense ? ((cat.total/actualTripExpense)*100).toFixed(0) : 0 }}%)
+                  NT${{ Math.round(cat.total) }} ({{ actualTripExpense ? ((cat.total/actualTripExpense)*100).toFixed(0) : 0 }}%)
                 </span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-2">
@@ -823,6 +841,24 @@
             <span aria-hidden="true"></span>
             <span class="sr-only">啟用共同旅費錢包</span>
           </label>
+        </div>
+        <div class="card currency-settings-card">
+          <h3>💱 貨幣設定</h3>
+          <p class="currency-settings-help">外幣交易會依這裡的匯率自動換算成台幣。</p>
+          <div class="currency-settings-grid">
+            <label class="money-field">
+              <span>外幣代碼</span>
+              <select v-model="foreignCurrency" name="foreign_currency">
+                <option value="">尚未設定</option>
+                <option v-for="code in foreignCurrencyOptions" :key="'foreign-code-' + code" :value="code">{{ code }}</option>
+              </select>
+            </label>
+            <label class="money-field">
+              <span>1 外幣兌台幣</span>
+              <input v-model.number="foreignToTwdRate" name="foreign_to_twd_rate" type="number" min="0" step="any" placeholder="例如 0.024">
+            </label>
+          </div>
+          <button type="button" class="currency-settings-submit" @click="saveCurrencySettings" :disabled="isSavingCurrencySettings">{{ isSavingCurrencySettings ? '儲存中...' : '儲存匯率設定' }}</button>
         </div>
         <button
           @click="shareItinerary"
@@ -1208,6 +1244,11 @@
         <div class="text-xs font-bold text-gray-500 ml-1">金額</div>
         <input v-model.number="editExpense.amount" type="number" placeholder="$" class="font-mono font-bold">
 
+        <div class="text-xs font-bold text-gray-500 ml-1">幣別</div>
+        <select v-model="editExpense.currency" aria-label="編輯分帳幣別">
+          <option v-for="option in currencyOptions" :key="'edit-exp-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+        </select>
+
         <div class="text-xs font-bold text-gray-500 ml-1">分類</div>
         <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
           <button
@@ -1265,6 +1306,11 @@
 
         <div class="text-xs font-bold text-gray-500 ml-1">金額</div>
         <input v-model.number="editWallet.amount" type="number" placeholder="$" class="font-mono font-bold">
+
+        <div class="text-xs font-bold text-gray-500 ml-1">幣別</div>
+        <select v-model="editWallet.currency" aria-label="編輯錢包幣別">
+          <option v-for="option in currencyOptions" :key="'edit-wallet-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+        </select>
 
         <template v-if="editWallet.type === 'deposit'">
           <div class="text-xs font-bold text-gray-500 ml-1">存入人</div>
@@ -1328,23 +1374,23 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260831.7"></script>
-<script src="./cache-refresh.js?v=20260831.7"></script>
-<script src="./keyword-map.js?v=20260831.7"></script>
-<script src="./js/utils.js?v=20260831.7"></script>
-<script src="./js/api.js?v=20260831.7"></script>
-<script src="./js/cache.js?v=20260831.7"></script>
-<script src="./js/maps.js?v=20260831.7"></script>
-<script src="./js/places.js?v=20260831.7"></script>
-<script src="./js/itinerary.js?v=20260831.7"></script>
-<script src="./js/hotels.js?v=20260831.7"></script>
-<script src="./js/expenses.js?v=20260831.7"></script>
-<script src="./js/weather.js?v=20260831.7"></script>
-<script src="./js/export.js?v=20260831.7"></script>
-<script src="./js/probe-search.js?v=20260831.7"></script>
-<script src="./app.js?v=20260831.7"></script>
-<script src="./search-zh-label.js?v=20260831.7"></script>
-<script src="./prep-checklist.js?v=20260831.7"></script>
+<script src="./config.js?v=20260910.1"></script>
+<script src="./cache-refresh.js?v=20260910.1"></script>
+<script src="./keyword-map.js?v=20260910.1"></script>
+<script src="./js/utils.js?v=20260910.1"></script>
+<script src="./js/api.js?v=20260910.1"></script>
+<script src="./js/cache.js?v=20260910.1"></script>
+<script src="./js/maps.js?v=20260910.1"></script>
+<script src="./js/places.js?v=20260910.1"></script>
+<script src="./js/itinerary.js?v=20260910.1"></script>
+<script src="./js/hotels.js?v=20260910.1"></script>
+<script src="./js/expenses.js?v=20260910.1"></script>
+<script src="./js/weather.js?v=20260910.1"></script>
+<script src="./js/export.js?v=20260910.1"></script>
+<script src="./js/probe-search.js?v=20260910.1"></script>
+<script src="./app.js?v=20260910.1"></script>
+<script src="./search-zh-label.js?v=20260910.1"></script>
+<script src="./prep-checklist.js?v=20260910.1"></script>
 
 </body>
 </html>

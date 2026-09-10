@@ -778,6 +778,26 @@ button.suggestion-item {
   min-width: 0;
 }
 
+.currency-settings-card {
+  gap: 10px;
+}
+
+.currency-settings-card h3 {
+  margin: 0;
+}
+
+.currency-settings-help {
+  margin: 0;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.currency-settings-card .desktop-primary {
+  width: 100%;
+  margin-top: 2px;
+}
+
 .desktop-form-wide {
   grid-column: 1 / -1;
 }

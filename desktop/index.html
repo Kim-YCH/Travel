@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260831.7 -->
+<!-- version: 20260910.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260831.7" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260910.1" />
 
-  <script src="../js/device-router.js?v=20260831.7" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20260831.7"></script>
-  <script src="../vendor/Sortable.min.js?v=20260831.7"></script>
+  <script src="../js/device-router.js?v=20260910.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20260910.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20260910.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260831.7" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260831.7" />
-  <link rel="stylesheet" href="./desktop.css?v=20260831.7" />
+  <link rel="stylesheet" href="../style.css?v=20260910.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260910.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20260910.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260831.7" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260910.1" />
 </head>
 <body class="desktop-body">
 
@@ -434,11 +434,11 @@
               </div>
               <div v-if="moneyDisplayMode === 'wallet'">
                 <span>累計存入</span>
-                <strong>${{ Math.round(sharedWalletDepositTotal) }}</strong>
+                <strong>NT${{ Math.round(sharedWalletDepositTotal) }}</strong>
               </div>
               <div v-if="moneyDisplayMode === 'wallet'">
                 <span>目前餘額</span>
-                <strong>${{ Math.round(sharedWalletBalance) }}</strong>
+                <strong>NT${{ Math.round(sharedWalletBalance) }}</strong>
               </div>
               <div v-if="moneyDisplayMode === 'wallet'">
                 <span>旅伴人數</span>
@@ -464,6 +464,12 @@
                 <label class="desktop-form-field">
                   <span>金額</span>
                   <input v-model.number="newExpense.amount" type="number" min="0" placeholder="$ 金額" />
+                </label>
+                <label class="desktop-form-field">
+                  <span>幣別</span>
+                  <select v-model="newExpense.currency" aria-label="個人分帳幣別">
+                    <option v-for="option in currencyOptions" :key="'d-exp-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+                  </select>
                 </label>
                 <label class="desktop-form-field">
                   <span>付款人</span>
@@ -573,6 +579,12 @@
                   <span>金額</span>
                   <input v-model.number="newSharedWalletDeposit.amount" type="number" min="1" placeholder="$ 金額" />
                 </label>
+                <label class="desktop-form-field">
+                  <span>幣別</span>
+                  <select v-model="newSharedWalletDeposit.currency" aria-label="存入幣別">
+                    <option v-for="option in currencyOptions" :key="'d-wd-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+                  </select>
+                </label>
                 <button
                   type="button"
                   class="desktop-primary desktop-form-submit"
@@ -590,6 +602,12 @@
                   <label class="desktop-form-field">
                     <span>金額</span>
                     <input v-model.number="newSharedWalletPayment.amount" type="number" min="1" placeholder="$ 金額" />
+                  </label>
+                  <label class="desktop-form-field">
+                    <span>幣別</span>
+                    <select v-model="newSharedWalletPayment.currency" aria-label="公費支出幣別">
+                      <option v-for="option in currencyOptions" :key="'d-wp-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+                    </select>
                   </label>
 
                   <div class="desktop-money-field desktop-form-wide">
@@ -643,7 +661,7 @@
                   <span>{{ tx.type === 'deposit' ? '存入' : '支出' }}</span>
                   <strong>{{ tx.type === 'deposit' ? (tx.person || '存入') : tx.title }}</strong>
                   <span>{{ formatSharedWalletUsers(tx) }}</span>
-                  <span>${{ Math.round(tx.amount) }}</span>
+                  <span>{{ formatTransactionAmount(tx) }}</span>
                   <span class="desktop-place-actions">
                     <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯錢包紀錄" @click="openEditWalletModal(tx)" :disabled="isSavingSharedWallet">✏️</button>
                     <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除錢包紀錄" @click="removeSharedWalletTransaction(tx)" :disabled="isSavingSharedWallet">✕</button>
@@ -795,6 +813,23 @@
             </div>
           </article>
 
+          <article class="card desktop-settings-actions currency-settings-card">
+            <h3>貨幣設定</h3>
+            <p class="currency-settings-help">外幣交易會依這裡的匯率自動換算成台幣。</p>
+            <label class="desktop-form-field">
+              <span>外幣代碼</span>
+              <select v-model="foreignCurrency" name="foreign_currency">
+                <option value="">尚未設定</option>
+                <option v-for="code in foreignCurrencyOptions" :key="'d-foreign-code-' + code" :value="code">{{ code }}</option>
+              </select>
+            </label>
+            <label class="desktop-form-field">
+              <span>1 外幣兌台幣</span>
+              <input v-model.number="foreignToTwdRate" name="foreign_to_twd_rate" type="number" min="0" step="any" placeholder="例如 0.024" />
+            </label>
+            <button type="button" class="desktop-primary" @click="saveCurrencySettings" :disabled="isSavingCurrencySettings">{{ isSavingCurrencySettings ? '儲存中...' : '儲存匯率設定' }}</button>
+          </article>
+
           <article class="card desktop-settings-actions">
             <h3>資料匯出</h3>
             <button type="button" class="desktop-ghost" @click="exportItinerary">複製行程文字</button>
@@ -924,6 +959,9 @@
           <div class="desktop-form">
             <input v-model="editExpense.title" placeholder="項目" />
             <input v-model.number="editExpense.amount" type="number" min="0" />
+            <select v-model="editExpense.currency" aria-label="編輯分帳幣別">
+              <option v-for="option in currencyOptions" :key="'d-edit-exp-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+            </select>
             <select v-model="editExpense.payer"><option v-for="p in people" :key="'d-ep-' + p.name" :value="p.name">{{ p.name }}</option></select>
             <select v-model="editExpense.category"><option v-for="cat in categories" :key="'d-ec-' + cat" :value="cat">{{ cat }}</option></select>
             <select v-model.number="editExpense.day" aria-label="Day"><option v-for="d in totalDays" :key="'d-exday-' + d" :value="d">Day {{ d }}</option></select>
@@ -951,6 +989,9 @@
             <input v-model="editWallet.date" type="date" aria-label="日期" />
             <input v-model="editWallet.title" placeholder="項目" />
             <input v-model.number="editWallet.amount" type="number" min="0" />
+            <select v-model="editWallet.currency" aria-label="編輯錢包幣別">
+              <option v-for="option in currencyOptions" :key="'d-edit-wallet-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+            </select>
           </div>
           <div v-if="editWallet.type === 'deposit'" class="desktop-people" aria-label="Deposit owner">
             <button
@@ -1019,24 +1060,24 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260831.7"></script>
+<script src="../config.js?v=20260910.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260831.7" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260831.7"></script>
-<script src="../js/utils.js?v=20260831.7"></script>
-<script src="../js/api.js?v=20260831.7"></script>
-<script src="../js/cache.js?v=20260831.7"></script>
-<script src="../js/maps.js?v=20260831.7"></script>
-<script src="../js/places.js?v=20260831.7"></script>
-<script src="../js/itinerary.js?v=20260831.7"></script>
-<script src="../js/hotels.js?v=20260831.7"></script>
-<script src="../js/expenses.js?v=20260831.7"></script>
-<script src="../js/weather.js?v=20260831.7"></script>
-<script src="../js/export.js?v=20260831.7"></script>
-<script src="../js/probe-search.js?v=20260831.7"></script>
-<script src="../app.js?v=20260831.7"></script>
-<script src="../search-zh-label.js?v=20260831.7"></script>
-<script src="../prep-checklist.js?v=20260831.7"></script>
+<script src="../cache-refresh.js?v=20260910.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260910.1"></script>
+<script src="../js/utils.js?v=20260910.1"></script>
+<script src="../js/api.js?v=20260910.1"></script>
+<script src="../js/cache.js?v=20260910.1"></script>
+<script src="../js/maps.js?v=20260910.1"></script>
+<script src="../js/places.js?v=20260910.1"></script>
+<script src="../js/itinerary.js?v=20260910.1"></script>
+<script src="../js/hotels.js?v=20260910.1"></script>
+<script src="../js/expenses.js?v=20260910.1"></script>
+<script src="../js/weather.js?v=20260910.1"></script>
+<script src="../js/export.js?v=20260910.1"></script>
+<script src="../js/probe-search.js?v=20260910.1"></script>
+<script src="../app.js?v=20260910.1"></script>
+<script src="../search-zh-label.js?v=20260910.1"></script>
+<script src="../prep-checklist.js?v=20260910.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';
