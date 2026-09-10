@@ -4606,7 +4606,7 @@ createApp({
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
       getTransactionCurrencyLabel, formatTransactionAmount, convertAmountToTwd,
       sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
-      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances, legacyPublicAccountExpenseCount,
+      sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances,
       filteredExpenses, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis,
 
