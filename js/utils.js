@@ -49,6 +49,14 @@
     try {
       const date = new Date(timeStr);
       if (isNaN(date.getTime())) return timeStr;
+
+      // Google Sheets serializes time-only cells with an 1899 base date. Using
+      // local getters in Korea applies Seoul's historical +08:27:52 offset.
+      if (typeof timeStr === 'string' && /^1899-12-(?:29|30)T/.test(timeStr)) {
+        const taipeiMinutes = (date.getUTCHours() * 60 + date.getUTCMinutes() + 8 * 60) % (24 * 60);
+        return `${pad2(Math.floor(taipeiMinutes / 60))}:${pad2(taipeiMinutes % 60)}`;
+      }
+
       const h = date.getHours().toString().padStart(2, '0');
       const m = date.getMinutes().toString().padStart(2, '0');
       return `${h}:${m}`;
