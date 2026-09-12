@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260911.2';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260912.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -57,6 +57,8 @@ createApp({
     const newTripCity = ref('');
     const showCreateTripModal = ref(false);
     const isCreatingTrip = ref(false);
+    const cloneSourceTripId = ref('');
+    const isCloningItinerary = ref(false);
 
     const currentTab = ref('itinerary');
     const dayViewMode = ref('list');
@@ -259,6 +261,11 @@ createApp({
     };
 
     const isKoreaTrip = computed(() => isKoreaCity(currentTrip.value?.city || ''));
+
+    const cloneSourceTrips = computed(() => {
+      const currentId = String(currentTrip.value?.id || '');
+      return trips.value.filter(trip => String(trip.id || '') !== currentId);
+    });
 
     const getTripTranslateTarget = () => {
       const city = String(currentTrip.value?.city || '').trim().toLowerCase();
@@ -2100,6 +2107,59 @@ createApp({
       await postJSON({ action: 'del', type: 'trips', id: currentTrip.value.id });
       exitTrip();
       await fetchTrips();
+    };
+
+    const cloneItineraryFromSelectedTrip = async () => {
+      if (isCloningItinerary.value || !currentTrip.value?.id) return;
+      const sourceId = String(cloneSourceTripId.value || '').trim();
+      const targetId = String(currentTrip.value.id || '').trim();
+      if (!sourceId) {
+        alert('請先選擇要複製的來源旅程。');
+        return;
+      }
+      if (sourceId === targetId) {
+        alert('來源旅程不能和目前旅程相同。');
+        return;
+      }
+      if (pendingSyncQueue.value.length > 0) {
+        alert('目前有待同步項目，請先等待同步完成或重試同步後再複製行程。');
+        return;
+      }
+
+      const sourceTrip = trips.value.find(trip => String(trip.id || '') === sourceId);
+      const sourceName = sourceTrip?.name || '來源旅程';
+      const targetName = currentTrip.value?.name || '目前旅程';
+      const ok = confirm(
+        `這會刪除「${targetName}」目前既有的正式行程、備案與住宿，\n` +
+        `並從「${sourceName}」複製一份新的行程資料過來。\n\n` +
+        `來源旅程不會被修改。\n` +
+        `新複製的行程與住宿會使用全新的 ID。\n` +
+        `花費、成員、共同錢包、準備清單不會被複製。\n\n` +
+        `確定要繼續嗎？`
+      );
+      if (!ok) return;
+
+      isCloningItinerary.value = true;
+      try {
+        const res = await postJSON({
+          action: 'clone_itinerary_to_trip',
+          sourceTripId: sourceId,
+          targetTripId: targetId,
+          overwrite: true
+        }, { queueOnFail: false });
+
+        if (!res || res.status === 'error') {
+          throw new Error(res?.message || '行程複製失敗');
+        }
+
+        await fetchData({ force: true, autoSelectToday: true });
+        alert(`已複製 ${res.itineraryCopied || 0} 筆行程 / 備案、${res.hotelsCopied || 0} 筆住宿。`);
+      } catch (err) {
+        console.error('clone itinerary failed:', err);
+        alert(`行程複製失敗：${err?.message || err || '請稍後再試'}`);
+      } finally {
+        isCloningItinerary.value = false;
+      }
     };
 
     const fetchData = async (options = {}) => {
@@ -4656,6 +4716,11 @@ createApp({
       scheduleSortableInit();
       updateMoneyAutoRefresh();
     });
+    watch(currentTrip, () => {
+      if (cloneSourceTripId.value && !cloneSourceTrips.value.some(trip => String(trip.id || '') === String(cloneSourceTripId.value))) {
+        cloneSourceTripId.value = '';
+      }
+    });
     watch([itinerary, expenses, sharedWalletTransactions, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
@@ -4740,6 +4805,7 @@ createApp({
       showEditHotelModal, editHotel, editHotelSearchQuery, editHotelSearchResults, editHotelIsSearching, editHotelSelectedPlaceData, isSavingHotel,
 
       createTrip, openCreateTripModal, closeCreateTripModal, createTripFromModal, selectTrip, exitTrip, deleteTripTotally, fetchData,
+      cloneSourceTripId, isCloningItinerary, cloneSourceTrips, cloneItineraryFromSelectedTrip,
 
       switchTab, switchDayViewMode, addNewDay, deleteDay, onDayClick, onDayDblClick, dayLabel,
       onItineraryTouchStart, onItineraryTouchEnd,
