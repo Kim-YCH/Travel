@@ -190,6 +190,29 @@ html, body {
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
 
+    .clone-copy-button {
+      width: 100%;
+      min-height: 54px;
+      border: 1px solid #b45309;
+      border-radius: 12px;
+      background: #d97706;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+      box-shadow: 0 10px 22px rgba(217, 119, 6, 0.24);
+      transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .clone-copy-button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .clone-copy-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+      box-shadow: none;
+    }
+
     .day-tab-active {
       background: #2563eb;
       color: white;
