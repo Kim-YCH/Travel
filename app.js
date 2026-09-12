@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260913.2';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260913.3';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -372,6 +372,47 @@ createApp({
       mapUrlProvider.value = '';
     };
 
+    const buildSharedMapUrlCandidate = (result, info = {}) => {
+      const provider = result?.provider === 'naver' || info.provider === 'naver' ? 'naver' : 'google';
+      const placeId = String(result?.placeId || '').trim();
+      const name = String(result?.name || '').trim();
+      const address = String(result?.address || '').trim();
+      const recoveredCoords = provider === 'google'
+        ? TravelPlaces.extractSharedMapCoordinates(result?.finalUrl, result?.originalUrl, info.url)
+        : { lat: null, lng: null };
+      const lat = mapUrlCoordinate(result?.lat) ?? recoveredCoords.lat;
+      const lng = mapUrlCoordinate(result?.lng) ?? recoveredCoords.lng;
+      const title = name || address || '地圖位置';
+
+      return {
+        source: provider,
+        from_map_url: true,
+        place_id: provider === 'naver'
+          ? `naver_url_${placeId || `${lat}_${lng}`}`
+          : placeId,
+        description: address || title,
+        address,
+        roadAddress: address,
+        lat,
+        lng,
+        structured_formatting: {
+          main_text: title,
+          secondary_text: address || (provider === 'naver' ? 'Naver Map 網址' : 'Google Maps 網址')
+        }
+      };
+    };
+
+    const resolveSharedMapUrlCandidate = async (info) => {
+      const result = await apiGet({ action: 'resolve_map_url', url: info.url });
+      if (result?.status === 'error') throw new Error(result.message || '網址解析失敗');
+      const candidate = buildSharedMapUrlCandidate(result, info);
+      const title = String(candidate?.structured_formatting?.main_text || '').trim();
+      if (!candidate.place_id && !title && (candidate.lat === null || candidate.lng === null)) {
+        throw new Error('無法解析地圖網址');
+      }
+      return { result, candidate };
+    };
+
     const resolveSharedMapUrl = async (info) => {
       const generation = ++mapUrlResolveGeneration;
       isResolvingMapUrl.value = true;
@@ -382,7 +423,7 @@ createApp({
       translatedSearchHint.value = '';
 
       try {
-        const result = await apiGet({ action: 'resolve_map_url', url: info.url });
+        const { result, candidate: mapUrlCandidate } = await resolveSharedMapUrlCandidate(info);
         if (generation !== mapUrlResolveGeneration) return;
         if (result?.status === 'error') throw new Error(result.message || '無法解析這個網址');
 
@@ -399,7 +440,7 @@ createApp({
           throw new Error('無法從網址取得地點資訊');
         }
 
-        const title = name || '地圖位置';
+        const title = name || address || mapUrlCandidate.structured_formatting?.main_text || '地圖位置';
         if (provider === 'google' && isKoreaTrip.value) {
           if (lat === null || lng === null) {
             throw new Error('Google 地點缺少座標，無法核對 Naver 地點');
@@ -425,22 +466,7 @@ createApp({
           return;
         }
 
-        searchResults.value = [{
-          source: provider,
-          from_map_url: true,
-          place_id: provider === 'naver'
-            ? `naver_url_${placeId || `${lat}_${lng}`}`
-            : placeId,
-          description: address || title,
-          address,
-          roadAddress: address,
-          lat,
-          lng,
-          structured_formatting: {
-            main_text: title,
-            secondary_text: address || (provider === 'naver' ? 'Naver Map 網址' : 'Google Maps 網址')
-          }
-        }];
+        searchResults.value = [mapUrlCandidate];
       } catch (err) {
         if (generation !== mapUrlResolveGeneration) return;
         console.warn('resolveSharedMapUrl failed:', err);
@@ -3539,6 +3565,20 @@ createApp({
     });
 
 
+    const hotelExtraCandidates = async (keyword) => {
+      const mapUrlInfo = TravelPlaces.classifySharedMapUrl(keyword);
+      if (mapUrlInfo.supported) {
+        try {
+          const { candidate } = await resolveSharedMapUrlCandidate(mapUrlInfo);
+          return [candidate];
+        } catch (err) {
+          console.warn('resolve hotel map url failed:', err);
+          return [];
+        }
+      }
+      return await naverTranslatedCandidates(keyword);
+    };
+
     const {
       search: searchHotelPlacesInput,
       clearDropdown: clearHotelSearchDropdown
@@ -3549,7 +3589,7 @@ createApp({
       selectedPlaceData: hotelSelectedPlaceData,
       ensureService: ensureAutocompleteService,
       types: ['establishment'],
-      extraCandidates: naverTranslatedCandidates
+      extraCandidates: hotelExtraCandidates
     });
 
     const selectHotelPlace = (item) => {
@@ -3623,8 +3663,9 @@ createApp({
       const safeStart = Math.min(startDay, endDay);
       const safeEnd = Math.max(startDay, endDay);
       const keyword = hotelSearchQuery.value.trim();
+      const selectedHotelSnapshot = hotelSelectedPlaceData.value ? { ...hotelSelectedPlaceData.value } : null;
 
-      if (!keyword && !hotelSelectedPlaceData.value?.place_id) {
+      if (!keyword && !selectedHotelSnapshot?.place_id && selectedHotelSnapshot?.lat == null) {
         alert('請先搜尋並選擇住宿地點');
         return;
       }
@@ -3637,19 +3678,19 @@ createApp({
       isAddingHotel.value = true;
 
       try {
-        let placeId = hotelSelectedPlaceData.value?.place_id || '';
-        let displayName = keyword;
-        let address = '';
-        let lat = null;
-        let lng = null;
+        let placeId = selectedHotelSnapshot?.place_id || '';
+        let displayName = selectedHotelSnapshot?.structured_formatting?.main_text || selectedHotelSnapshot?.name || keyword;
+        let address = selectedHotelSnapshot?.address || selectedHotelSnapshot?.description || '';
+        let lat = selectedHotelSnapshot?.lat != null && selectedHotelSnapshot.lat !== '' ? Number(selectedHotelSnapshot.lat) : null;
+        let lng = selectedHotelSnapshot?.lng != null && selectedHotelSnapshot.lng !== '' ? Number(selectedHotelSnapshot.lng) : null;
 
-        if (isNaverPlace(hotelSelectedPlaceData.value)) {
-          const naver = await resolveNaverPlace(hotelSelectedPlaceData.value);
+        if (isNaverPlace(selectedHotelSnapshot)) {
+          const naver = await resolveNaverPlace(selectedHotelSnapshot);
           placeId = naver.placeId;
           displayName = naver.displayName || displayName;
-          address = naver.address;
-          lat = naver.lat;
-          lng = naver.lng;
+          address = naver.address || address;
+          if (naver.lat != null) lat = naver.lat;
+          if (naver.lng != null) lng = naver.lng;
         } else if (placeId) {
           const place = await getPlaceDetails(placeId, 'zh-TW');
           if (place) {
