@@ -10,8 +10,10 @@
  */
 'use strict';
 
-const VERSION = '20260913.5';
+const VERSION = '20260914.1';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
+const PREP_IMAGE_CACHE = 'travel-prep-images-v1';
+const PREP_IMAGE_CACHE_LIMIT = 60;
 
 const SHELL_ASSETS = [
   './',
@@ -96,7 +98,7 @@ self.addEventListener('activate', (event) => {
     await Promise.all(
       keys
         // 舊版的 travel-cdn-* 快取也會在這裡一併清掉。
-        .filter((key) => key.startsWith('travel-') && key !== SHELL_CACHE)
+        .filter((key) => key.startsWith('travel-') && key !== SHELL_CACHE && key !== PREP_IMAGE_CACHE)
         .map((key) => caches.delete(key))
     );
     await self.clients.claim();
@@ -105,6 +107,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'TRAVEL_SKIP_WAITING') self.skipWaiting();
+  if (event.data && event.data.type === 'TRAVEL_PREP_IMAGE_EVICT') {
+    event.waitUntil((async () => {
+      let success = false;
+      try {
+        const url = new URL(event.data.url);
+        if (url.hostname === 'lh3.googleusercontent.com' && url.pathname.startsWith('/d/')) {
+          const cache = await caches.open(PREP_IMAGE_CACHE);
+          await cache.delete(url.href);
+          success = true;
+        }
+      } catch (_) {}
+      if (event.ports && event.ports[0]) event.ports[0].postMessage(success);
+    })());
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -113,6 +129,27 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
   if (isNetworkOnly(url)) return;
+
+  if (req.destination === 'image' && url.hostname === 'lh3.googleusercontent.com' && url.pathname.startsWith('/d/')) {
+    event.respondWith((async () => {
+      let cache;
+      try {
+        cache = await caches.open(PREP_IMAGE_CACHE);
+        const cached = await cache.match(req);
+        if (cached) return cached;
+      } catch (_) {}
+      const res = await fetch(req);
+      if (cache && res && (res.ok || res.type === 'opaque')) {
+        try {
+          await cache.put(req, res.clone());
+          const keys = await cache.keys();
+          await Promise.all(keys.slice(0, Math.max(0, keys.length - PREP_IMAGE_CACHE_LIMIT)).map(key => cache.delete(key)));
+        } catch (_) {}
+      }
+      return res;
+    })());
+    return;
+  }
 
   if (req.mode === 'navigate') {
     event.respondWith((async () => {

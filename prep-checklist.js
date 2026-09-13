@@ -1,11 +1,12 @@
-// version: 20260830.1
+// version: 20260914.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260830.1';
+  const VERSION = '20260914.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
+  const IMAGE_STORAGE_PREFIX = 'travel_prepare_images_v1::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
   const API_URL = (window.TRAVEL_CONFIG && window.TRAVEL_CONFIG.API_URL) || '';
 
@@ -35,7 +36,9 @@
 
   // 品項圖片：與清單文字狀態分開管理。imagesByItem[itemId] = [imgObj,...]
   const imagesByItem = {};
-  let imagesLoadedForOwner = null;
+  let imagesContextKey = '';
+  let imagesLoadedForContext = null;
+  let imageRequestId = 0;
   // 圖片抓取的重試狀態。圖片跟清單文字不同：清單有自己的輪詢會一直補，
   // 圖片原本只掛在 refreshPersonalArea() 結尾那一次呼叫上，
   // 只要那條路徑被 loadFromSheet 的任何一個 early return 擋掉，就永遠不會再試。
@@ -299,6 +302,7 @@
   }
 
   function loadLocalState() {
+    syncImageContext();
     currentTripKey = getStorageKey(selectedOwner);
     if (!selectedOwner) {
       state = buildEmptyState('');
@@ -358,13 +362,20 @@
     updateSyncUI();
   }
 
-  async function apiPost(body) {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body)
-    });
-    return await res.json();
+  async function apiPost(body, timeoutMs = 0) {
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body),
+        ...(controller ? { signal: controller.signal } : {})
+      });
+      return await res.json();
+    } finally {
+      if (timeout !== null) clearTimeout(timeout);
+    }
   }
 
   function applyRemoteData(data, statusText) {
@@ -409,7 +420,7 @@
       render();
     }
     // 首次或換人後補抓圖片；loadAllImages 內有 owner 去重，不會重複打。
-    if (selectedOwner && imagesLoadedForOwner !== selectedOwner) loadAllImages();
+    if (selectedOwner && imagesLoadedForContext !== imagesContextKey) loadAllImages();
   }
 
   function refreshChecklistFromDatabase() {
@@ -1095,9 +1106,6 @@
     syncStatus = selectedOwner ? '讀取資料庫' : '';
     lastSyncedAt = '';
     lastRemoteUpdatedAt = '';
-    // 換人就清掉上一位的圖片快取，避免短暫顯示錯人的圖。
-    Object.keys(imagesByItem).forEach(k => delete imagesByItem[k]);
-    imagesLoadedForOwner = null;
     loadLocalState();
     render();
     if (selectedOwner) { loadFromSheet({ replacePending: true }); loadAllImages(true); }
@@ -1441,6 +1449,7 @@
   function bindRootEvents() {
     if (!root || boundRoots.has(root)) return;
     boundRoots.add(root);
+    root.addEventListener('error', handlePhotoError, true);
 
     root.addEventListener('click', event => {
       const target = event.target;
@@ -1527,9 +1536,51 @@
   }
 
   // force=true 是使用者主動要求（換人、↻ 更新資料）：無視退避直接重抓。
+  function syncImageContext() {
+    const key = selectedOwner ? IMAGE_STORAGE_PREFIX + getTripIdentity() + '::owner::' + selectedOwner : '';
+    if (key === imagesContextKey) return;
+    imagesContextKey = key;
+    imageRequestId += 1;
+    imagesLoadedForContext = null;
+    imagesInFlight = false;
+    imagesRetryAfter = 0;
+    imagesFailStreak = 0;
+    Object.keys(imagesByItem).forEach(k => delete imagesByItem[k]);
+    Object.keys(uploadingByItem).forEach(k => delete uploadingByItem[k]);
+    try {
+      const saved = safeJsonParse(localStorage.getItem(key), []);
+      if (key && Array.isArray(saved)) Object.assign(imagesByItem, groupImagesByItem(saved));
+    } catch (_) {}
+  }
+
+  function saveImageMetadata() {
+    if (!imagesContextKey) return;
+    try {
+      localStorage.setItem(imagesContextKey, JSON.stringify(Object.values(imagesByItem).flat()));
+    } catch (_) {}
+  }
+
+  function updateImageItemCache(key, itemId, images) {
+    if (key === imagesContextKey) {
+      // A listing started before this mutation may still contain the old item photos.
+      imageRequestId += 1;
+      imagesInFlight = false;
+      imagesByItem[itemId] = images;
+      saveImageMetadata();
+      refreshItemImages(itemId);
+      return;
+    }
+    try {
+      const saved = safeJsonParse(localStorage.getItem(key), []);
+      const otherItems = Array.isArray(saved) ? saved.filter(img => String(img.item_id) !== String(itemId)) : [];
+      localStorage.setItem(key, JSON.stringify(otherItems.concat(images)));
+    } catch (_) {}
+  }
+
   async function loadAllImages(force) {
+    syncImageContext();
     if (!API_URL || !selectedOwner || !isBrowserOnline()) return;
-    if (!force && imagesLoadedForOwner === selectedOwner) return;
+    if (!force && imagesLoadedForContext === imagesContextKey) return;
     // 同一時間只允許一個請求。ensureLoadedForCurrentTrip 的 1.2s 輪詢會一直叫它，
     // 沒有這道閘就會在慢速網路上疊出一堆重複請求。
     if (imagesInFlight) return;
@@ -1537,27 +1588,31 @@
     // 連續失敗就退避，別讓輪詢變成每 1.2 秒打一次的無限重試。
     if (!force && (imagesFailStreak >= IMAGES_MAX_RETRY || Date.now() < imagesRetryAfter)) return;
 
-    const requestOwner = selectedOwner;
+    const requestKey = imagesContextKey;
+    const requestId = ++imageRequestId;
+    const isCurrent = () => requestId === imageRequestId && requestKey === imagesContextKey;
     imagesInFlight = true;
     try {
-      const res = await apiPost(buildBasePayload('prep_item_images_get'));
-      if (selectedOwner !== requestOwner) return;
+      const res = await apiPost(buildBasePayload('prep_item_images_get'), 20000);
+      if (!isCurrent()) return;
       if (res && res.status === 'success' && Array.isArray(res.images)) {
         Object.keys(imagesByItem).forEach(k => delete imagesByItem[k]);
         Object.assign(imagesByItem, groupImagesByItem(res.images));
-        imagesLoadedForOwner = requestOwner;
+        imagesLoadedForContext = requestKey;
         imagesFailStreak = 0;
+        saveImageMetadata();
         refreshPersonalArea();
       } else {
         imagesFailStreak += 1;
         imagesRetryAfter = Date.now() + IMAGES_RETRY_MS;
       }
     } catch (err) {
+      if (!isCurrent()) return;
       imagesFailStreak += 1;
       imagesRetryAfter = Date.now() + IMAGES_RETRY_MS;
       console.warn('load prep images failed:', err);
     } finally {
-      imagesInFlight = false;
+      if (isCurrent()) imagesInFlight = false;
     }
   }
 
@@ -1667,12 +1722,15 @@
 
   async function uploadOneImage(itemId, file) {
     if (!isBrowserOnline()) { alert('圖片需連線後才能上傳。'); return; }
+    syncImageContext();
+    const requestKey = imagesContextKey;
+    const basePayload = buildBasePayload('prep_image_upload');
     bumpUploading(itemId, 1);
     try {
       const compressed = await compressImage(file);
       if (!compressed.base64) throw new Error('empty image data');
       const clientUploadId = makeId('upload');
-      const payload = Object.assign(buildBasePayload('prep_image_upload'), {
+      const payload = Object.assign(basePayload, {
         itemId,
         clientUploadId,
         imageBase64: compressed.base64,
@@ -1683,29 +1741,33 @@
       });
       const res = await apiPost(payload);
       if (!res || res.status !== 'success') throw new Error((res && res.message) || 'upload failed');
-      if (Array.isArray(res.images)) imagesByItem[itemId] = groupImagesByItem(res.images)[itemId] || res.images;
+      if (Array.isArray(res.images)) updateImageItemCache(requestKey, itemId, groupImagesByItem(res.images)[itemId] || res.images);
     } catch (err) {
       console.warn('prep image upload failed:', err);
       alert('圖片上傳失敗，請稍後再試。');
     } finally {
-      bumpUploading(itemId, -1);
+      if (requestKey === imagesContextKey) bumpUploading(itemId, -1);
     }
   }
 
   async function deleteImage(itemId, imageId) {
     if (!isBrowserOnline()) { alert('圖片需連線後才能刪除。'); return; }
     if (!confirm('刪除這張圖片？')) return;
+    syncImageContext();
+    const requestKey = imagesContextKey;
     const backup = (imagesByItem[itemId] || []).slice();
     imagesByItem[itemId] = backup.filter(img => String(img.id) !== String(imageId));
     refreshItemImages(itemId);
     try {
       const res = await apiPost(Object.assign(buildBasePayload('prep_image_delete'), { itemId, imageId }));
       if (!res || res.status !== 'success') throw new Error((res && res.message) || 'delete failed');
-      if (Array.isArray(res.images)) { imagesByItem[itemId] = res.images; refreshItemImages(itemId); }
+      updateImageItemCache(requestKey, itemId, Array.isArray(res.images) ? res.images : backup.filter(img => String(img.id) !== String(imageId)));
     } catch (err) {
       console.warn('prep image delete failed:', err);
-      imagesByItem[itemId] = backup;
-      refreshItemImages(itemId);
+      if (requestKey === imagesContextKey) {
+        imagesByItem[itemId] = backup;
+        refreshItemImages(itemId);
+      }
       alert('圖片刪除失敗，請稍後再試。');
     }
   }
@@ -1723,6 +1785,29 @@
     old.replaceWith(fresh);
   }
 
+  async function handlePhotoError(event) {
+    const img = event.target;
+    if (!img || img.tagName !== 'IMG' || !isBrowserOnline()) return;
+    const source = img.src;
+    const shouldRetry = img.dataset.prepRetried !== source;
+    let url;
+    try { url = new URL(source); } catch (_) { return; }
+    const controller = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (!controller || typeof MessageChannel === 'undefined'
+      || url.hostname !== 'lh3.googleusercontent.com' || !url.pathname.startsWith('/d/')) return;
+    img.dataset.prepRetried = source;
+    const evicted = await new Promise(resolve => {
+      const channel = new MessageChannel();
+      const finish = value => { clearTimeout(timeout); channel.port1.close(); channel.port2.close(); resolve(value); };
+      const timeout = setTimeout(() => finish(false), 3000);
+      channel.port1.onmessage = message => finish(message.data === true);
+      try {
+        controller.postMessage({ type: 'TRAVEL_PREP_IMAGE_EVICT', url: source }, [channel.port2]);
+      } catch (_) { finish(false); }
+    });
+    if (evicted && shouldRetry && img.src === source) img.src = source;
+  }
+
   function openImageViewer(itemId, startIndex) {
     const list = imagesByItem[itemId] || [];
     if (!list.length) return;
@@ -1737,6 +1822,7 @@
       <button class="prep-img-viewer-btn prep-img-viewer-next" type="button" aria-label="下一張">›</button>
       <div class="prep-img-viewer-count"></div>`;
     const imgEl = overlay.querySelector('img');
+    imgEl.addEventListener('error', handlePhotoError);
     const countEl = overlay.querySelector('.prep-img-viewer-count');
     const show = () => {
       imgEl.src = list[index] ? (list[index].url || '') : '';
@@ -1858,8 +1944,8 @@
     // 這兩條 force 路徑救回來。症狀就是「第一次載入沒有圖片，重新讀取才正常」。
     //
     // 這裡跟著既有的輪詢（只在準備頁可見時跑）一起補抓，內部有 in-flight 閘與
-    // 失敗退避，成功後 imagesLoadedForOwner 會擋掉後續呼叫，不會變成常駐請求。
-    if (selectedOwner && imagesLoadedForOwner !== selectedOwner) loadAllImages();
+    // 失敗退避，成功後以旅程與成員去重。
+    if (selectedOwner && imagesLoadedForContext !== imagesContextKey) loadAllImages();
   }
 
   function init() {
