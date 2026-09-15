@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260914.1 -->
+<!-- version: 20260915.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260914.1" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260915.1" />
 
-  <script src="../js/device-router.js?v=20260914.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20260914.1"></script>
-  <script src="../vendor/Sortable.min.js?v=20260914.1"></script>
+  <script src="../js/device-router.js?v=20260915.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20260915.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20260915.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260914.1" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260914.1" />
-  <link rel="stylesheet" href="./desktop.css?v=20260914.1" />
+  <link rel="stylesheet" href="../style.css?v=20260915.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260915.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20260915.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260914.1" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260915.1" />
 </head>
 <body class="desktop-body">
 
@@ -525,7 +525,7 @@
                   <span>日期</span><span>項目</span><span>付款人</span><span>分類</span><span>參與</span><span class="desktop-td-amount">金額</span><span></span>
                 </div>
                 <div v-for="item in filteredExpenses" :key="item.id" class="desktop-tr">
-                  <span class="desktop-td-date">{{ expenseDateLabel(item) }}</span>
+                  <span class="desktop-td-date">{{ expenseRecordDateLabel(item) }}</span>
                   <strong class="desktop-td-title">{{ item.title }}</strong>
                   <span class="desktop-td-payer">{{ item.payer }}</span>
                   <span class="desktop-td-cat"><span class="desktop-td-cat-icon" aria-hidden="true">{{ getExpenseCategoryIcon(item.category) }}</span>{{ item.category }}</span>
@@ -656,9 +656,9 @@
               </template>
 
               <div class="desktop-table desktop-table-wallet">
-                <div class="desktop-tr desktop-th"><span>類型</span><span>項目</span><span>對象</span><span class="desktop-td-amount">金額</span><span></span></div>
-                <div v-for="tx in sharedWalletRecords" :key="tx.id" class="desktop-tr">
-                  <span>{{ tx.type === 'deposit' ? '存入' : '支出' }}</span>
+                <div class="desktop-tr desktop-th"><span>日期</span><span>項目</span><span>對象</span><span class="desktop-td-amount">金額</span><span></span></div>
+                <div v-for="tx in visibleSharedWalletRecords" :key="tx.id" class="desktop-tr">
+                  <span class="desktop-td-date">{{ walletRecordDateLabel(tx) }}</span>
                   <strong>{{ tx.type === 'deposit' ? (tx.person || '存入') : tx.title }}</strong>
                   <span>{{ formatSharedWalletUsers(tx) }}</span>
                   <span>{{ formatTransactionAmount(tx) }}</span>
@@ -667,7 +667,7 @@
                     <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除錢包紀錄" @click="removeSharedWalletTransaction(tx)" :disabled="isSavingSharedWallet">✕</button>
                   </span>
                 </div>
-                <p v-if="!sharedWalletRecords.length" class="desktop-empty">尚無共同錢包紀錄</p>
+                <p v-if="!visibleSharedWalletRecords.length" class="desktop-empty">{{ walletEntryMode === 'deposit' ? '尚無存入紀錄' : '尚無支出紀錄' }}</p>
               </div>
             </article>
           </template>
@@ -1099,26 +1099,26 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260914.1"></script>
+<script src="../config.js?v=20260915.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260914.1" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260914.1"></script>
-<script src="../js/utils.js?v=20260914.1"></script>
-<script src="../js/api.js?v=20260914.1"></script>
-<script src="../js/cache.js?v=20260914.1"></script>
-<script src="../js/maps.js?v=20260914.1"></script>
-<script src="../js/places.js?v=20260914.1"></script>
-<script src="../js/itinerary.js?v=20260914.1"></script>
-<script src="../js/hotels.js?v=20260914.1"></script>
-<script src="../js/expenses.js?v=20260914.1"></script>
-<script src="../js/sync-queue.js?v=20260914.1"></script>
-<script src="../js/sync-debug.js?v=20260914.1"></script>
-<script src="../js/weather.js?v=20260914.1"></script>
-<script src="../js/export.js?v=20260914.1"></script>
-<script src="../js/probe-search.js?v=20260914.1"></script>
-<script src="../app.js?v=20260914.1"></script>
-<script src="../search-zh-label.js?v=20260914.1"></script>
-<script src="../prep-checklist.js?v=20260914.1"></script>
+<script src="../cache-refresh.js?v=20260915.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260915.1"></script>
+<script src="../js/utils.js?v=20260915.1"></script>
+<script src="../js/api.js?v=20260915.1"></script>
+<script src="../js/cache.js?v=20260915.1"></script>
+<script src="../js/maps.js?v=20260915.1"></script>
+<script src="../js/places.js?v=20260915.1"></script>
+<script src="../js/itinerary.js?v=20260915.1"></script>
+<script src="../js/hotels.js?v=20260915.1"></script>
+<script src="../js/expenses.js?v=20260915.1"></script>
+<script src="../js/sync-queue.js?v=20260915.1"></script>
+<script src="../js/sync-debug.js?v=20260915.1"></script>
+<script src="../js/weather.js?v=20260915.1"></script>
+<script src="../js/export.js?v=20260915.1"></script>
+<script src="../js/probe-search.js?v=20260915.1"></script>
+<script src="../app.js?v=20260915.1"></script>
+<script src="../search-zh-label.js?v=20260915.1"></script>
+<script src="../prep-checklist.js?v=20260915.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

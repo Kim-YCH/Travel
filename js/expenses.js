@@ -128,6 +128,51 @@
     return Number.isFinite(fromDate) ? fromDate : 0;
   };
 
+  const isValidCalendarDate = (value) => {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year
+      && date.getUTCMonth() === month - 1
+      && date.getUTCDate() === day;
+  };
+
+  const recordCreatedDateLabel = (record, fallbackDate = '') => {
+    const createdAt = String(record?.created_at || '');
+    const createdDatePrefix = createdAt.match(/^\d{4}-\d{2}-\d{2}/);
+    const createdTime = createdDatePrefix && !isValidCalendarDate(createdDatePrefix[0])
+      ? NaN
+      : Date.parse(createdAt);
+    const idTime = Number(String(record?.id || '').split('_')[0]);
+    const idDate = Number.isFinite(idTime) && idTime >= 1e12 ? new Date(idTime) : null;
+    const timestamp = Number.isFinite(createdTime)
+      ? createdTime
+      : (idDate && Number.isFinite(idDate.getTime()) ? idDate.getTime() : NaN);
+
+    if (Number.isFinite(timestamp)) {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(new Date(timestamp));
+      const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      return `${values.year}/${values.month}/${values.day}`;
+    }
+
+    const fallback = String(fallbackDate || '');
+    return isValidCalendarDate(fallback) ? fallback.replaceAll('-', '/') : '—';
+  };
+
+  const filterSharedWalletRecords = (records, type) => (
+    (Array.isArray(records) ? records : [])
+      .filter(item => item?.type === type && Number(item?.amount) > 0)
+      .slice()
+  );
+
   /**
    * 從每個人的淨額算出實際轉帳清單。
    *
@@ -192,6 +237,8 @@
     parseBooleanFlag,
     normalizeSharedWalletTransaction,
     formatSharedWalletUsers,
-    expenseCreatedTime
+    expenseCreatedTime,
+    recordCreatedDateLabel,
+    filterSharedWalletRecords
   });
 })(window);

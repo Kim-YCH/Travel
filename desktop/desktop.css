@@ -2567,14 +2567,22 @@ button.suggestion-item {
 }
 
 .desktop-td-date,
-.desktop-td-payer,
-.desktop-td-involved {
+.desktop-td-payer {
   min-width: 0;
   color: var(--cloud-muted);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.desktop-td-involved {
+  min-width: 0;
+  color: var(--cloud-muted);
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
 }
 
 .desktop-td-title {

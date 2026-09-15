@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260914.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260915.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -45,7 +45,9 @@ createApp({
       parseBooleanFlag,
       normalizeSharedWalletTransaction,
       formatSharedWalletUsers,
-      expenseCreatedTime
+      expenseCreatedTime,
+      recordCreatedDateLabel,
+      filterSharedWalletRecords
     } = TravelExpenses;
 
     const { weatherCodeInfo, uvLevelLabel } = TravelWeather;
@@ -3494,6 +3496,10 @@ createApp({
         .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
     });
 
+    const visibleSharedWalletRecords = computed(() => (
+      filterSharedWalletRecords(sharedWalletRecords.value, walletEntryMode.value)
+    ));
+
     const sharedWalletDeposits = computed(() => sharedWalletRecords.value.filter(item => item.type === 'deposit'));
     const sharedWalletPayments = computed(() => sharedWalletRecords.value.filter(item => item.type === 'payment'));
     const sharedWalletDepositTotal = computed(() => sharedWalletDeposits.value.reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
@@ -3536,6 +3542,8 @@ createApp({
     });
 
     const filteredExpenses = computed(() => normalExpenseRecords.value);
+    const expenseRecordDateLabel = item => recordCreatedDateLabel(item);
+    const walletRecordDateLabel = item => recordCreatedDateLabel(item, item?.date);
 
     const filteredCategoryAnalysis = computed(() => {
       const stats = {};
@@ -4880,8 +4888,9 @@ createApp({
       toggleEditWalletPerson, selectAllEditWalletPeople,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
+      expenseRecordDateLabel, walletRecordDateLabel,
       getTransactionCurrencyLabel, formatTransactionAmount, convertAmountToTwd,
-      sharedWalletEnabled, sharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
+      sharedWalletEnabled, sharedWalletRecords, visibleSharedWalletRecords, sharedWalletDeposits, sharedWalletPayments,
       sharedWalletDepositTotal, sharedWalletPaymentTotal, sharedWalletBalance, sharedWalletMemberBalances,
       filteredExpenses, filteredCategoryAnalysis,
       filteredDayExpenseAnalysis, filteredPayerExpenseAnalysis,
