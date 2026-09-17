@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const VERSION = '20260915.2';
+const VERSION = '20260917.1';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const PREP_IMAGE_CACHE = 'travel-prep-images-v1';
 const PREP_IMAGE_CACHE_LIMIT = 60;
@@ -39,6 +39,7 @@ const SHELL_ASSETS = [
   `./js/expenses.js?v=${VERSION}`,
   `./js/sync-queue.js?v=${VERSION}`,
   `./js/sync-debug.js?v=${VERSION}`,
+  `./js/personal-ledger.js?v=${VERSION}`,
   `./js/weather.js?v=${VERSION}`,
   `./js/export.js?v=${VERSION}`,
   `./js/probe-search.js?v=${VERSION}`,

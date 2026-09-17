@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20260915.2 -->
+<!-- version: 20260917.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260915.2" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20260917.1" />
 
-  <script src="../js/device-router.js?v=20260915.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20260915.2"></script>
-  <script src="../vendor/Sortable.min.js?v=20260915.2"></script>
+  <script src="../js/device-router.js?v=20260917.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20260917.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20260917.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20260915.2" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20260915.2" />
-  <link rel="stylesheet" href="./desktop.css?v=20260915.2" />
+  <link rel="stylesheet" href="../style.css?v=20260917.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20260917.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20260917.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20260915.2" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20260917.1" />
 </head>
 <body class="desktop-body">
 
@@ -30,6 +30,7 @@
       <nav class="desktop-nav" aria-label="主要導覽">
         <button type="button" :class="{ 'is-active': currentTab === 'itinerary' }" @click="switchTab('itinerary'); switchDayViewMode('map')">📍 行程</button>
         <button type="button" :class="{ 'is-active': currentTab === 'money' }" @click="switchTab('money')">💰 分帳</button>
+        <button type="button" :class="{ 'is-active': currentTab === 'ledger' }" @click="switchTab('ledger')">🧾 記帳</button>
         <button type="button" :class="{ 'is-active': currentTab === 'prep' }" @click="switchTab('prep')">🎒 準備</button>
         <button type="button" :class="{ 'is-active': currentTab === 'settings' }" @click="switchTab('settings')">⚙️ 設定</button>
       </nav>
@@ -754,6 +755,76 @@
         </aside>
         </div>
       </section>
+      <section v-show="currentTab === 'ledger'" class="desktop-pane desktop-ledger">
+        <header class="desktop-ledger-head">
+          <div>
+            <h2>記帳</h2>
+            <div class="desktop-ledger-owners" role="group" aria-label="選擇成員">
+              <button
+                v-for="p in ledgerPeople"
+                :key="'desktop-ledger-owner-' + p.id"
+                type="button"
+                :class="{ 'is-active': selectedLedgerOwner === p.name }"
+                @click="selectLedgerOwner(p.name)"
+              >{{ p.name }}</button>
+            </div>
+            <p v-if="!ledgerPeople.length" class="desktop-ledger-owner-empty">請先到設定新增成員</p>
+          </div>
+          <div class="desktop-ledger-summary" aria-label="記帳摘要">
+            <div><span>分帳</span><strong>NT${{ Math.round(personalLedgerDerivedTotal) }}</strong></div>
+            <div><span>記帳</span><strong>NT${{ Math.round(personalLedgerManualTotal) }}</strong></div>
+            <div class="is-total"><span>合計</span><strong>NT${{ Math.round(personalLedgerTotal) }}</strong></div>
+          </div>
+        </header>
+
+        <div class="desktop-ledger-grid">
+          <form class="desktop-ledger-form" @submit.prevent="addPersonalLedgerEntry">
+            <h3>新增記帳</h3>
+            <label><span>日期</span><input v-model="newPersonalLedgerEntry.date" type="date" required></label>
+            <label><span>項目</span><input v-model="newPersonalLedgerEntry.title" type="text" placeholder="項目名稱" required></label>
+            <div class="desktop-ledger-form-row">
+              <label><span>金額</span><input v-model.number="newPersonalLedgerEntry.amount" type="number" min="0" step="any" placeholder="0" required></label>
+              <label>
+                <span>幣別</span>
+                <select v-model="newPersonalLedgerEntry.currency">
+                  <option v-for="option in currencyOptions" :key="'desktop-ledger-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>分類</span>
+              <select v-model="newPersonalLedgerEntry.category">
+                <option v-for="cat in categories" :key="'desktop-ledger-category-' + cat" :value="cat">{{ cat }}</option>
+              </select>
+            </label>
+            <label><span>備註</span><input v-model="newPersonalLedgerEntry.note" type="text" placeholder="選填"></label>
+            <button type="submit" class="desktop-primary" :disabled="isSavingPersonalLedger || !selectedLedgerOwner">
+              {{ isSavingPersonalLedger ? '儲存中...' : '新增' }}
+            </button>
+          </form>
+
+          <section class="desktop-ledger-list" aria-labelledby="desktop-ledger-list-title">
+            <h3 id="desktop-ledger-list-title">明細</h3>
+            <div class="desktop-ledger-table" v-if="personalLedgerEntries.length">
+              <div class="desktop-ledger-table-head" aria-hidden="true">
+                <span>日期</span><span>項目</span><span>來源</span><span>金額</span><span></span>
+              </div>
+              <article v-for="entry in personalLedgerEntries" :key="entry.id" class="desktop-ledger-row">
+                <time>{{ entry.date || '—' }}</time>
+                <div><strong>{{ entry.title }}</strong><small>{{ entry.category }}<template v-if="entry.note"> · {{ entry.note }}</template></small></div>
+                <span class="desktop-ledger-source" :class="'is-' + entry.source">{{ entry.sourceLabel }}</span>
+                <strong class="desktop-ledger-amount">{{ formatTransactionAmount(entry) }}</strong>
+                <div v-if="!entry.readOnly" class="desktop-ledger-actions">
+                  <button type="button" class="desktop-icon-btn" title="編輯" aria-label="編輯記帳" @click="openEditPersonalLedgerModal(entry)">✏️</button>
+                  <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除記帳" @click="removePersonalLedgerEntry(entry)">✕</button>
+                </div>
+                <span v-else aria-hidden="true"></span>
+              </article>
+            </div>
+            <p v-else class="desktop-empty">目前沒有記帳紀錄</p>
+          </section>
+        </div>
+      </section>
       <section v-show="currentTab === 'settings'" class="desktop-pane desktop-settings">
         <div class="desktop-settings-main">
           <article class="card desktop-settings-lodging">
@@ -1054,6 +1125,32 @@
         </div>
       </div>
 
+      <div v-if="showEditPersonalLedgerModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
+        <form class="card desktop-modal desktop-ledger-edit" @submit.prevent="savePersonalLedgerEntry">
+          <h3>編輯記帳</h3>
+          <label><span>日期</span><input v-model="editPersonalLedgerEntry.date" type="date"></label>
+          <label><span>項目</span><input v-model="editPersonalLedgerEntry.title" type="text"></label>
+          <label><span>金額</span><input v-model.number="editPersonalLedgerEntry.amount" type="number" min="0" step="any"></label>
+          <label>
+            <span>幣別</span>
+            <select v-model="editPersonalLedgerEntry.currency">
+              <option v-for="option in currencyOptions" :key="'desktop-edit-ledger-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>分類</span>
+            <select v-model="editPersonalLedgerEntry.category">
+              <option v-for="cat in categories" :key="'desktop-edit-ledger-category-' + cat" :value="cat">{{ cat }}</option>
+            </select>
+          </label>
+          <label><span>備註</span><input v-model="editPersonalLedgerEntry.note" type="text"></label>
+          <div class="desktop-modal-actions">
+            <button type="button" class="desktop-ghost" @click="closeEditPersonalLedgerModal" :disabled="isSavingPersonalLedger">取消</button>
+            <button type="submit" class="desktop-primary" :disabled="isSavingPersonalLedger">{{ isSavingPersonalLedger ? '儲存中...' : '儲存' }}</button>
+          </div>
+        </form>
+      </div>
+
       <div v-if="showDayModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeDayModal" @keydown.esc="closeDayModal">
         <div class="card desktop-modal">
           <h3>Day {{ modalDay }}</h3>
@@ -1099,26 +1196,27 @@
   </div>
 </div>
 
-<script src="../config.js?v=20260915.2"></script>
+<script src="../config.js?v=20260917.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20260915.2" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20260915.2"></script>
-<script src="../js/utils.js?v=20260915.2"></script>
-<script src="../js/api.js?v=20260915.2"></script>
-<script src="../js/cache.js?v=20260915.2"></script>
-<script src="../js/maps.js?v=20260915.2"></script>
-<script src="../js/places.js?v=20260915.2"></script>
-<script src="../js/itinerary.js?v=20260915.2"></script>
-<script src="../js/hotels.js?v=20260915.2"></script>
-<script src="../js/expenses.js?v=20260915.2"></script>
-<script src="../js/sync-queue.js?v=20260915.2"></script>
-<script src="../js/sync-debug.js?v=20260915.2"></script>
-<script src="../js/weather.js?v=20260915.2"></script>
-<script src="../js/export.js?v=20260915.2"></script>
-<script src="../js/probe-search.js?v=20260915.2"></script>
-<script src="../app.js?v=20260915.2"></script>
-<script src="../search-zh-label.js?v=20260915.2"></script>
-<script src="../prep-checklist.js?v=20260915.2"></script>
+<script src="../cache-refresh.js?v=20260917.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20260917.1"></script>
+<script src="../js/utils.js?v=20260917.1"></script>
+<script src="../js/api.js?v=20260917.1"></script>
+<script src="../js/cache.js?v=20260917.1"></script>
+<script src="../js/maps.js?v=20260917.1"></script>
+<script src="../js/places.js?v=20260917.1"></script>
+<script src="../js/itinerary.js?v=20260917.1"></script>
+<script src="../js/hotels.js?v=20260917.1"></script>
+<script src="../js/expenses.js?v=20260917.1"></script>
+<script src="../js/sync-queue.js?v=20260917.1"></script>
+<script src="../js/sync-debug.js?v=20260917.1"></script>
+<script src="../js/personal-ledger.js?v=20260917.1"></script>
+<script src="../js/weather.js?v=20260917.1"></script>
+<script src="../js/export.js?v=20260917.1"></script>
+<script src="../js/probe-search.js?v=20260917.1"></script>
+<script src="../app.js?v=20260917.1"></script>
+<script src="../search-zh-label.js?v=20260917.1"></script>
+<script src="../prep-checklist.js?v=20260917.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

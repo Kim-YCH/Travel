@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<!-- version: 20260915.2 -->
+<!-- version: 20260917.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260915.2" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260915.2" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260915.2" />
-  <link rel="manifest" href="./site.webmanifest?v=20260915.2" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260917.1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20260917.1" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20260917.1" />
+  <link rel="manifest" href="./site.webmanifest?v=20260917.1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20260915.2" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20260915.2"></script>
-  <script src="./vendor/Sortable.min.js?v=20260915.2"></script>
+  <script src="./js/device-router.js?v=20260917.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20260917.1"></script>
+  <script src="./vendor/Sortable.min.js?v=20260917.1"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20260915.2" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20260915.2" />
+  <link rel="stylesheet" href="./style.css?v=20260917.1" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20260917.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20260915.2" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20260917.1" />
 </head>
 <body>
 
@@ -813,6 +813,78 @@
         </div>
       </div>
 
+      <!-- Personal ledger -->
+      <div v-show="currentTab === 'ledger'" class="ledger-page tab-panel">
+        <section class="ledger-owner-section" aria-labelledby="ledger-owner-title">
+          <h2 id="ledger-owner-title">記帳</h2>
+          <div class="ledger-owner-options" role="group" aria-label="選擇成員">
+            <button
+              v-for="p in ledgerPeople"
+              :key="'ledger-owner-' + p.id"
+              type="button"
+              :class="{ active: selectedLedgerOwner === p.name }"
+              @click="selectLedgerOwner(p.name)"
+            >{{ p.name }}</button>
+          </div>
+          <p v-if="!ledgerPeople.length" class="ledger-owner-empty">請先到設定新增成員</p>
+        </section>
+
+        <section class="ledger-summary" aria-label="記帳摘要">
+          <div><span>分帳</span><strong>NT${{ Math.round(personalLedgerDerivedTotal) }}</strong></div>
+          <div><span>記帳</span><strong>NT${{ Math.round(personalLedgerManualTotal) }}</strong></div>
+          <div class="ledger-summary-total"><span>合計</span><strong>NT${{ Math.round(personalLedgerTotal) }}</strong></div>
+        </section>
+
+        <form class="ledger-entry-form" @submit.prevent="addPersonalLedgerEntry">
+          <h3>新增記帳</h3>
+          <div class="ledger-form-grid">
+            <label><span>日期</span><input v-model="newPersonalLedgerEntry.date" type="date" required></label>
+            <label><span>項目</span><input v-model="newPersonalLedgerEntry.title" type="text" placeholder="項目名稱" required></label>
+            <label><span>金額</span><input v-model.number="newPersonalLedgerEntry.amount" type="number" min="0" step="any" placeholder="0" required></label>
+            <label>
+              <span>幣別</span>
+              <select v-model="newPersonalLedgerEntry.currency">
+                <option v-for="option in currencyOptions" :key="'ledger-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+              </select>
+            </label>
+            <label>
+              <span>分類</span>
+              <select v-model="newPersonalLedgerEntry.category">
+                <option v-for="cat in categories" :key="'ledger-category-' + cat" :value="cat">{{ cat }}</option>
+              </select>
+            </label>
+            <label class="ledger-note-field"><span>備註</span><input v-model="newPersonalLedgerEntry.note" type="text" placeholder="選填"></label>
+          </div>
+          <button type="submit" class="ledger-submit" :disabled="isSavingPersonalLedger || !selectedLedgerOwner">
+            {{ isSavingPersonalLedger ? '儲存中...' : '新增' }}
+          </button>
+        </form>
+
+        <section class="ledger-list-section" aria-labelledby="ledger-list-title">
+          <h3 id="ledger-list-title">明細</h3>
+          <div v-if="personalLedgerEntries.length" class="ledger-list">
+            <article v-for="entry in personalLedgerEntries" :key="entry.id" class="ledger-entry">
+              <div class="ledger-entry-main">
+                <div class="ledger-entry-heading">
+                  <strong>{{ entry.title }}</strong>
+                  <span class="ledger-source" :class="'ledger-source-' + entry.source">{{ entry.sourceLabel }}</span>
+                </div>
+                <span>{{ entry.date || '未填日期' }}<template v-if="entry.category"> · {{ entry.category }}</template></span>
+                <small v-if="entry.note">{{ entry.note }}</small>
+              </div>
+              <div class="ledger-entry-side">
+                <strong>{{ formatTransactionAmount(entry) }}</strong>
+                <div v-if="!entry.readOnly" class="ledger-entry-actions">
+                  <button type="button" title="編輯" aria-label="編輯記帳" @click="openEditPersonalLedgerModal(entry)">✏️</button>
+                  <button type="button" title="刪除" aria-label="刪除記帳" @click="removePersonalLedgerEntry(entry)">×</button>
+                </div>
+              </div>
+            </article>
+          </div>
+          <p v-else class="ledger-empty">目前沒有記帳紀錄</p>
+        </section>
+      </div>
+
       <!-- Prep -->
       <div v-show="currentTab === 'prep'" class="p-3 space-y-3 pb-24 tab-panel prep-page">
         <div id="prep-checklist-root"></div>
@@ -986,6 +1058,9 @@
       </button>
       <button @click="switchTab('money')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='money'?'text-green-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5">💰</span><span class="text-[10px] font-bold">分帳</span>
+      </button>
+      <button @click="switchTab('ledger')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='ledger'?'text-emerald-700 scale-110':'text-gray-400'">
+        <span class="text-2xl mb-0.5">🧾</span><span class="text-[10px] font-bold">記帳</span>
       </button>
       <button @click="switchTab('prep')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='prep'?'text-blue-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5">🎒</span><span class="text-[10px] font-bold">準備</span>
@@ -1391,6 +1466,32 @@
     </div>
   </div>
 
+  <div v-if="showEditPersonalLedgerModal" class="modal-mask" @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
+    <div class="modal-card ledger-edit-modal" role="dialog" aria-modal="true" tabindex="-1">
+      <h2>編輯記帳</h2>
+      <label><span>日期</span><input v-model="editPersonalLedgerEntry.date" type="date"></label>
+      <label><span>項目</span><input v-model="editPersonalLedgerEntry.title" type="text"></label>
+      <label><span>金額</span><input v-model.number="editPersonalLedgerEntry.amount" type="number" min="0" step="any"></label>
+      <label>
+        <span>幣別</span>
+        <select v-model="editPersonalLedgerEntry.currency">
+          <option v-for="option in currencyOptions" :key="'edit-ledger-currency-' + option.value" :value="option.value">{{ option.value === 'FOREIGN' ? (foreignCurrency || '外幣') : option.label }}</option>
+        </select>
+      </label>
+      <label>
+        <span>分類</span>
+        <select v-model="editPersonalLedgerEntry.category">
+          <option v-for="cat in categories" :key="'edit-ledger-category-' + cat" :value="cat">{{ cat }}</option>
+        </select>
+      </label>
+      <label><span>備註</span><input v-model="editPersonalLedgerEntry.note" type="text"></label>
+      <div class="ledger-edit-actions">
+        <button type="button" @click="closeEditPersonalLedgerModal" :disabled="isSavingPersonalLedger">取消</button>
+        <button type="button" class="primary" @click="savePersonalLedgerEntry" :disabled="isSavingPersonalLedger">{{ isSavingPersonalLedger ? '儲存中...' : '儲存' }}</button>
+      </div>
+    </div>
+  </div>
+
   <div v-if="showSyncDebugModal" class="modal-mask sync-debug-mask" @click.self="closeSyncDebugModal" @keydown.esc="closeSyncDebugModal">
     <section class="modal-card sync-debug-modal" role="dialog" aria-modal="true" aria-labelledby="sync-debug-title" tabindex="-1">
       <header class="sync-debug-header">
@@ -1416,25 +1517,26 @@
   </div>
 </div>
 
-<script src="./config.js?v=20260915.2"></script>
-<script src="./cache-refresh.js?v=20260915.2"></script>
-<script src="./keyword-map.js?v=20260915.2"></script>
-<script src="./js/utils.js?v=20260915.2"></script>
-<script src="./js/api.js?v=20260915.2"></script>
-<script src="./js/cache.js?v=20260915.2"></script>
-<script src="./js/maps.js?v=20260915.2"></script>
-<script src="./js/places.js?v=20260915.2"></script>
-<script src="./js/itinerary.js?v=20260915.2"></script>
-<script src="./js/hotels.js?v=20260915.2"></script>
-<script src="./js/expenses.js?v=20260915.2"></script>
-<script src="./js/sync-queue.js?v=20260915.2"></script>
-<script src="./js/sync-debug.js?v=20260915.2"></script>
-<script src="./js/weather.js?v=20260915.2"></script>
-<script src="./js/export.js?v=20260915.2"></script>
-<script src="./js/probe-search.js?v=20260915.2"></script>
-<script src="./app.js?v=20260915.2"></script>
-<script src="./search-zh-label.js?v=20260915.2"></script>
-<script src="./prep-checklist.js?v=20260915.2"></script>
+<script src="./config.js?v=20260917.1"></script>
+<script src="./cache-refresh.js?v=20260917.1"></script>
+<script src="./keyword-map.js?v=20260917.1"></script>
+<script src="./js/utils.js?v=20260917.1"></script>
+<script src="./js/api.js?v=20260917.1"></script>
+<script src="./js/cache.js?v=20260917.1"></script>
+<script src="./js/maps.js?v=20260917.1"></script>
+<script src="./js/places.js?v=20260917.1"></script>
+<script src="./js/itinerary.js?v=20260917.1"></script>
+<script src="./js/hotels.js?v=20260917.1"></script>
+<script src="./js/expenses.js?v=20260917.1"></script>
+<script src="./js/sync-queue.js?v=20260917.1"></script>
+<script src="./js/sync-debug.js?v=20260917.1"></script>
+<script src="./js/personal-ledger.js?v=20260917.1"></script>
+<script src="./js/weather.js?v=20260917.1"></script>
+<script src="./js/export.js?v=20260917.1"></script>
+<script src="./js/probe-search.js?v=20260917.1"></script>
+<script src="./app.js?v=20260917.1"></script>
+<script src="./search-zh-label.js?v=20260917.1"></script>
+<script src="./prep-checklist.js?v=20260917.1"></script>
 
 </body>
 </html>

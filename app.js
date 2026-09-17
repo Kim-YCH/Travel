@@ -4,12 +4,12 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260915.2';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260917.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
       'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport',
-      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug'
+      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug', 'TravelPersonalLedger'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -26,6 +26,18 @@ createApp({
     const TravelProbeSearch = window.TravelProbeSearch;
     const TravelSyncQueue = window.TravelSyncQueue;
     const TravelSyncDebug = window.TravelSyncDebug;
+    const TravelPersonalLedger = window.TravelPersonalLedger;
+
+    const {
+      normalizeManualEntry,
+      buildPersonalLedgerEntries,
+      persistedLedgerPeople,
+      applyManualEntryRollback,
+      rebaseManualEntryJobs,
+      personalLedgerOwnerKey,
+      prepOwnerKey,
+      resolveSelectedOwner
+    } = TravelPersonalLedger;
 
     const {
       PUBLIC_ACCOUNT_NAME,
@@ -76,6 +88,7 @@ createApp({
     const isAddingPlace = ref(false);
     const isAddingExpense = ref(false);
     const isSavingSharedWallet = ref(false);
+    const isSavingPersonalLedger = ref(false);
     const isUpdatingSharedWalletSetting = ref(false);
     const isRefreshingMoney = ref(false);
 
@@ -97,9 +110,11 @@ createApp({
     const SYNC_MAX_AUTO_RETRIES = 3;
 
     const people = ref([]);
+    const ledgerPeople = computed(() => persistedLedgerPeople(people.value));
     const itinerary = ref([]);
     const expenses = ref([]);
     const sharedWalletTransactions = ref([]);
+    const personalLedgerManualEntries = ref([]);
     const hotels = ref([]);
     const alternatives = ref([]); // 舊版備案表保留但不再使用；新版備案改存在 itinerary.is_alternative
 
@@ -115,6 +130,16 @@ createApp({
       const offset = now.getTimezoneOffset() * 60000;
       return new Date(now.getTime() - offset).toISOString().slice(0, 10);
     };
+    const createEmptyPersonalLedgerEntry = () => ({
+      date: defaultWalletDate(),
+      title: '',
+      amount: '',
+      currency: 'TWD',
+      category: '飲食',
+      note: ''
+    });
+    const selectedLedgerOwner = ref('');
+    const newPersonalLedgerEntry = ref(createEmptyPersonalLedgerEntry());
     const newSharedWalletDeposit = ref({ person: '', amount: '', currency: 'TWD', note: '' });
     const newSharedWalletPayment = ref({ title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' });
     const currencyOptions = Object.freeze([
@@ -213,7 +238,60 @@ createApp({
       persons: [], amount: 0, currency: 'TWD', category: '飲食', note: ''
     });
 
+    const showEditPersonalLedgerModal = ref(false);
+    const editPersonalLedgerId = ref('');
+    const editPersonalLedgerEntry = ref(createEmptyPersonalLedgerEntry());
+
     const generateId = TravelUtils.generateId;
+
+    const readCookieValue = (key) => {
+      const prefix = `${encodeURIComponent(key)}=`;
+      const item = String(document.cookie || '')
+        .split(';')
+        .map(part => part.trim())
+        .find(part => part.startsWith(prefix));
+      if (!item) return '';
+      try { return decodeURIComponent(item.slice(prefix.length)); } catch (_) { return ''; }
+    };
+
+    const readDeviceOwner = (key) => {
+      try {
+        return localStorage.getItem(key) || readCookieValue(key) || '';
+      } catch (_) {
+        return readCookieValue(key);
+      }
+    };
+
+    const writeDeviceOwner = (key, value) => {
+      const normalized = String(value || '').trim();
+      if (!key || !normalized) return;
+      try { localStorage.setItem(key, normalized); } catch (_) {}
+      document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(normalized)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+    };
+
+    const syncLedgerOwnerSelection = () => {
+      const tripId = currentTrip.value?.id;
+      if (!tripId) {
+        selectedLedgerOwner.value = '';
+        return;
+      }
+      const key = personalLedgerOwnerKey(tripId);
+      const owner = resolveSelectedOwner({
+        storedOwner: readDeviceOwner(key),
+        prepOwner: readDeviceOwner(prepOwnerKey(tripId)),
+        people: ledgerPeople.value
+      });
+      selectedLedgerOwner.value = owner;
+      if (owner) writeDeviceOwner(key, owner);
+    };
+
+    const selectLedgerOwner = (owner) => {
+      const normalized = resolveSelectedOwner({ storedOwner: owner, prepOwner: '', people: ledgerPeople.value });
+      selectedLedgerOwner.value = normalized;
+      if (normalized && currentTrip.value?.id) {
+        writeDeviceOwner(personalLedgerOwnerKey(currentTrip.value.id), normalized);
+      }
+    };
 
     const syncCurrencySettingsFromTrip = () => {
       const settings = normalizeTripCurrencySettings(currentTrip.value);
@@ -887,6 +965,7 @@ createApp({
           itinerary: itinerary.value,
           expenses: expenses.value,
           sharedWalletTransactions: sharedWalletTransactions.value,
+          personalLedgerEntries: personalLedgerManualEntries.value,
           people: people.value,
           hotels: hotels.value,
           alternatives: alternatives.value,
@@ -908,9 +987,13 @@ createApp({
         sharedWalletTransactions.value = Array.isArray(c.sharedWalletTransactions)
           ? c.sharedWalletTransactions.map(normalizeSharedWalletTransaction)
           : [];
+        personalLedgerManualEntries.value = Array.isArray(c.personalLedgerEntries)
+          ? c.personalLedgerEntries.map(normalizeManualEntry)
+          : [];
         people.value = filterActualPeople(c.people);
         if (!people.value.length) people.value = [{id:'default', name:'我'}];
         syncPersonSelections();
+        syncLedgerOwnerSelection();
         hotels.value    = Array.isArray(c.hotels) ? c.hotels.map(normalizeHotelRecord) : [];
         alternatives.value = Array.isArray(c.alternatives) ? c.alternatives.map(normalizeAlternativeRecord) : [];
 
@@ -1003,20 +1086,65 @@ createApp({
       }
     };
 
-    const enqueuePendingWrite = (payload, err) => {
-      if (!currentTrip.value?.id || !payload?.action) return;
+    const enqueuePendingWrite = (payload, err, originTripId = String(currentTrip.value?.id || ''), jobOptions = {}) => {
+      const tripId = String(originTripId || '');
+      if (!tripId || !payload?.action) return;
       const job = {
+        rollback: jobOptions.rollback || null,
+        retryDefinitive: jobOptions.retryDefinitive === true,
         id: generateId(),
         payload,
         attempts: 0,
         error: String(err?.message || err || ''),
         created_at: new Date().toISOString()
       };
-      pendingSyncQueue.value.push(job);
-      recordSyncDebug('queued', job, { error: job.error });
-      syncStatus.value = 'queued';
-      syncMessage.value = '已暫存，稍後重送';
-      savePendingQueue();
+      const isActiveTrip = String(currentTrip.value?.id || '') === tripId;
+      if (isActiveTrip) {
+        pendingSyncQueue.value.push(job);
+        syncStatus.value = 'queued';
+        syncMessage.value = '已暫存，稍後重送';
+        savePendingQueue();
+      } else {
+        try {
+          const key = pendingQueueKey(tripId);
+          const existing = JSON.parse(localStorage.getItem(key) || '[]');
+          const jobs = Array.isArray(existing) ? existing.map(normalizePendingJob) : [];
+          localStorage.setItem(key, JSON.stringify([...jobs, job]));
+        } catch (_) {}
+      }
+      recordSyncDebug('queued', job, { error: job.error, tripId });
+    };
+
+    const supersedePendingWrites = (originTripId, successfulPayload) => {
+      if (String(successfulPayload?.type || '') !== 'personal_ledger') return;
+      const tripId = String(originTripId || '');
+      if (!tripId) return;
+      const activeTrip = String(currentTrip.value?.id || '') === tripId;
+      try {
+        const key = pendingQueueKey(tripId);
+        const source = activeTrip
+          ? pendingSyncQueue.value
+          : JSON.parse(localStorage.getItem(key) || '[]');
+        const normalized = Array.isArray(source) ? source.map(normalizePendingJob) : [];
+        const remaining = TravelSyncQueue.discardSupersededJobs(normalized, successfulPayload);
+        if (remaining.length === normalized.length) return;
+        localStorage.setItem(key, JSON.stringify(remaining));
+        if (activeTrip) pendingSyncQueue.value = remaining;
+      } catch (_) {}
+    };
+
+    const isPendingWriteForTrip = (originTripId, jobId) => {
+      const tripId = String(originTripId || '');
+      if (!tripId || !jobId) return false;
+      if (String(currentTrip.value?.id || '') === tripId) {
+        return TravelSyncQueue.hasPendingJob(pendingSyncQueue.value, jobId);
+      }
+      try {
+        const parsed = JSON.parse(localStorage.getItem(pendingQueueKey(tripId)) || '[]');
+        return TravelSyncQueue.hasPendingJob(parsed, jobId);
+      } catch (_) {
+        return true;
+      }
     };
 
     const enqueueMutationWrite = (write) => {
@@ -1028,12 +1156,7 @@ createApp({
       });
     };
 
-    const assertMutationResponse = (res) => {
-      if (!res || res.status !== 'success') {
-        throw new Error(res?.message || 'invalid sync response');
-      }
-      return res;
-    };
+    const assertMutationResponse = TravelSyncQueue.assertMutationResponse;
 
     const flushPendingQueue = (options = {}) => {
       if (pendingQueueFlushPromise) return pendingQueueFlushPromise;
@@ -1061,31 +1184,67 @@ createApp({
         isFlushingQueue.value = true;
         syncStatus.value = 'syncing';
 
-        const remain = [];
+        const outcomes = [];
+        const rejectedIds = [];
         for (const job of queueSnapshot) {
           try {
             if (!job?.payload?.action) throw new Error('同步佇列資料格式無效');
-            const res = await enqueueMutationWrite(() => rawPostJSON(job.payload));
+            const res = await enqueueMutationWrite(() => {
+              if (!isPendingWriteForTrip(tripId, job.id)) {
+                return { status: 'superseded', superseded: true };
+              }
+              return rawPostJSON(job.payload);
+            });
+            if (res?.superseded) {
+              outcomes.push({ id: job.id, status: 'superseded' });
+              recordSyncDebug('retry_superseded', job);
+              continue;
+            }
             assertMutationResponse(res);
+            outcomes.push({ id: job.id, status: 'success' });
             recordSyncDebug('retry_succeeded', job, { response: res });
           } catch (err) {
+            if (err?.code === 'API_REJECTED' && job.retryDefinitive !== true) {
+              outcomes.push({ id: job.id, status: 'rejected' });
+              rejectedIds.push(job.id);
+              recordSyncDebug('retry_rejected', job, { error: String(err?.message || err || '') });
+              continue;
+            }
             const failedJob = {
               ...normalizePendingJob(job),
               attempts: (job.attempts || 0) + 1,
               error: String(err?.message || err || ''),
               last_try_at: new Date().toISOString()
             };
-            remain.push(failedJob);
+            outcomes.push({ id: job.id, status: 'retry', job: failedJob });
             recordSyncDebug('retry_failed', failedJob, { error: failedJob.error });
           }
         }
 
-        if (currentTrip.value?.id && String(currentTrip.value.id) === tripId) {
-          const queuedIds = new Set(queueSnapshot.map(job => job.id));
-          const newJobs = pendingSyncQueue.value.filter(job => !queuedIds.has(job?.id));
-          pendingSyncQueue.value = [...remain, ...newJobs];
-          savePendingQueue();
-          const blockedJobs = pendingSyncQueue.value.filter((job) => (
+        const activeTrip = String(currentTrip.value?.id || '') === tripId;
+        let originJobs = [];
+        try {
+          const stored = localStorage.getItem(pendingQueueKey(tripId));
+          const parsed = stored ? JSON.parse(stored) : [];
+          originJobs = activeTrip
+            ? pendingSyncQueue.value.map(normalizePendingJob)
+            : (Array.isArray(parsed) ? parsed.map(normalizePendingJob) : []);
+        } catch (_) {
+          originJobs = activeTrip ? pendingSyncQueue.value.map(normalizePendingJob) : queueSnapshot.slice();
+        }
+
+        const rebased = rebasePersonalLedgerJobs(tripId, originJobs, rejectedIds);
+        const settledQueue = TravelSyncQueue.settlePendingJobs(originJobs, outcomes).map(job => ({
+          ...job,
+          rollback: rebased.rollbacks[String(job?.id || '')] || job.rollback || null
+        }));
+        try {
+          localStorage.setItem(pendingQueueKey(tripId), JSON.stringify(settledQueue));
+        } catch (_) {}
+
+        if (activeTrip) {
+          pendingSyncQueue.value = settledQueue;
+          const blockedJobs = settledQueue.filter((job) => (
             Number(job?.attempts || 0) >= SYNC_MAX_AUTO_RETRIES
           ));
           if (blockedJobs.length) {
@@ -1098,7 +1257,7 @@ createApp({
               : '已同步';
           }
         }
-        return pendingSyncQueue.value.length === 0;
+        return settledQueue.length === 0;
       })().catch((err) => {
         console.error('flushPendingQueue failed:', err);
         syncStatus.value = 'error';
@@ -1116,23 +1275,31 @@ createApp({
 
     const postJSON = async (payload, options = {}) => {
       const queueOnFail = options.queueOnFail !== false;
+      const originTripId = String(currentTrip.value?.id || '');
+      const isOriginTripActive = () => String(currentTrip.value?.id || '') === originTripId;
       if (payload?.action) syncStatus.value = 'syncing';
 
       try {
-        const res = await enqueueMutationWrite(() => rawPostJSON(payload));
-        assertMutationResponse(res);
-        if (payload?.action && pendingSyncQueue.value.length === 0 && pendingMutationWrites === 0) {
+        const res = await enqueueMutationWrite(async () => {
+          const response = await rawPostJSON(payload);
+          assertMutationResponse(response);
+          supersedePendingWrites(originTripId, payload);
+          return response;
+        });
+        if (payload?.action && isOriginTripActive() && pendingSyncQueue.value.length === 0 && pendingMutationWrites === 0) {
           syncStatus.value = 'synced';
           syncMessage.value = '已同步';
         }
         return res;
       } catch (err) {
-        if (queueOnFail && payload?.action) {
-          enqueuePendingWrite(payload, err);
+        if (queueOnFail && payload?.action && err?.code !== 'API_REJECTED') {
+          enqueuePendingWrite(payload, err, originTripId, { rollback: options.rollback || null });
           return { status: 'queued', queued: true, message: String(err?.message || err || '') };
         }
-        syncStatus.value = 'error';
-        syncMessage.value = String(err?.message || err || '同步失敗');
+        if (isOriginTripActive()) {
+          syncStatus.value = 'error';
+          syncMessage.value = String(err?.message || err || '同步失敗');
+        }
         throw err;
       }
     };
@@ -2042,6 +2209,8 @@ createApp({
       itinerary.value = [];
       expenses.value = [];
       sharedWalletTransactions.value = [];
+      personalLedgerManualEntries.value = [];
+      selectedLedgerOwner.value = '';
       people.value = [];
       newSharedWalletDeposit.value = { person: '', amount: '', currency: 'TWD', note: '' };
       newSharedWalletPayment.value = { title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
@@ -2090,6 +2259,8 @@ createApp({
       lastMoneyRefreshAt = 0;
       currentView.value = 'lobby';
       currentTrip.value = null;
+      personalLedgerManualEntries.value = [];
+      selectedLedgerOwner.value = '';
       pendingSyncQueue.value = [];
       syncStatus.value = 'synced';
       syncMessage.value = '';
@@ -2218,11 +2389,16 @@ createApp({
         const walletPayload = Array.isArray(data?.sharedWalletTransactions)
           ? data.sharedWalletTransactions
           : (Array.isArray(data?.shared_wallet_transactions) ? data.shared_wallet_transactions : null);
+        const ledgerPayload = Array.isArray(data?.personalLedgerEntries)
+          ? data.personalLedgerEntries
+          : [];
         itinerary.value = itin.map(normalizeItineraryRecord);
         expenses.value = exp.map(normalizeExpenseRecord);
+        personalLedgerManualEntries.value = ledgerPayload.map(normalizeManualEntry);
         people.value = filterActualPeople(ppl);
         if (!people.value.length) people.value = [{id:'default', name:'我'}];
         syncPersonSelections();
+        syncLedgerOwnerSelection();
         if (walletPayload) sharedWalletTransactions.value = walletPayload.map(normalizeSharedWalletTransaction);
         hotels.value = htl.map(normalizeHotelRecord);
         alternatives.value = [];
@@ -2238,6 +2414,7 @@ createApp({
           expenses: expenses.value,
           people: people.value,
           hotels: hotels.value,
+          personalLedgerEntries: personalLedgerManualEntries.value,
           sharedWalletTransactions: walletPayload ? sharedWalletTransactions.value : null
         });
 
@@ -3505,6 +3682,20 @@ createApp({
     const sharedWalletDepositTotal = computed(() => sharedWalletDeposits.value.reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
     const sharedWalletPaymentTotal = computed(() => sharedWalletPayments.value.reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
     const sharedWalletBalance = computed(() => sharedWalletDepositTotal.value - sharedWalletPaymentTotal.value);
+    const personalLedgerEntries = computed(() => buildPersonalLedgerEntries({
+      owner: selectedLedgerOwner.value,
+      people: ledgerPeople.value,
+      expenses: normalExpenseRecords.value,
+      walletTransactions: sharedWalletRecords.value,
+      manualEntries: personalLedgerManualEntries.value
+    }));
+    const personalLedgerDerivedTotal = computed(() => personalLedgerEntries.value
+      .filter(item => item.source !== 'manual')
+      .reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
+    const personalLedgerManualTotal = computed(() => personalLedgerEntries.value
+      .filter(item => item.source === 'manual')
+      .reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
+    const personalLedgerTotal = computed(() => personalLedgerDerivedTotal.value + personalLedgerManualTotal.value);
     const sharedWalletMemberBalances = computed(() => {
       const names = Array.from(new Set(
         people.value
@@ -3897,24 +4088,23 @@ createApp({
     };
 
     const syncSharedWalletPayload = async (payload) => {
+      const originTripId = String(currentTrip.value?.id || '');
       try {
         const res = await postJSON(payload, { queueOnFail: false });
-        if (!res || res.status !== 'error') return res;
-
-        const message = String(res.message || 'shared wallet sync failed');
-        if (/unknown action|missing type|invalid type|unknown shared wallet action/i.test(message)) {
-          enqueuePendingWrite(payload, new Error(message));
-          return { status: 'queued', queued: true, message };
-        }
-        const serverError = new Error(message);
-        serverError.isWalletServerError = true;
-        throw serverError;
+        return res;
       } catch (err) {
-        if (err?.isWalletServerError) throw err;
-        if (!pendingSyncQueue.value.some(job => job.payload === payload)) {
-          enqueuePendingWrite(payload, err);
+        const message = String(err?.message || err || 'shared wallet sync failed');
+        if (err?.code === 'API_REJECTED') {
+          if (/unknown action|missing type|invalid type|unknown shared wallet action/i.test(message)) {
+            enqueuePendingWrite(payload, err, originTripId, { retryDefinitive: true });
+            return { status: 'queued', queued: true, message };
+          }
+          throw err;
         }
-        return { status: 'queued', queued: true, message: String(err?.message || err || '') };
+        if (!pendingSyncQueue.value.some(job => job.payload === payload)) {
+          enqueuePendingWrite(payload, err, originTripId);
+        }
+        return { status: 'queued', queued: true, message };
       }
     };
 
@@ -4192,6 +4382,183 @@ createApp({
         alert('錢包紀錄刪除失敗，請稍後再試。');
       } finally {
         isSavingSharedWallet.value = false;
+      }
+    };
+
+    const applyPersonalLedgerRollback = (rollback, originTripId) => {
+      const tripId = String(originTripId || '');
+      if (!tripId || !rollback) return;
+      if (String(currentTrip.value?.id || '') === tripId) {
+        personalLedgerManualEntries.value = applyManualEntryRollback(
+          personalLedgerManualEntries.value,
+          rollback
+        );
+        saveTripCache(tripId);
+        return;
+      }
+      try {
+        const key = cacheKey(tripId);
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const cached = JSON.parse(raw);
+        cached.personalLedgerEntries = applyManualEntryRollback(cached.personalLedgerEntries, rollback);
+        cached.ts = Date.now();
+        localStorage.setItem(key, JSON.stringify(cached));
+      } catch (_) {}
+    };
+
+    const rebasePersonalLedgerJobs = (originTripId, jobs, rejectedJobIds) => {
+      const tripId = String(originTripId || '');
+      if (!tripId) return { rollbacks: {} };
+      if (String(currentTrip.value?.id || '') === tripId) {
+        const result = rebaseManualEntryJobs(personalLedgerManualEntries.value, jobs, rejectedJobIds);
+        personalLedgerManualEntries.value = result.entries;
+        saveTripCache(tripId);
+        return result;
+      }
+      try {
+        const key = cacheKey(tripId);
+        const raw = localStorage.getItem(key);
+        if (!raw) return { rollbacks: {} };
+        const cached = JSON.parse(raw);
+        const result = rebaseManualEntryJobs(cached.personalLedgerEntries, jobs, rejectedJobIds);
+        cached.personalLedgerEntries = result.entries;
+        cached.ts = Date.now();
+        localStorage.setItem(key, JSON.stringify(cached));
+        return result;
+      } catch (_) {
+        return { rollbacks: {} };
+      }
+    };
+
+    const validPersonalLedgerDate = (value) => {
+      const text = String(value || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+      const parsed = new Date(`${text}T00:00:00Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
+    };
+
+    const buildManualLedgerPayload = (form, existing = {}) => ({
+      id: String(existing.id || generateId()),
+      trip_id: String(currentTrip.value?.id || ''),
+      owner: selectedLedgerOwner.value,
+      date: String(form.date || ''),
+      title: String(form.title || '').trim(),
+      amount: Number(form.amount || 0),
+      currency: normalizeCurrency(form.currency),
+      category: categories.includes(form.category) ? form.category : '其他',
+      note: String(form.note || '').trim(),
+      created_at: String(existing.created_at || new Date().toISOString()),
+      updated_at: new Date().toISOString()
+    });
+
+    const validateManualLedgerPayload = (entry) => {
+      const members = ledgerPeople.value.map(person => normalizePersonName(person.name)).filter(Boolean);
+      if (!currentTrip.value?.id || !members.includes(entry.owner)) return false;
+      if (!validPersonalLedgerDate(entry.date) || !entry.title || entry.amount <= 0) return false;
+      return validateTransactionCurrency(entry.currency);
+    };
+
+    const addPersonalLedgerEntry = async () => {
+      if (isSavingPersonalLedger.value) return;
+      const entry = buildManualLedgerPayload(newPersonalLedgerEntry.value);
+      if (!validateManualLedgerPayload(entry)) return;
+      const originTripId = String(entry.trip_id || '');
+      const rollback = { action: 'remove', id: entry.id };
+
+      const normalized = normalizeManualEntry(entry);
+      isSavingPersonalLedger.value = true;
+      personalLedgerManualEntries.value.unshift(normalized);
+      scheduleTripCacheSave();
+      newPersonalLedgerEntry.value = createEmptyPersonalLedgerEntry();
+
+      try {
+        const res = await postJSON(
+          { action: 'add', type: 'personal_ledger', data: entry },
+          { rollback }
+        );
+        if (res?.status === 'error') throw new Error(res.message || 'personal ledger add failed');
+      } catch (err) {
+        applyPersonalLedgerRollback(rollback, originTripId);
+        alert('記帳新增失敗，請稍後再試。');
+      } finally {
+        isSavingPersonalLedger.value = false;
+      }
+    };
+
+    const openEditPersonalLedgerModal = (item) => {
+      if (!item?.id || item.readOnly || item.source !== 'manual') return;
+      editPersonalLedgerId.value = String(item.id);
+      editPersonalLedgerEntry.value = {
+        date: String(item.date || ''),
+        title: String(item.title || ''),
+        amount: Number(item.amount) || '',
+        currency: normalizeCurrency(item.currency),
+        category: categories.includes(item.category) ? item.category : '其他',
+        note: String(item.note || '')
+      };
+      showEditPersonalLedgerModal.value = true;
+    };
+
+    const closeEditPersonalLedgerModal = () => {
+      if (isSavingPersonalLedger.value) return;
+      showEditPersonalLedgerModal.value = false;
+      editPersonalLedgerId.value = '';
+    };
+
+    const savePersonalLedgerEntry = async () => {
+      if (isSavingPersonalLedger.value || !editPersonalLedgerId.value) return;
+      const index = personalLedgerManualEntries.value.findIndex(
+        item => String(item.id) === String(editPersonalLedgerId.value)
+      );
+      if (index < 0) return;
+      const backup = { ...personalLedgerManualEntries.value[index] };
+      const entry = buildManualLedgerPayload(editPersonalLedgerEntry.value, backup);
+      if (!validateManualLedgerPayload(entry)) return;
+      const originTripId = String(entry.trip_id || '');
+      const rollback = { action: 'replace', entry: backup };
+
+      isSavingPersonalLedger.value = true;
+      personalLedgerManualEntries.value.splice(index, 1, normalizeManualEntry(entry));
+      scheduleTripCacheSave();
+      try {
+        const res = await postJSON(
+          { action: 'edit', type: 'personal_ledger', id: entry.id, data: entry },
+          { rollback }
+        );
+        if (res?.status === 'error') throw new Error(res.message || 'personal ledger edit failed');
+        showEditPersonalLedgerModal.value = false;
+        editPersonalLedgerId.value = '';
+      } catch (err) {
+        applyPersonalLedgerRollback(rollback, originTripId);
+        alert('記帳修改失敗，請稍後再試。');
+      } finally {
+        isSavingPersonalLedger.value = false;
+      }
+    };
+
+    const removePersonalLedgerEntry = async (item) => {
+      if (isSavingPersonalLedger.value || !item?.id || item.readOnly || item.source !== 'manual') return;
+      if (!confirm('確定刪除此筆記帳？')) return;
+      const index = personalLedgerManualEntries.value.findIndex(record => String(record.id) === String(item.id));
+      if (index < 0) return;
+      const backup = { ...personalLedgerManualEntries.value[index] };
+      const originTripId = String(backup.trip_id || currentTrip.value?.id || '');
+      const rollback = { action: 'insert', entry: backup, index };
+      isSavingPersonalLedger.value = true;
+      personalLedgerManualEntries.value.splice(index, 1);
+      scheduleTripCacheSave();
+      try {
+        const res = await postJSON(
+          { action: 'del', type: 'personal_ledger', id: item.id },
+          { rollback }
+        );
+        if (res?.status === 'error') throw new Error(res.message || 'personal ledger delete failed');
+      } catch (err) {
+        applyPersonalLedgerRollback(rollback, originTripId);
+        alert('記帳刪除失敗，請稍後再試。');
+      } finally {
+        isSavingPersonalLedger.value = false;
       }
     };
 
@@ -4584,7 +4951,7 @@ createApp({
 
     const canAutoRefreshMoney = () => (
       currentView.value === 'app' &&
-      currentTab.value === 'money' &&
+      (currentTab.value === 'money' || currentTab.value === 'ledger') &&
       currentTrip.value?.id &&
       !document.hidden
     );
@@ -4594,7 +4961,7 @@ createApp({
       if (isRefreshingMoney.value || !currentTrip.value?.id) return false;
       if (!force && !canAutoRefreshMoney()) return false;
       if (!force && Date.now() - lastMoneyRefreshAt < MONEY_REFRESH_THROTTLE_MS) return false;
-      if (isLoading.value || isAddingExpense.value || isSavingExpense.value || isSavingSharedWallet.value) return false;
+      if (isLoading.value || isAddingExpense.value || isSavingExpense.value || isSavingSharedWallet.value || isSavingPersonalLedger.value) return false;
 
       isRefreshingMoney.value = true;
       if (force) {
@@ -4705,7 +5072,7 @@ createApp({
       await nextTick();
 
       scheduleSortableInit();
-      if (tab === 'money') {
+      if (tab === 'money' || tab === 'ledger') {
         await refreshMoneyData({ silent: true });
       }
     };
@@ -4770,7 +5137,8 @@ createApp({
         cloneSourceTripId.value = '';
       }
     });
-    watch([itinerary, expenses, sharedWalletTransactions, people, hotels], () => scheduleTripCacheSave(), { deep: true });
+    watch([currentTrip, people], () => syncLedgerOwnerSelection(), { deep: true });
+    watch([itinerary, expenses, sharedWalletTransactions, personalLedgerManualEntries, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
@@ -4838,12 +5206,14 @@ createApp({
       currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,
       showSyncDebugModal, syncDebugEntries, handleDebugTitleClick, closeSyncDebugModal,
       copySyncDebugLog, clearSyncDebugLog, formatSyncDebugEntry,
-      isAddingPlace, isAddingExpense, isSavingSharedWallet, isUpdatingSharedWalletSetting, isSavingExpense,
+      isAddingPlace, isAddingExpense, isSavingSharedWallet, isSavingPersonalLedger, isUpdatingSharedWalletSetting, isSavingExpense,
       isDeletingAlternative, isPromotingAlternative,
       currentDay, totalDays,
-      people, itinerary, expenses, sharedWalletTransactions, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
+      people, ledgerPeople, itinerary, expenses, sharedWalletTransactions, personalLedgerManualEntries, hotels, alternatives, filteredItinerary, filteredAlternatives, currentDayHotels,
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
       walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
+      selectedLedgerOwner, newPersonalLedgerEntry, personalLedgerEntries,
+      personalLedgerDerivedTotal, personalLedgerManualTotal, personalLedgerTotal,
       categories, itineraryTypes, currencyOptions, foreignCurrencyOptions,
       foreignCurrency, foreignToTwdRate, isSavingCurrencySettings,
       searchResults, translatedSearchHint, isSearching, isResolvingMapUrl, mapUrlResolveError, mapUrlProvider, isCoordinateMode, resolvedCoordName,
@@ -4886,6 +5256,9 @@ createApp({
       toggleSharedWalletPaymentPerson, selectAllSharedWalletPaymentPeople, formatSharedWalletUsers,
       showEditWalletModal, editWallet, openEditWalletModal, closeEditWalletModal, saveEditWalletTransaction,
       toggleEditWalletPerson, selectAllEditWalletPeople,
+      selectLedgerOwner, addPersonalLedgerEntry, removePersonalLedgerEntry,
+      showEditPersonalLedgerModal, editPersonalLedgerEntry,
+      openEditPersonalLedgerModal, closeEditPersonalLedgerModal, savePersonalLedgerEntry,
       addExpense, removeExpense, openEditExpenseModal, closeEditExpenseModal, saveEditExpense, addPerson, removePerson,
       totalExpense, actualTripExpense, balanceSheet, settlementPlan, categoryAnalysis, formatInvolved, getExpenseCategoryIcon, expenseDateLabel,
       expenseRecordDateLabel, walletRecordDateLabel,

@@ -4,6 +4,7 @@
   const COLLECTION_BY_TYPE = Object.freeze({
     itinerary: 'itinerary',
     expenses: 'expenses',
+    personal_ledger: 'personalLedgerEntries',
     people: 'people',
     hotels: 'hotels',
     trips: 'trips'
@@ -91,8 +92,63 @@
     return { confirmed, pending };
   };
 
+  const mutationKey = job => {
+    const payload = job?.payload || job || {};
+    const data = parseData(payload.data);
+    const id = String(data.id || payload.id || '');
+    const type = String(payload.action || '').startsWith('shared_wallet_')
+      ? 'shared_wallet'
+      : String(payload.type || '');
+    return type && id ? `${type}:${id}` : '';
+  };
+
+  const discardSupersededJobs = (jobs, successfulPayload) => {
+    const successfulKey = mutationKey(successfulPayload);
+    if (!successfulKey) return Array.isArray(jobs) ? jobs.slice() : [];
+    return (Array.isArray(jobs) ? jobs : []).filter(job => mutationKey(job) !== successfulKey);
+  };
+
+  const hasPendingJob = (jobs, jobId) => (Array.isArray(jobs) ? jobs : [])
+    .some(job => String(job?.id || '') === String(jobId || ''));
+
+  const settlePendingJobs = (jobs, outcomes) => {
+    const outcomeById = new Map((Array.isArray(outcomes) ? outcomes : []).map(outcome => (
+      [String(outcome?.id || ''), outcome]
+    )));
+    const sourceJobs = Array.isArray(jobs) ? jobs : [];
+    const successfulKeys = new Set();
+    const supersededRetries = new Set();
+    sourceJobs.slice().reverse().forEach(job => {
+      const outcome = outcomeById.get(String(job?.id || ''));
+      const key = mutationKey(job);
+      if (!outcome || !key) return;
+      if (outcome.status === 'success') successfulKeys.add(key);
+      if (outcome.status === 'retry' && successfulKeys.has(key)) {
+        supersededRetries.add(String(job?.id || ''));
+      }
+    });
+    return sourceJobs.flatMap(job => {
+      const outcome = outcomeById.get(String(job?.id || ''));
+      if (!outcome) return [job];
+      if (supersededRetries.has(String(job?.id || ''))) return [];
+      return outcome.status === 'retry' ? [outcome.job || job] : [];
+    });
+  };
+
+  const assertMutationResponse = (response) => {
+    if (response && response.status === 'success') return response;
+    const error = new Error(response?.message || 'invalid sync response');
+    error.code = 'API_REJECTED';
+    error.response = response || null;
+    throw error;
+  };
+
   window.TravelSyncQueue = Object.freeze({
+    assertMutationResponse,
+    discardSupersededJobs,
+    hasPendingJob,
     isCloudConfirmed,
-    reconcilePendingJobs
+    reconcilePendingJobs,
+    settlePendingJobs
   });
 })(window);
