@@ -8,7 +8,7 @@
  * localStorage.removeItem('travel_debug_enabled'); location.reload();
  */
 window.TRAVEL_CONFIG = Object.freeze({
-  API_URL: 'https://script.google.com/macros/s/AKfycbz59RxNklymR4CTKtR2P4FbA-eKtIBH0lNtYsKnIn9DVdWExQ_GE5AxHMnu2uO4tL7z/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbz5TfTRz3AeB1ir4SHgg9-pKpb-lAEa8MIEnvef3Kld0nNoASSL1FWXZZdapbOZwvYB/exec',
   GOOGLE_MAPS_API_KEY: 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q',
-  APP_VERSION: '20260917.1'
+  APP_VERSION: '20260919.1'
 });
