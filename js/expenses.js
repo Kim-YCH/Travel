@@ -167,6 +167,12 @@
     return isValidCalendarDate(fallback) ? fallback.replaceAll('-', '/') : '—';
   };
 
+  const walletTransactionDateLabel = record => {
+    const date = String(record?.date || '').slice(0, 10);
+    if (isValidCalendarDate(date)) return date.replaceAll('-', '/');
+    return recordCreatedDateLabel(record);
+  };
+
   const filterSharedWalletRecords = (records, type) => (
     (Array.isArray(records) ? records : [])
       .filter(item => item?.type === type && Number(item?.amount) > 0)
@@ -239,6 +245,7 @@
     formatSharedWalletUsers,
     expenseCreatedTime,
     recordCreatedDateLabel,
+    walletTransactionDateLabel,
     filterSharedWalletRecords
   });
 })(window);

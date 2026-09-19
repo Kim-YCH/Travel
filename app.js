@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260919.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260919.2';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -31,6 +31,7 @@ createApp({
     const {
       normalizeManualEntry,
       buildPersonalLedgerEntries,
+      buildPersonalLedgerCategoryAnalysis,
       persistedLedgerPeople,
       applyManualEntryRollback,
       rebaseManualEntryJobs,
@@ -59,6 +60,7 @@ createApp({
       formatSharedWalletUsers,
       expenseCreatedTime,
       recordCreatedDateLabel,
+      walletTransactionDateLabel,
       filterSharedWalletRecords
     } = TravelExpenses;
 
@@ -3696,6 +3698,10 @@ createApp({
       .filter(item => item.source === 'manual')
       .reduce((sum, item) => sum + convertAmountToTwd(item, currentTrip.value), 0));
     const personalLedgerTotal = computed(() => personalLedgerDerivedTotal.value + personalLedgerManualTotal.value);
+    const personalLedgerCategoryAnalysis = computed(() => buildPersonalLedgerCategoryAnalysis(
+      personalLedgerEntries.value,
+      entry => convertAmountToTwd(entry, currentTrip.value)
+    ));
     const sharedWalletMemberBalances = computed(() => {
       const names = Array.from(new Set(
         people.value
@@ -3734,7 +3740,7 @@ createApp({
 
     const filteredExpenses = computed(() => normalExpenseRecords.value);
     const expenseRecordDateLabel = item => recordCreatedDateLabel(item);
-    const walletRecordDateLabel = item => recordCreatedDateLabel(item, item?.date);
+    const walletRecordDateLabel = item => walletTransactionDateLabel(item);
 
     const filteredCategoryAnalysis = computed(() => {
       const stats = {};
@@ -5213,7 +5219,7 @@ createApp({
       newPlace, newTime, newPlaceType, newNote, newPerson, newExpense,
       walletEntryMode, newSharedWalletDeposit, newSharedWalletPayment,
       selectedLedgerOwner, newPersonalLedgerEntry, personalLedgerEntries,
-      personalLedgerDerivedTotal, personalLedgerManualTotal, personalLedgerTotal,
+      personalLedgerDerivedTotal, personalLedgerManualTotal, personalLedgerTotal, personalLedgerCategoryAnalysis,
       categories, itineraryTypes, currencyOptions, foreignCurrencyOptions,
       foreignCurrency, foreignToTwdRate, isSavingCurrencySettings,
       searchResults, translatedSearchHint, isSearching, isResolvingMapUrl, mapUrlResolveError, mapUrlProvider, isCoordinateMode, resolvedCoordName,

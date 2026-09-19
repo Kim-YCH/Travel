@@ -716,6 +716,55 @@ button.bg-gray-700,
   color: #087f5b;
 }
 
+.ledger-analysis {
+  max-width: 760px;
+  margin: 0 auto 18px;
+  padding: 14px 16px;
+  border: 1px solid #d9e4f3;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ledger-analysis h3 {
+  margin: 0 0 12px;
+  color: #24334a;
+  font-size: 16px;
+}
+
+.ledger-analysis-row + .ledger-analysis-row {
+  margin-top: 12px;
+}
+
+.ledger-analysis-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: #56657a;
+  font-size: 14px;
+}
+
+.ledger-analysis-line strong {
+  color: #24334a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ledger-analysis-bar {
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e6edf6;
+}
+
+.ledger-analysis-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1677d2;
+}
+
 .ledger-entry-form {
   padding: 16px;
   border: 1px solid #dce3e8;

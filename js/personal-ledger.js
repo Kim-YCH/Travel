@@ -235,6 +235,32 @@
     ));
   };
 
+  const buildPersonalLedgerCategoryAnalysis = (entries, toTwd = item => Number(item?.amount) || 0) => {
+    const totals = new Map();
+
+    (Array.isArray(entries) ? entries : []).forEach(entry => {
+      let amount = 0;
+      try {
+        amount = Number(toTwd(entry));
+      } catch (_) {
+        amount = 0;
+      }
+      if (!Number.isFinite(amount) || amount <= 0) return;
+
+      const name = String(entry?.category || '其他').trim() || '其他';
+      totals.set(name, (totals.get(name) || 0) + amount);
+    });
+
+    const grandTotal = Array.from(totals.values()).reduce((sum, amount) => sum + amount, 0);
+    if (grandTotal <= 0) return [];
+
+    return Array.from(totals, ([name, total]) => ({
+      name,
+      total,
+      percent: Math.round((total / grandTotal) * 100)
+    })).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  };
+
   const hashTripIdentity = value => {
     const text = String(value || '');
     let hash = 0;
@@ -266,6 +292,7 @@
     rebaseManualEntryJobs,
     persistedLedgerPeople,
     buildPersonalLedgerEntries,
+    buildPersonalLedgerCategoryAnalysis,
     hashTripIdentity,
     personalLedgerOwnerKey,
     prepOwnerKey,
