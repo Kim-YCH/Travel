@@ -1,10 +1,10 @@
-// version: 20260914.1
+// version: 20260930.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20260914.1';
+  const VERSION = '20260930.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const IMAGE_STORAGE_PREFIX = 'travel_prepare_images_v1::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
@@ -378,6 +378,21 @@
     }
   }
 
+  async function apiGet(url, timeoutMs = 20000) {
+    if (window.TravelApi && typeof window.TravelApi.jsonp === 'function') {
+      return window.TravelApi.jsonp(url, timeoutMs);
+    }
+
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const res = await fetch(url, controller ? { signal: controller.signal } : undefined);
+      return await res.json();
+    } finally {
+      if (timeout !== null) clearTimeout(timeout);
+    }
+  }
+
   function applyRemoteData(data, statusText) {
     const remote = normalizeState({
       owner: data.owner || selectedOwner,
@@ -460,8 +475,7 @@
       if (trip.id) url += '&tripId=' + encodeURIComponent(trip.id);
       else url += '&tripName=' + encodeURIComponent(trip.name);
 
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await apiGet(url);
       const currentTrip = getCurrentTripInfo();
       const isCurrentRequest = requestId === remoteLoadRequestId
         && selectedOwner === requestOwner
