@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<!-- version: 20261003.1 -->
+<!-- version: 20261003.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261003.1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261003.1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261003.1" />
-  <link rel="manifest" href="./site.webmanifest?v=20261003.1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261003.2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261003.2" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261003.2" />
+  <link rel="manifest" href="./site.webmanifest?v=20261003.2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20261003.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20261003.1"></script>
-  <script src="./vendor/Sortable.min.js?v=20261003.1"></script>
+  <script src="./js/device-router.js?v=20261003.2" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20261003.2"></script>
+  <script src="./vendor/Sortable.min.js?v=20261003.2"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20261003.1" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20261003.1" />
+  <link rel="stylesheet" href="./style.css?v=20261003.2" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20261003.2" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20261003.1" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20261003.2" />
 </head>
 <body>
 
@@ -1084,8 +1084,8 @@
 
   <!-- 新增行程。搜尋下拉住在彈窗裡是既有規劃：cloud-theme.css 已經有
        .modal-card:has(.suggestions-list) 的 position/z-index/overflow 規則。 -->
-  <div v-if="showAddPlaceModal" class="modal-mask" @click.self="closeAddPlaceModal" @keydown.esc="closeAddPlaceModal">
-    <div class="modal-card itinerary-search-card relative space-y-2" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('add-place', showAddPlaceModal)" class="modal-mask" :class="modalMaskPresentationClass('add-place', showAddPlaceModal)" @click.self="closeAddPlaceModal" @keydown.esc="closeAddPlaceModal">
+    <div class="modal-card itinerary-search-card relative space-y-2 t-modal" :class="modalPresentationClass('add-place', showAddPlaceModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">新增行程</div>
 
       <div class="flex gap-2 relative">
@@ -1150,8 +1150,8 @@
   </div>
 
   <!-- 路線查詢 modal：內容從常駐卡片搬過來，展開收合狀態改由彈窗開關取代 -->
-  <div v-if="showRouteModal" class="modal-mask" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
-    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('route', showRouteModal)" class="modal-mask" :class="modalMaskPresentationClass('route', showRouteModal)" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
+    <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('route', showRouteModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">🧭 路線查詢</div>
 
       <div class="route-panel-body">
@@ -1192,8 +1192,8 @@
   </div>
 
   <!-- Day modal -->
-  <div v-if="showDayModal" class="modal-mask" @click.self="closeDayModal" @keydown.esc="closeDayModal">
-    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('day', showDayModal)" class="modal-mask" :class="modalMaskPresentationClass('day', showDayModal)" @click.self="closeDayModal" @keydown.esc="closeDayModal">
+    <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('day', showDayModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">Day{{ modalDay }} 設定</div>
 
       <template v-if="modalDay === 1">
@@ -1218,8 +1218,8 @@
   </div>
 
   <!-- Edit itinerary modal -->
-  <div v-if="showEditModal" class="modal-mask" @click.self="closeEditModal" @keydown.esc="closeEditModal">
-    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('edit-place', showEditModal)" class="modal-mask" :class="modalMaskPresentationClass('edit-place', showEditModal)" @click.self="closeEditModal" @keydown.esc="closeEditModal">
+    <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('edit-place', showEditModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">編輯行程</div>
 
       <div class="space-y-2">
@@ -1273,8 +1273,8 @@
   </div>
 
   <!-- Edit hotel modal -->
-  <div v-if="showEditHotelModal" class="modal-mask" @click.self="closeEditHotelModal" @keydown.esc="closeEditHotelModal">
-    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('edit-hotel', showEditHotelModal)" class="modal-mask" :class="modalMaskPresentationClass('edit-hotel', showEditHotelModal)" @click.self="closeEditHotelModal" @keydown.esc="closeEditHotelModal">
+    <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('edit-hotel', showEditHotelModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">編輯住宿</div>
 
       <div class="space-y-2">
@@ -1337,8 +1337,8 @@
   </div>
 
   <!-- Edit expense modal -->
-  <div v-if="showEditExpenseModal" class="modal-mask" @click.self="closeEditExpenseModal" @keydown.esc="closeEditExpenseModal">
-    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('edit-expense', showEditExpenseModal)" class="modal-mask" :class="modalMaskPresentationClass('edit-expense', showEditExpenseModal)" @click.self="closeEditExpenseModal" @keydown.esc="closeEditExpenseModal">
+    <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('edit-expense', showEditExpenseModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">編輯記帳</div>
 
       <div class="space-y-2">
@@ -1400,8 +1400,8 @@
   </div>
 
   <!-- Edit shared wallet transaction modal -->
-  <div v-if="showEditWalletModal" class="modal-mask" @click.self="closeEditWalletModal" @keydown.esc="closeEditWalletModal">
-    <div class="modal-card space-y-3" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('edit-wallet', showEditWalletModal)" class="modal-mask" :class="modalMaskPresentationClass('edit-wallet', showEditWalletModal)" @click.self="closeEditWalletModal" @keydown.esc="closeEditWalletModal">
+    <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('edit-wallet', showEditWalletModal)" role="dialog" aria-modal="true" tabindex="-1">
       <div class="font-bold text-gray-800 text-lg">{{ editWallet.type === 'deposit' ? '編輯存入' : '編輯公費支出' }}</div>
 
       <div class="space-y-2">
@@ -1477,8 +1477,8 @@
     </div>
   </div>
 
-  <div v-if="showEditPersonalLedgerModal" class="modal-mask" @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
-    <div class="modal-card ledger-edit-modal" role="dialog" aria-modal="true" tabindex="-1">
+  <div v-if="isModalRendered('edit-ledger', showEditPersonalLedgerModal)" class="modal-mask" :class="modalMaskPresentationClass('edit-ledger', showEditPersonalLedgerModal)" @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
+    <div class="modal-card ledger-edit-modal t-modal" :class="modalPresentationClass('edit-ledger', showEditPersonalLedgerModal)" role="dialog" aria-modal="true" tabindex="-1">
       <h2>編輯記帳</h2>
       <label><span>日期</span><input v-model="editPersonalLedgerEntry.date" type="date"></label>
       <label><span>項目</span><input v-model="editPersonalLedgerEntry.title" type="text"></label>
@@ -1503,8 +1503,8 @@
     </div>
   </div>
 
-  <div v-if="showSyncDebugModal" class="modal-mask sync-debug-mask" @click.self="closeSyncDebugModal" @keydown.esc="closeSyncDebugModal">
-    <section class="modal-card sync-debug-modal" role="dialog" aria-modal="true" aria-labelledby="sync-debug-title" tabindex="-1">
+  <div v-if="isModalRendered('sync-debug', showSyncDebugModal)" class="modal-mask sync-debug-mask" :class="modalMaskPresentationClass('sync-debug', showSyncDebugModal)" @click.self="closeSyncDebugModal" @keydown.esc="closeSyncDebugModal">
+    <section class="modal-card sync-debug-modal t-modal" :class="modalPresentationClass('sync-debug', showSyncDebugModal)" role="dialog" aria-modal="true" aria-labelledby="sync-debug-title" tabindex="-1">
       <header class="sync-debug-header">
         <div>
           <h2 id="sync-debug-title">同步診斷紀錄</h2>
@@ -1528,26 +1528,26 @@
   </div>
 </div>
 
-<script src="./config.js?v=20261003.1"></script>
-<script src="./cache-refresh.js?v=20261003.1"></script>
-<script src="./keyword-map.js?v=20261003.1"></script>
-<script src="./js/utils.js?v=20261003.1"></script>
-<script src="./js/api.js?v=20261003.1"></script>
-<script src="./js/cache.js?v=20261003.1"></script>
-<script src="./js/maps.js?v=20261003.1"></script>
-<script src="./js/places.js?v=20261003.1"></script>
-<script src="./js/itinerary.js?v=20261003.1"></script>
-<script src="./js/hotels.js?v=20261003.1"></script>
-<script src="./js/expenses.js?v=20261003.1"></script>
-<script src="./js/sync-queue.js?v=20261003.1"></script>
-<script src="./js/sync-debug.js?v=20261003.1"></script>
-<script src="./js/personal-ledger.js?v=20261003.1"></script>
-<script src="./js/weather.js?v=20261003.1"></script>
-<script src="./js/export.js?v=20261003.1"></script>
-<script src="./js/probe-search.js?v=20261003.1"></script>
-<script src="./app.js?v=20261003.1"></script>
-<script src="./search-zh-label.js?v=20261003.1"></script>
-<script src="./prep-checklist.js?v=20261003.1"></script>
+<script src="./config.js?v=20261003.2"></script>
+<script src="./cache-refresh.js?v=20261003.2"></script>
+<script src="./keyword-map.js?v=20261003.2"></script>
+<script src="./js/utils.js?v=20261003.2"></script>
+<script src="./js/api.js?v=20261003.2"></script>
+<script src="./js/cache.js?v=20261003.2"></script>
+<script src="./js/maps.js?v=20261003.2"></script>
+<script src="./js/places.js?v=20261003.2"></script>
+<script src="./js/itinerary.js?v=20261003.2"></script>
+<script src="./js/hotels.js?v=20261003.2"></script>
+<script src="./js/expenses.js?v=20261003.2"></script>
+<script src="./js/sync-queue.js?v=20261003.2"></script>
+<script src="./js/sync-debug.js?v=20261003.2"></script>
+<script src="./js/personal-ledger.js?v=20261003.2"></script>
+<script src="./js/weather.js?v=20261003.2"></script>
+<script src="./js/export.js?v=20261003.2"></script>
+<script src="./js/probe-search.js?v=20261003.2"></script>
+<script src="./app.js?v=20261003.2"></script>
+<script src="./search-zh-label.js?v=20261003.2"></script>
+<script src="./prep-checklist.js?v=20261003.2"></script>
 
 </body>
 </html>

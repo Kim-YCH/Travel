@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20261003.1 -->
+<!-- version: 20261003.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261003.1" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261003.2" />
 
-  <script src="../js/device-router.js?v=20261003.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20261003.1"></script>
-  <script src="../vendor/Sortable.min.js?v=20261003.1"></script>
+  <script src="../js/device-router.js?v=20261003.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20261003.2"></script>
+  <script src="../vendor/Sortable.min.js?v=20261003.2"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20261003.1" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20261003.1" />
-  <link rel="stylesheet" href="./desktop.css?v=20261003.1" />
+  <link rel="stylesheet" href="../style.css?v=20261003.2" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20261003.2" />
+  <link rel="stylesheet" href="./desktop.css?v=20261003.2" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20261003.1" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20261003.2" />
 </head>
 <body class="desktop-body">
 
@@ -249,8 +249,8 @@
              冒泡經過，不然 Esc 按了沒反應。所以 app.js 的 openAddPlaceModal()
              自己在 nextTick 之後把 focus 打進搜尋框（ref="desktopAddPlaceInputEl"），
              不靠那套系統也能讓點外面、按 Esc、按「關閉」三種方式都能收合。 -->
-        <div v-if="showAddPlaceModal" class="desktop-modal-mask" @click.self="closeAddPlaceModal" @keydown.esc="closeAddPlaceModal">
-  <article class="card desktop-modal desktop-add-place relative" role="dialog" aria-modal="true">
+        <div v-if="isModalRendered('add-place', showAddPlaceModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('add-place', showAddPlaceModal)" @click.self="closeAddPlaceModal" @keydown.esc="closeAddPlaceModal">
+  <article class="card desktop-modal desktop-add-place relative t-modal" :class="modalPresentationClass('add-place', showAddPlaceModal)" role="dialog" aria-modal="true">
     <h3>新增行程</h3>
     <div class="desktop-add-row desktop-itinerary-add-row">
       <input ref="desktopAddPlaceInputEl" v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '，或貼上地圖網址'" />
@@ -308,8 +308,8 @@
              Task 3 就是漏了聚焦，導致 Esc 實際上關不掉。app.js 的
              openRouteModal() 會在 nextTick 之後用 routeModalEl 這個 ref 找
              子樹裡第一個 select（起點欄位）聚焦。 -->
-        <div v-if="showRouteModal" ref="routeModalEl" class="desktop-modal-mask" tabindex="-1" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
-          <article class="card desktop-modal" role="dialog" aria-modal="true">
+        <div v-if="isModalRendered('route', showRouteModal)" ref="routeModalEl" class="desktop-modal-mask" :class="modalMaskPresentationClass('route', showRouteModal)" tabindex="-1" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
+          <article class="card desktop-modal t-modal" :class="modalPresentationClass('route', showRouteModal)" role="dialog" aria-modal="true">
             <h3>🧭 路線查詢</h3>
 
             <div class="route-panel-body">
@@ -953,8 +953,9 @@
       </section>
 
       <div
-        v-if="showCreateTripModal"
+        v-if="isModalRendered('create-trip', showCreateTripModal)"
         class="desktop-modal-mask"
+        :class="modalMaskPresentationClass('create-trip', showCreateTripModal)"
         role="dialog"
         aria-modal="true"
         aria-labelledby="desktop-create-trip-title"
@@ -963,7 +964,7 @@
         @click.self="closeCreateTripModal"
         @keydown.esc="closeCreateTripModal"
       >
-        <form class="card desktop-modal desktop-create-trip-modal" @submit.prevent="createTripFromModal">
+        <form class="card desktop-modal desktop-create-trip-modal t-modal" :class="modalPresentationClass('create-trip', showCreateTripModal)" @submit.prevent="createTripFromModal">
           <h3 id="desktop-create-trip-title">新增旅程</h3>
           <label class="desktop-form-field">
             <span>旅程名稱</span>
@@ -980,8 +981,8 @@
         </form>
       </div>
 
-      <div v-if="showEditModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditModal" @keydown.esc="closeEditModal">
-        <div class="card desktop-modal">
+      <div v-if="isModalRendered('edit-place', showEditModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-place', showEditModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditModal" @keydown.esc="closeEditModal">
+        <div class="card desktop-modal t-modal" :class="modalPresentationClass('edit-place', showEditModal)">
           <h3>編輯行程</h3>
           <div class="desktop-form">
             <input v-model="editPlace.name" placeholder="名稱" />
@@ -1020,8 +1021,8 @@
         </div>
       </div>
 
-      <div v-if="showEditHotelModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditHotelModal" @keydown.esc="closeEditHotelModal">
-        <div class="card desktop-modal">
+      <div v-if="isModalRendered('edit-hotel', showEditHotelModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-hotel', showEditHotelModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditHotelModal" @keydown.esc="closeEditHotelModal">
+        <div class="card desktop-modal t-modal" :class="modalPresentationClass('edit-hotel', showEditHotelModal)">
           <h3>編輯住宿</h3>
           <input v-model="editHotelSearchQuery" @input="searchEditHotelPlacesInput" placeholder="重新搜尋住宿" />
           <div v-if="editHotelSearchResults.length" class="suggestions-list">
@@ -1052,8 +1053,8 @@
         </div>
       </div>
 
-      <div v-if="showEditExpenseModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditExpenseModal" @keydown.esc="closeEditExpenseModal">
-        <div class="card desktop-modal">
+      <div v-if="isModalRendered('edit-expense', showEditExpenseModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-expense', showEditExpenseModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditExpenseModal" @keydown.esc="closeEditExpenseModal">
+        <div class="card desktop-modal t-modal" :class="modalPresentationClass('edit-expense', showEditExpenseModal)">
           <h3>編輯支出</h3>
           <div class="desktop-form">
             <input v-model="editExpense.title" placeholder="項目" />
@@ -1081,8 +1082,8 @@
         </div>
       </div>
 
-      <div v-if="showEditWalletModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditWalletModal" @keydown.esc="closeEditWalletModal">
-        <div class="card desktop-modal">
+      <div v-if="isModalRendered('edit-wallet', showEditWalletModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-wallet', showEditWalletModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditWalletModal" @keydown.esc="closeEditWalletModal">
+        <div class="card desktop-modal t-modal" :class="modalPresentationClass('edit-wallet', showEditWalletModal)">
           <h3>編輯錢包紀錄</h3>
           <div class="desktop-form">
             <input v-model="editWallet.date" type="date" aria-label="日期" />
@@ -1138,8 +1139,8 @@
         </div>
       </div>
 
-      <div v-if="showEditPersonalLedgerModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
-        <form class="card desktop-modal desktop-ledger-edit" @submit.prevent="savePersonalLedgerEntry">
+      <div v-if="isModalRendered('edit-ledger', showEditPersonalLedgerModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-ledger', showEditPersonalLedgerModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
+        <form class="card desktop-modal desktop-ledger-edit t-modal" :class="modalPresentationClass('edit-ledger', showEditPersonalLedgerModal)" @submit.prevent="savePersonalLedgerEntry">
           <h3>編輯記帳</h3>
           <label><span>日期</span><input v-model="editPersonalLedgerEntry.date" type="date"></label>
           <label><span>項目</span><input v-model="editPersonalLedgerEntry.title" type="text"></label>
@@ -1164,8 +1165,8 @@
         </form>
       </div>
 
-      <div v-if="showDayModal" class="desktop-modal-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeDayModal" @keydown.esc="closeDayModal">
-        <div class="card desktop-modal">
+      <div v-if="isModalRendered('day', showDayModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('day', showDayModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeDayModal" @keydown.esc="closeDayModal">
+        <div class="card desktop-modal t-modal" :class="modalPresentationClass('day', showDayModal)">
           <h3>Day {{ modalDay }}</h3>
           <label>設定 Day 1 日期<input v-model="dateInput" type="date" /></label>
           <button type="button" class="desktop-primary" @click="applyDay1Date">套用</button>
@@ -1182,8 +1183,8 @@
         </div>
       </div>
 
-      <div v-if="showSyncDebugModal" class="desktop-modal-mask sync-debug-mask" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeSyncDebugModal" @keydown.esc="closeSyncDebugModal">
-        <section class="desktop-modal sync-debug-modal" aria-labelledby="desktop-sync-debug-title">
+      <div v-if="isModalRendered('sync-debug', showSyncDebugModal)" class="desktop-modal-mask sync-debug-mask" :class="modalMaskPresentationClass('sync-debug', showSyncDebugModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeSyncDebugModal" @keydown.esc="closeSyncDebugModal">
+        <section class="desktop-modal sync-debug-modal t-modal" :class="modalPresentationClass('sync-debug', showSyncDebugModal)" aria-labelledby="desktop-sync-debug-title">
           <header class="sync-debug-header">
             <div>
               <h2 id="desktop-sync-debug-title">同步診斷紀錄</h2>
@@ -1209,27 +1210,27 @@
   </div>
 </div>
 
-<script src="../config.js?v=20261003.1"></script>
+<script src="../config.js?v=20261003.2"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20261003.1" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20261003.1"></script>
-<script src="../js/utils.js?v=20261003.1"></script>
-<script src="../js/api.js?v=20261003.1"></script>
-<script src="../js/cache.js?v=20261003.1"></script>
-<script src="../js/maps.js?v=20261003.1"></script>
-<script src="../js/places.js?v=20261003.1"></script>
-<script src="../js/itinerary.js?v=20261003.1"></script>
-<script src="../js/hotels.js?v=20261003.1"></script>
-<script src="../js/expenses.js?v=20261003.1"></script>
-<script src="../js/sync-queue.js?v=20261003.1"></script>
-<script src="../js/sync-debug.js?v=20261003.1"></script>
-<script src="../js/personal-ledger.js?v=20261003.1"></script>
-<script src="../js/weather.js?v=20261003.1"></script>
-<script src="../js/export.js?v=20261003.1"></script>
-<script src="../js/probe-search.js?v=20261003.1"></script>
-<script src="../app.js?v=20261003.1"></script>
-<script src="../search-zh-label.js?v=20261003.1"></script>
-<script src="../prep-checklist.js?v=20261003.1"></script>
+<script src="../cache-refresh.js?v=20261003.2" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20261003.2"></script>
+<script src="../js/utils.js?v=20261003.2"></script>
+<script src="../js/api.js?v=20261003.2"></script>
+<script src="../js/cache.js?v=20261003.2"></script>
+<script src="../js/maps.js?v=20261003.2"></script>
+<script src="../js/places.js?v=20261003.2"></script>
+<script src="../js/itinerary.js?v=20261003.2"></script>
+<script src="../js/hotels.js?v=20261003.2"></script>
+<script src="../js/expenses.js?v=20261003.2"></script>
+<script src="../js/sync-queue.js?v=20261003.2"></script>
+<script src="../js/sync-debug.js?v=20261003.2"></script>
+<script src="../js/personal-ledger.js?v=20261003.2"></script>
+<script src="../js/weather.js?v=20261003.2"></script>
+<script src="../js/export.js?v=20261003.2"></script>
+<script src="../js/probe-search.js?v=20261003.2"></script>
+<script src="../app.js?v=20261003.2"></script>
+<script src="../search-zh-label.js?v=20261003.2"></script>
+<script src="../prep-checklist.js?v=20261003.2"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

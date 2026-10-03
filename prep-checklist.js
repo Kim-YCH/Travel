@@ -1,10 +1,10 @@
-// version: 20261003.1
+// version: 20261003.2
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20261003.1';
+  const VERSION = '20261003.2';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const IMAGE_STORAGE_PREFIX = 'travel_prepare_images_v1::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
@@ -676,6 +676,7 @@
       .prep-close { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.18); color: white; width: 36px; height: 36px; border-radius: 999px; font-size: 22px; line-height: 1; }
       .prep-progress-track { margin-top: 12px; height: 8px; border-radius: 999px; background: rgba(255,255,255,.26); overflow: hidden; }
       .prep-progress-bar { height: 100%; background: white; border-radius: 999px; transition: width .2s; }
+      @media (prefers-reduced-motion: reduce) { .prep-progress-bar { transition: none; } }
       .prep-body { padding: 12px; overflow-y: auto; max-height: calc(88vh - 122px); }
       .prep-status-line { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#64748b; font-size:11px; margin:0 2px 10px; }
       .prep-status-right { display:flex; align-items:center; gap:6px; min-width:0; }

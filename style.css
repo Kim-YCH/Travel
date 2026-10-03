@@ -175,7 +175,7 @@ html, body {
       border-radius: 12px;
       width: 100%;
       outline: none;
-      transition: all 0.2s;
+      transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
       box-sizing: border-box;
     }
 
@@ -840,6 +840,14 @@ html, body {
       cursor: grabbing;
     }
 
+    :root {
+      --modal-open-dur: 250ms;
+      --modal-close-dur: 150ms;
+      --modal-scale: 0.96;
+      --modal-scale-close: 0.96;
+      --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
     .modal-mask {
       position: fixed;
       inset: 0;
@@ -866,6 +874,54 @@ html, body {
       padding: 16px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.25);
       -webkit-overflow-scrolling: touch;
+    }
+
+    .modal-mask.t-modal-mask {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--modal-open-dur) var(--modal-ease);
+    }
+
+    .modal-mask.t-modal-mask.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-mask.t-modal-mask.is-closing {
+      opacity: 0;
+      pointer-events: none;
+      transition-duration: var(--modal-close-dur);
+    }
+
+    .t-modal {
+      transform-origin: center;
+      transform: scale(var(--modal-scale));
+      opacity: 0;
+      pointer-events: none;
+      transition:
+        transform var(--modal-open-dur) var(--modal-ease),
+        opacity var(--modal-open-dur) var(--modal-ease);
+      will-change: transform, opacity;
+    }
+
+    .t-modal.is-open {
+      transform: scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .t-modal.is-closing {
+      transform: scale(var(--modal-scale-close));
+      opacity: 0;
+      pointer-events: none;
+      transition:
+        transform var(--modal-close-dur) var(--modal-ease),
+        opacity var(--modal-close-dur) var(--modal-ease);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .t-modal { transition: none !important; }
+      .modal-mask.t-modal-mask { transition: none !important; }
     }
 
     .transport-editor {
@@ -1980,7 +2036,7 @@ html, body {
       border: 1px solid #e2e8f0;
       background: #ffffff;
       color: #64748b;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
     }
 
     .map-mode-btn-active {
@@ -2195,6 +2251,26 @@ html, body {
   padding-top: 6px !important;
   padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)) !important;
   align-items: flex-start !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar {
+    animation: none;
+  }
+
+  input, select, textarea,
+  .clone-copy-button,
+  .map-probe-toggle,
+  .map-locator-toggle,
+  .stat-bar,
+  .icon-btn,
+  .toggle-control > span[aria-hidden="true"],
+  .toggle-control > span[aria-hidden="true"]::after,
+  .map-mode-btn,
+  .bottom-nav button,
+  .trip-forecast-day {
+    transition: none;
+  }
 }
 
 /* Owner-only sync diagnostics; the modal is not rendered until local debug is enabled. */

@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261003.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261003.2';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -2938,6 +2938,69 @@ createApp({
     // 不改」地搬過來，不能在起點 select 上加 ref，所以改成開窗時用 querySelector
     // 找子樹裡第一個 select（就是起點欄位）撈出來聚焦。
     const routeModalEl = ref(null);
+    const modalPresentation = ref({});
+    const modalPresentationTimers = new Map();
+
+    const clearModalPresentationTimer = (key) => {
+      const timer = modalPresentationTimers.get(key);
+      if (timer) window.clearTimeout(timer);
+      modalPresentationTimers.delete(key);
+    };
+
+    const getModalCloseDuration = () => {
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return 0;
+      const value = window.getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur');
+      const duration = Number.parseFloat(value);
+      return Number.isFinite(duration) ? duration : 150;
+    };
+
+    const isModalRendered = (key, isOpen) => Boolean(isOpen || modalPresentation.value[key] === 'closing');
+    const modalPresentationClass = (key, isOpen) => ({
+      'is-open': isOpen && modalPresentation.value[key] === 'open',
+      'is-closing': !isOpen && modalPresentation.value[key] === 'closing'
+    });
+    const modalMaskPresentationClass = (key, isOpen) => ({
+      't-modal-mask': true,
+      ...modalPresentationClass(key, isOpen)
+    });
+
+    const watchModalPresentation = (key, source) => {
+      watch(source, (isOpen) => {
+        clearModalPresentationTimer(key);
+        if (isOpen) {
+          modalPresentation.value[key] = 'opening';
+          nextTick(() => window.requestAnimationFrame(() => {
+            if (source.value) modalPresentation.value[key] = 'open';
+          }));
+          return;
+        }
+
+        if (!modalPresentation.value[key]) return;
+        modalPresentation.value[key] = 'closing';
+        const closeDuration = getModalCloseDuration();
+        if (closeDuration === 0) {
+          delete modalPresentation.value[key];
+          return;
+        }
+        modalPresentationTimers.set(key, window.setTimeout(() => {
+          if (!source.value) delete modalPresentation.value[key];
+          modalPresentationTimers.delete(key);
+        }, closeDuration));
+      }, { flush: 'sync' });
+    };
+
+    [
+      ['create-trip', showCreateTripModal],
+      ['add-place', showAddPlaceModal],
+      ['route', showRouteModal],
+      ['day', showDayModal],
+      ['edit-place', showEditModal],
+      ['edit-hotel', showEditHotelModal],
+      ['edit-expense', showEditExpenseModal],
+      ['edit-wallet', showEditWalletModal],
+      ['edit-ledger', showEditPersonalLedgerModal],
+      ['sync-debug', showSyncDebugModal]
+    ].forEach(([key, source]) => watchModalPresentation(key, source));
 
     const openRouteModal = () => {
       showRouteModal.value = true;
@@ -5185,6 +5248,7 @@ createApp({
       stopMoneyAutoRefresh();
       if (mapBounceTimer) clearTimeout(mapBounceTimer);
       if (debugTitleClickTimer) clearTimeout(debugTitleClickTimer);
+      modalPresentationTimers.forEach(timer => window.clearTimeout(timer));
       probeSearch.dispose();
     });
 
@@ -5193,6 +5257,7 @@ createApp({
       currentView, currentTrip, trips, newTripName, newTripCity, showCreateTripModal,
       currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,
       showSyncDebugModal, syncDebugEntries, handleDebugTitleClick, closeSyncDebugModal,
+      isModalRendered, modalPresentationClass, modalMaskPresentationClass,
       copySyncDebugLog, clearSyncDebugLog, formatSyncDebugEntry,
       isAddingPlace, isAddingExpense, isSavingSharedWallet, isSavingPersonalLedger, isUpdatingSharedWalletSetting, isSavingExpense,
       isDeletingAlternative, isPromotingAlternative,

@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const VERSION = '20261003.1';
+const VERSION = '20261003.2';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const PREP_IMAGE_CACHE = 'travel-prep-images-v1';
 const PREP_IMAGE_CACHE_LIMIT = 60;
