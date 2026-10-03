@@ -4,7 +4,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20260930.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261003.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -4217,12 +4217,6 @@ createApp({
       if (!validateTransactionCurrency(currency)) return;
       if (isDeposit && (!person || !validPeople.includes(person))) return;
       if (!isDeposit && !title) return;
-      const amountInTwd = convertAmountToTwd({ amount, currency }, currentTrip.value);
-      if (!isDeposit && amountInTwd > sharedWalletBalance.value) {
-        alert(`共同錢包餘額不足，目前可用 $${Math.round(sharedWalletBalance.value)}。`);
-        return;
-      }
-
       const now = new Date().toISOString();
       const transaction = normalizeSharedWalletTransaction({
         id: generateId(),
@@ -4312,8 +4306,6 @@ createApp({
       if (isDeposit && !validPeople.includes(normalizePersonName(form.person))) return;
       if (!isDeposit && !String(form.title || '').trim()) return;
 
-      // 後端會擋餘額變負，前端先算一次才能給出有意義的訊息而不是通用錯誤。
-      const signed = (record) => (record.type === 'deposit' ? 1 : -1) * convertAmountToTwd(record, currentTrip.value);
       const nextRecord = normalizeSharedWalletTransaction({
         ...original,
         type: form.type,
@@ -4328,12 +4320,6 @@ createApp({
         note: String(form.note || '').trim(),
         updated_at: new Date().toISOString()
       });
-
-      const projected = sharedWalletBalance.value - signed(original) + signed(nextRecord);
-      if (projected < 0) {
-        alert(`修改後共同錢包會變成負數（${Math.round(projected)}），請先調整其他紀錄。`);
-        return;
-      }
 
       const backup = { ...original };
       isSavingSharedWallet.value = true;
@@ -4361,10 +4347,6 @@ createApp({
 
     const removeSharedWalletTransaction = async (item) => {
       if (isSavingSharedWallet.value || !item?.id || !currentTrip.value?.id) return;
-      if (item.type === 'deposit' && sharedWalletBalance.value - convertAmountToTwd(item, currentTrip.value) < 0) {
-        alert('刪除此筆存入後錢包會變成負數，請先調整支出紀錄。');
-        return;
-      }
       if (!confirm(`確定刪除此筆${item.type === 'deposit' ? '存入' : '公費支出'}紀錄？`)) return;
 
       const index = sharedWalletTransactions.value.findIndex(record => String(record.id) === String(item.id));
