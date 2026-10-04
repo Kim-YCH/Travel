@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<!-- version: 20261003.2 -->
+<!-- version: 20261004.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261003.2" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261004.1" />
 
-  <script src="../js/device-router.js?v=20261003.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20261003.2"></script>
-  <script src="../vendor/Sortable.min.js?v=20261003.2"></script>
+  <script src="../js/device-router.js?v=20261004.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20261004.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20261004.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20261003.2" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20261003.2" />
-  <link rel="stylesheet" href="./desktop.css?v=20261003.2" />
+  <link rel="stylesheet" href="../style.css?v=20261004.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20261004.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20261004.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20261003.2" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20261004.1" />
 </head>
 <body class="desktop-body">
 
@@ -255,11 +255,10 @@
     <div class="desktop-add-row desktop-itinerary-add-row">
       <input ref="desktopAddPlaceInputEl" v-model="newPlace" @input="searchPlacesInput" type="text" :placeholder="'搜尋 ' + currentTrip.city + '，或貼上地圖網址'" />
       <div class="desktop-add-row-fields">
-        <input v-model="newTime" type="time" />
-        <select v-model="newPlaceType">
+        <label class="desktop-form-field"><span>時間</span><input v-model="newTime" type="time" /></label>
+        <label class="desktop-form-field"><span>分類</span><select v-model="newPlaceType">
           <option v-for="type in itineraryTypes" :key="'type-' + type" :value="type">{{ type }}</option>
-        </select>
-        <button type="button" class="desktop-primary" @click="addPlace" :disabled="isAddingPlace">新增</button>
+        </select></label>
       </div>
     </div>
     <div v-if="isResolvingMapUrl" class="desktop-hint">正在解析地圖網址…</div>
@@ -290,6 +289,7 @@
     </div>
     <div class="desktop-modal-actions">
       <button type="button" class="desktop-ghost" @click="closeAddPlaceModal">關閉</button>
+      <button type="button" class="desktop-primary" @click="addPlace" :disabled="isAddingPlace">新增</button>
     </div>
   </article>
         </div>
@@ -844,8 +844,8 @@
             <h3>住宿管理</h3>
             <div class="desktop-form">
               <input v-model="hotelSearchQuery" @input="searchHotelPlacesInput" placeholder="搜尋住宿名稱或地址" />
-              <input v-model.number="newHotel.start_day" type="number" min="1" placeholder="起始 Day" />
-              <input v-model.number="newHotel.end_day" type="number" min="1" placeholder="結束 Day" />
+              <label class="desktop-form-field"><span>起始 Day</span><input v-model.number="newHotel.start_day" type="number" min="1" placeholder="起始 Day" /></label>
+              <label class="desktop-form-field"><span>結束 Day</span><input v-model.number="newHotel.end_day" type="number" min="1" placeholder="結束 Day" /></label>
               <button type="button" class="desktop-primary" @click="addHotel" :disabled="isAddingHotel">新增</button>
             </div>
             <div v-if="hotelSearchResults.length" class="suggestions-list">
@@ -1210,27 +1210,27 @@
   </div>
 </div>
 
-<script src="../config.js?v=20261003.2"></script>
+<script src="../config.js?v=20261004.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20261003.2" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20261003.2"></script>
-<script src="../js/utils.js?v=20261003.2"></script>
-<script src="../js/api.js?v=20261003.2"></script>
-<script src="../js/cache.js?v=20261003.2"></script>
-<script src="../js/maps.js?v=20261003.2"></script>
-<script src="../js/places.js?v=20261003.2"></script>
-<script src="../js/itinerary.js?v=20261003.2"></script>
-<script src="../js/hotels.js?v=20261003.2"></script>
-<script src="../js/expenses.js?v=20261003.2"></script>
-<script src="../js/sync-queue.js?v=20261003.2"></script>
-<script src="../js/sync-debug.js?v=20261003.2"></script>
-<script src="../js/personal-ledger.js?v=20261003.2"></script>
-<script src="../js/weather.js?v=20261003.2"></script>
-<script src="../js/export.js?v=20261003.2"></script>
-<script src="../js/probe-search.js?v=20261003.2"></script>
-<script src="../app.js?v=20261003.2"></script>
-<script src="../search-zh-label.js?v=20261003.2"></script>
-<script src="../prep-checklist.js?v=20261003.2"></script>
+<script src="../cache-refresh.js?v=20261004.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20261004.1"></script>
+<script src="../js/utils.js?v=20261004.1"></script>
+<script src="../js/api.js?v=20261004.1"></script>
+<script src="../js/cache.js?v=20261004.1"></script>
+<script src="../js/maps.js?v=20261004.1"></script>
+<script src="../js/places.js?v=20261004.1"></script>
+<script src="../js/itinerary.js?v=20261004.1"></script>
+<script src="../js/hotels.js?v=20261004.1"></script>
+<script src="../js/expenses.js?v=20261004.1"></script>
+<script src="../js/sync-queue.js?v=20261004.1"></script>
+<script src="../js/sync-debug.js?v=20261004.1"></script>
+<script src="../js/personal-ledger.js?v=20261004.1"></script>
+<script src="../js/weather.js?v=20261004.1"></script>
+<script src="../js/export.js?v=20261004.1"></script>
+<script src="../js/probe-search.js?v=20261004.1"></script>
+<script src="../app.js?v=20261004.1"></script>
+<script src="../search-zh-label.js?v=20261004.1"></script>
+<script src="../prep-checklist.js?v=20261004.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

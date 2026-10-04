@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const VERSION = '20261003.2';
+const VERSION = '20261004.1';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const PREP_IMAGE_CACHE = 'travel-prep-images-v1';
 const PREP_IMAGE_CACHE_LIMIT = 60;
@@ -50,6 +50,8 @@ const SHELL_ASSETS = [
   `./favicon.svg?v=${VERSION}`,
   `./favicon-32x32.png?v=${VERSION}`,
   `./apple-touch-icon.png?v=${VERSION}`,
+  './desktop/travel-sky.png',
+  './desktop/travel-plane.png',
   './icon-192.png',
   './icon-512.png'
 ];

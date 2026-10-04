@@ -1861,12 +1861,12 @@ button.suggestion-item {
    準備頁（#prep-checklist-root）直接引用同一組變數，不要另外湊數值。
    ===================================================================== */
 .desktop-app {
-  --desktop-radius-card: 14px;
-  --desktop-radius-control: 10px;
+  --desktop-radius-card: var(--cloud-radius);
+  --desktop-radius-control: var(--cloud-radius);
   --desktop-control-h: 42px;
   --desktop-card-pad: 18px;
-  --desktop-action-idle-opacity: .38;
-  --desktop-action-idle-filter: grayscale(1);
+  --desktop-action-idle-opacity: 1;
+  --desktop-action-idle-filter: none;
   --desktop-action-transition:
     opacity .15s ease,
     filter .15s ease,
@@ -4050,4 +4050,421 @@ button.suggestion-item {
   .desktop-ledger-grid { grid-template-columns: 240px minmax(0, 1fr); gap: 12px; }
   .desktop-ledger-table-head,
   .desktop-ledger-row { grid-template-columns: 78px minmax(0, 1fr) 60px 124px 72px; gap: 8px; }
+}
+
+/* Visual audit refinements: compact headers and predictable workspaces. */
+.desktop-app .desktop-header {
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: nowrap;
+  gap: 16px;
+  min-height: 80px;
+  padding: 12px 24px;
+  box-shadow: none !important;
+}
+.desktop-app .desktop-header h1 { flex: 0 1 auto; min-width: 0; font-size: 20px; overflow-wrap: anywhere; letter-spacing: 0; }
+.desktop-app .desktop-header-meta { flex: 1; justify-content: flex-end; }
+.desktop-app .desktop-trip-weather-card {
+  width: auto; margin: 0 !important; padding: 6px 12px; gap: 10px;
+  border-radius: var(--cloud-radius); box-shadow: none !important; align-self: center;
+}
+.desktop-app .desktop-trip-weather-card .trip-weather-icon { width: 32px; height: 32px; font-size: 22px; }
+.desktop-app .desktop-trip-weather-card .trip-weather-temp { font-size: 20px; }
+.desktop-app .desktop-trip-weather-card .trip-weather-metrics { font-size: 11px; }
+.desktop-app .desktop-brand, .desktop-app .desktop-trip-nav h3 { letter-spacing: 0; }
+.desktop-app .desktop-nav button.is-active { box-shadow: none; }
+.desktop-app .desktop-nav button.is-active:hover { color: white; }
+.desktop-app .card.desktop-modal { border-radius: var(--cloud-radius-modal) !important; }
+.desktop-app .desktop-modal { padding: 20px; }
+.desktop-app .desktop-modal-actions { align-items: center; padding-top: 16px; margin-top: 4px; border-top: 1px solid var(--cloud-border); }
+.desktop-app .desktop-itinerary .desktop-add-place .desktop-itinerary-add-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.desktop-app .desktop-itinerary .desktop-add-place .desktop-add-row-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; }
+.desktop-app .desktop-itinerary .desktop-add-place input,
+.desktop-app .desktop-itinerary .desktop-add-place select,
+.desktop-app .desktop-itinerary .desktop-add-place .desktop-primary,
+.desktop-app .desktop-itinerary .desktop-add-place .desktop-ghost { height: 42px; font-size: 14px; }
+.desktop-app .desktop-icon-btn { color: var(--cloud-text-2); background: var(--cloud-tint-gray); }
+.desktop-app .desktop-icon-btn.desktop-icon-danger { color: var(--cloud-negative); }
+.desktop-app .desktop-itinerary .desktop-place-actions { flex-shrink: 0; gap: 6px; }
+.desktop-app .desktop-place-main em a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.desktop-app .desktop-itinerary .card.desktop-place-card { border-radius: var(--cloud-radius) !important; box-shadow: none !important; }
+.desktop-app .desktop-money-layout .card { border-radius: var(--cloud-radius) !important; }
+.desktop-app .desktop-money-layout .desktop-money-hero { background: var(--cloud-surface) !important; padding: 18px 20px; }
+.desktop-money-hero-value { font-size: 32px; letter-spacing: 0; }
+.desktop-money-bar-fill.is-shared { background: var(--cloud-text-2); }
+.desktop-money-bar-fill.is-personal { background: var(--cloud-primary); }
+.desktop-money .desktop-money-mode, .desktop-money .desktop-money-submode,
+.desktop-money .desktop-money-mode button, .desktop-money .desktop-money-submode button { border-radius: var(--cloud-radius); box-shadow: none; }
+.desktop-app .desktop-ledger-owners button.is-active { background: var(--cloud-primary); border-color: var(--cloud-primary); }
+.desktop-ledger-summary .is-total { background: var(--cloud-tint-gray); color: var(--cloud-text); }
+.desktop-ledger-source.is-split, .desktop-ledger-source.is-wallet, .desktop-ledger-source.is-manual { background: var(--cloud-tint-gray); color: var(--cloud-text-2); font-size: 12px; }
+.desktop-analysis-bar > span { background: var(--cloud-primary); }
+.desktop-ledger-row > div:nth-child(2) small, .desktop-ledger-table-head { font-size: 12px; color: var(--cloud-muted); }
+.desktop-app .desktop-settings { width: min(1160px, 100%); grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 24px 32px; }
+.desktop-settings-main, .desktop-settings-side { display: contents; }
+.desktop-app .desktop-settings .card {
+  padding: 0 0 24px; background: transparent !important;
+  border: 0 !important; border-bottom: 1px solid var(--cloud-border) !important;
+  border-radius: 0 !important; box-shadow: none !important;
+}
+.desktop-settings h3 { font-size: 18px; font-weight: 700; margin-bottom: 14px; }
+.desktop-settings-side > .currency-settings-card { grid-column: 1; grid-row: 2; }
+.desktop-settings-side > .desktop-settings-actions:nth-child(3) { grid-column: 2; grid-row: 2; }
+.desktop-settings-side > .desktop-settings-actions:last-child { grid-column: 1 / -1; }
+.desktop-settings-lodging .desktop-form { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+.desktop-settings-lodging .desktop-form > input { grid-column: 1 / -1; }
+.desktop-settings-lodging .desktop-form > button { grid-column: 1 / -1; justify-self: end; }
+.desktop-app .desktop-settings-lodging .desktop-hotel-row { grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: "icon main actions"; padding: 12px 0; border-bottom: 1px solid var(--cloud-border); }
+.desktop-settings-lodging .desktop-place-actions { align-self: start; }
+.desktop-app .desktop-settings-member-form { margin-top: 0; }
+.desktop-app .desktop-member-row > span { white-space: normal; overflow-wrap: anywhere; }
+.desktop-app .desktop-settings-actions .desktop-ghost { width: auto; text-align: left; }
+.desktop-app .desktop-settings-actions button { align-self: flex-start; }
+.desktop-app #prep-checklist-root { max-width: min(1040px, 100%); }
+.desktop-app #prep-checklist-root .prep-personal-area { grid-template-columns: 220px minmax(0, 1fr); gap: 0 24px; }
+.desktop-app #prep-checklist-root .prep-cat-col { grid-row: 2; }
+.desktop-app #prep-checklist-root .prep-detail-col { grid-column: 2; grid-row: 2; min-width: 0; align-self: start; }
+.desktop-app #prep-checklist-root .prep-bottom-actions { margin: 16px 0 0; justify-content: flex-start; }
+.desktop-app #prep-checklist-root .prep-owner-box,
+.desktop-app #prep-checklist-root .prep-add-box,
+.desktop-app #prep-checklist-root .prep-cat-rail { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding: 0; }
+.desktop-app #prep-checklist-root .prep-owner-box { padding-bottom: 16px; border-bottom: 1px solid var(--cloud-border) !important; }
+.desktop-app #prep-checklist-root .prep-add-box { padding-top: 16px; border-top: 1px solid var(--cloud-border) !important; }
+.desktop-app #prep-checklist-root .prep-section { border-radius: var(--cloud-radius) !important; box-shadow: none !important; }
+.desktop-app #prep-checklist-root .prep-section-title { border-radius: 7px 7px 0 0; background: var(--cloud-tint-gray); }
+.desktop-app #prep-checklist-root .prep-icon-btn { opacity: 1; filter: none; width: 40px; height: 40px; }
+.desktop-app #prep-checklist-root .prep-item-menu-actions .prep-icon-btn { width: auto; padding: 0 10px; }
+.desktop-app #prep-checklist-root .prep-cat-count { font-size: 12px; color: var(--cloud-muted); }
+.desktop-app #prep-checklist-root .prep-item { min-height: 52px; }
+.desktop-app #prep-checklist-root .prep-item:has(.prep-item-menu[open]) { flex-wrap: wrap; }
+.desktop-app #prep-checklist-root .prep-section-count { font-size: 12px !important; }
+
+/* Product polish: quieter chrome and compact supporting information. */
+.desktop-app .desktop-header {
+  background: var(--cloud-surface) !important; color: var(--cloud-text) !important;
+  border-bottom: 1px solid var(--cloud-border); min-height: 72px;
+}
+.desktop-app .desktop-header h1 { color: var(--cloud-text); font-weight: 700; }
+.desktop-app .desktop-header-meta p { color: var(--cloud-muted); font-size: 12px; opacity: 1; }
+.desktop-app .desktop-brand { font-size: 16px; font-weight: 700; }
+.desktop-app .desktop-nav { gap: 4px; }
+.desktop-app .desktop-nav button { font-weight: 500; min-height: 40px; }
+.desktop-app .desktop-nav button.is-active,
+.desktop-app .desktop-nav button.is-active:hover {
+  background: var(--cloud-tint-blue) !important; color: var(--cloud-primary-strong);
+  border-color: transparent;
+}
+.desktop-app .desktop-trip-list-item strong { font-weight: 600; font-size: 14px; }
+.desktop-app .desktop-trip-list-item.is-active { background: var(--cloud-tint-gray) !important; }
+.desktop-app .desktop-pane:not(.desktop-itinerary) { padding-top: 24px; }
+.desktop-app .desktop-pane h3, .desktop-app .desktop-modal h3 { font-size: 16px; font-weight: 600; }
+.desktop-app .desktop-primary, .desktop-app .desktop-ghost,
+.desktop-app .desktop-danger, .desktop-app .desktop-people button { font-weight: 600; }
+.desktop-app .desktop-form-field > span, .desktop-app .desktop-money-field > span {
+  font-weight: 500; color: var(--cloud-text-2); font-size: 12px;
+}
+.desktop-app .desktop-settings-lodging .desktop-place-main strong { font-weight: 600; }
+.desktop-app .desktop-day-tabs button { min-height: 44px; }
+.desktop-app .desktop-day-tabs strong { font-weight: 600; }
+.desktop-app .desktop-itinerary .desktop-place-main strong { font-weight: 600; line-height: 1.5; }
+.desktop-app .desktop-itinerary .desktop-place-main .itinerary-category {
+  font-weight: 500; color: var(--cloud-muted); margin-right: 8px;
+}
+.desktop-app .desktop-itinerary .desktop-place-time { font-weight: 600; font-variant-numeric: tabular-nums; }
+.desktop-app .desktop-itinerary .desktop-list-block > .card { margin-bottom: 8px; }
+.desktop-app .desktop-icon-btn { background: transparent; }
+.desktop-app .desktop-icon-btn:hover { background: var(--cloud-tint-gray); }
+.desktop-app .desktop-money-layout .card { padding: 16px; box-shadow: none !important; }
+.desktop-app .desktop-money-layout .desktop-money-hero {
+  border: 0 !important; padding: 0 0 4px; background: transparent !important;
+}
+.desktop-app .desktop-money-hero-label { letter-spacing: 0; font-weight: 500; }
+.desktop-app .desktop-money-hero-value { font-weight: 600; font-size: 30px; }
+.desktop-app .desktop-money-hero-sub { font-weight: 400; }
+.desktop-app .desktop-money-section-head { margin-bottom: 16px; }
+.desktop-app .desktop-money-section-head p { font-weight: 400; }
+.desktop-app .desktop-money-bars { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.desktop-app .desktop-money-bar-track { height: 6px; }
+.desktop-app .desktop-money-bar-label, .desktop-app .desktop-money-bar-value { font-weight: 600; }
+.desktop-app .desktop-money-chips { margin-top: 16px; gap: 16px; }
+.desktop-app .desktop-money-chips > div {
+  padding: 0 0 0 12px; border: 0; border-left: 1px solid var(--cloud-border);
+  border-radius: 0; background: transparent;
+}
+.desktop-app .desktop-money-chips strong { font-weight: 600; font-size: 16px; }
+.desktop-app .desktop-ledger-head h2 { font-size: 22px; font-weight: 700; }
+.desktop-app .desktop-ledger-owners button { font-weight: 600; border-radius: var(--cloud-radius); }
+.desktop-app .desktop-ledger-row strong, .desktop-app .desktop-ledger-summary strong { font-weight: 600; }
+.desktop-app .desktop-ledger-row { min-height: 64px; }
+.desktop-app .desktop-ledger-analysis { box-shadow: none; }
+.desktop-app #prep-checklist-root .prep-section-title { padding: 12px 16px; }
+.desktop-app #prep-checklist-root .prep-section-name { font-weight: 600; }
+.desktop-app #prep-checklist-root .prep-owner-chip { border-radius: var(--cloud-radius); font-weight: 600; }
+
+/* Surface hierarchy only: preserve the existing geometry and interactions. */
+.desktop-app {
+  --cloud-primary: var(--cloud-vivid-blue);
+  --cloud-primary-strong: var(--cloud-vivid-blue-strong);
+  --cloud-primary-gradient: linear-gradient(var(--cloud-primary), var(--cloud-primary));
+  --cloud-border: var(--cloud-travel-border);
+}
+.desktop-app,
+.desktop-app .desktop-main,
+.desktop-app .desktop-itinerary .desktop-day-bar {
+  background: var(--cloud-canvas);
+}
+.desktop-app .desktop-sidebar { background: var(--cloud-sidebar-surface); }
+.desktop-app .desktop-nav button.is-active,
+.desktop-app .desktop-nav button.is-active:hover,
+.desktop-app .desktop-trip-list-item.is-active { background: var(--cloud-active-surface) !important; }
+.desktop-app .desktop-header {
+  isolation: isolate;
+  background: linear-gradient(var(--cloud-art-wash), var(--cloud-art-wash)), url('./travel-sky.png') center 75% / cover no-repeat, var(--cloud-header-sky) !important;
+  border-bottom-color: var(--cloud-section-border);
+}
+/* Static travel decoration cannot intercept clicks or resize header content. */
+.desktop-app .desktop-header::before,
+.desktop-app .desktop-header::after {
+  content: '';
+  display: block;
+  position: absolute;
+  bottom: 0;
+  top: auto;
+  right: auto;
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+  z-index: 0;
+}
+.desktop-app .desktop-header::before {
+  left: 21%;
+  bottom: 15%;
+  width: 14%;
+  height: 60%;
+  border-top: 2px dashed var(--cloud-header-cloud);
+  border-radius: 60% 70% 0 0;
+  transform: rotate(-12deg);
+}
+.desktop-app .desktop-header::after {
+  left: 34%;
+  top: 10%;
+  bottom: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 0;
+  background: url('./travel-plane.png') center / contain no-repeat;
+  transform: none;
+}
+.desktop-app .desktop-header h1 {
+  background: transparent;
+  color: var(--cloud-title-ink);
+  font-size: 26px;
+  line-height: 32px;
+}
+.desktop-app .desktop-trip-weather-card {
+  background: var(--cloud-surface) !important;
+  border-color: var(--cloud-section-border) !important;
+  box-shadow: var(--cloud-travel-shadow) !important;
+}
+.desktop-app .desktop-itinerary .desktop-day-tabs button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--cloud-text-2);
+  box-shadow: none;
+}
+.desktop-app .desktop-itinerary .desktop-day-tabs button:hover:not(.is-active):not(:disabled) {
+  background: var(--cloud-control-surface);
+  border-color: var(--cloud-border);
+}
+.desktop-app .desktop-itinerary .desktop-day-tabs button.is-active {
+  background: var(--cloud-section-surface);
+  border-color: var(--cloud-section-border);
+  color: var(--cloud-primary-strong);
+  box-shadow: inset 0 -2px 0 var(--cloud-primary);
+}
+.desktop-app .desktop-itinerary .desktop-list-block h3 {
+  background: var(--cloud-section-surface);
+  box-shadow: inset 0 -1px 0 var(--cloud-section-border);
+  color: var(--cloud-primary-strong);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 18px;
+  letter-spacing: 0;
+}
+.desktop-app .desktop-itinerary .desktop-list-block h3::before { background: var(--cloud-primary); }
+.desktop-app .desktop-itinerary .desktop-block-count {
+  background: transparent;
+  color: var(--cloud-primary-strong);
+}
+.desktop-app .desktop-itinerary .desktop-map-head {
+  background: var(--cloud-section-surface);
+  border-color: var(--cloud-section-border);
+  box-shadow: none;
+}
+.desktop-app .desktop-itinerary .desktop-map-head h3 {
+  color: var(--cloud-primary-strong);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.5px;
+  letter-spacing: 0;
+}
+.desktop-app .desktop-money-section-head,
+.desktop-app .desktop-rail-head {
+  background: transparent;
+  box-shadow: none;
+}
+.desktop-app .desktop-money-section-head {
+  position: relative;
+  isolation: isolate;
+  padding-left: 14px;
+  background: linear-gradient(100deg, var(--cloud-title-wash), var(--cloud-header-end));
+  border-radius: 4px;
+}
+.desktop-app .desktop-money-section-head::after,
+.desktop-app .desktop-itinerary .desktop-map-head::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 44%;
+  height: 60%;
+  background: var(--cloud-title-mountain);
+  clip-path: polygon(0 100%, 8% 75%, 15% 90%, 28% 20%, 32% 12%, 43% 60%, 48% 45%, 60% 88%, 72% 5%, 77% 0, 90% 65%, 95% 40%, 100% 65%, 100% 100%);
+  opacity: .7;
+  pointer-events: none;
+  z-index: -1;
+}
+.desktop-app .desktop-itinerary .desktop-map-head { position: relative; isolation: isolate; }
+.desktop-app .desktop-money-section-head > *,
+.desktop-app .desktop-itinerary .desktop-map-head > * { position: relative; z-index: 1; }
+.desktop-app .desktop-money-section-head h3,
+.desktop-app .desktop-rail-head h3,
+.desktop-app .desktop-settings h3,
+.desktop-app .desktop-ledger-grid h3,
+.desktop-app .desktop-ledger-analysis h3 {
+  position: relative;
+  background: transparent;
+  box-shadow: none;
+  color: var(--cloud-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0;
+}
+.desktop-app .desktop-money-section-head h3 {
+  color: var(--cloud-title-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+.desktop-app .desktop-money-section-head h3::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 4px;
+  width: 5px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--cloud-primary);
+  pointer-events: none;
+}
+.desktop-app .desktop-money-section-head h3::after,
+.desktop-app .desktop-rail-head h3::after,
+.desktop-app .desktop-settings h3::after,
+.desktop-app .desktop-ledger-grid h3::after,
+.desktop-app .desktop-ledger-analysis h3::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 20px;
+  height: 2px;
+  background: var(--cloud-primary-soft);
+  pointer-events: none;
+}
+.desktop-app .desktop-money-section-head h3::after { display: none; }
+.desktop-app .desktop-itinerary #map.desktop-map {
+  background: var(--cloud-control-surface) !important;
+  border-color: var(--cloud-border) !important;
+}
+.desktop-app .desktop-itinerary .desktop-list-block > .card.desktop-place-card,
+.desktop-app .desktop-itinerary .desktop-list-block > .card.desktop-place-card:not(.desktop-alt-row):hover {
+  background: var(--cloud-surface) !important;
+  box-shadow: inset 2px 0 0 var(--cloud-section-border) !important;
+}
+.desktop-app .desktop-itinerary .desktop-list-block > .card.desktop-place-card:not(.desktop-alt-row):hover {
+  border-color: var(--cloud-border-strong) !important;
+}
+.desktop-app .desktop-itinerary .transport-summary span {
+  background: var(--cloud-control-surface);
+  border-color: var(--cloud-border);
+  color: var(--cloud-text-2);
+}
+.desktop-app .desktop-money .desktop-money-mode,
+.desktop-app .desktop-money .desktop-money-submode,
+.desktop-app .desktop-ledger-summary,
+.desktop-app .desktop-ledger-summary .is-total,
+.desktop-app .desktop-itinerary .route-mode-switch,
+.desktop-app .card.desktop-probe {
+  background: var(--cloud-control-surface) !important;
+  border-color: var(--cloud-border) !important;
+  box-shadow: none !important;
+}
+.desktop-app .desktop-ledger-analysis-bar span { background: var(--cloud-primary); }
+.desktop-app #prep-checklist-root .prep-section-title {
+  background: var(--cloud-section-surface);
+  border-color: var(--cloud-section-border);
+}
+
+@media (max-width: 1200px) {
+  .desktop-app .desktop-shell { grid-template-columns: 200px minmax(0, 1fr); }
+  .desktop-app .desktop-header-meta p { flex-basis: 100%; text-align: right; }
+  .desktop-app .desktop-ledger-grid { grid-template-columns: minmax(0, 1fr); }
+  .desktop-ledger-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desktop-ledger-form > h3 { grid-column: 1 / -1; }
+  .desktop-app .desktop-settings { gap: 24px; }
+}
+@media (max-width: 900px) {
+  .desktop-app .desktop-settings { grid-template-columns: minmax(0, 1fr); }
+  .desktop-settings-side > .currency-settings-card,
+  .desktop-settings-side > .desktop-settings-actions:nth-child(3) { grid-column: auto; grid-row: auto; }
+  .desktop-app #prep-checklist-root .prep-personal-area { grid-template-columns: minmax(0, 1fr); }
+  .desktop-app #prep-checklist-root .prep-cat-col { position: static; grid-column: 1; grid-row: 2; }
+  .desktop-app #prep-checklist-root .prep-detail-col { grid-column: 1; grid-row: 3; }
+  .desktop-app #prep-checklist-root .prep-cat-list { max-height: 180px; }
+  .desktop-app #prep-checklist-root .prep-add-box { margin-bottom: 20px; }
+}
+@media (max-width: 760px) {
+  .desktop-app .desktop-money-bars { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .desktop-app .desktop-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "header" "sidebar" "main"; }
+  .desktop-app .desktop-sidebar { padding: 8px 12px; gap: 8px; max-height: 204px; border-bottom: 1px solid var(--cloud-border); }
+  .desktop-app .desktop-brand { display: none; }
+  .desktop-app .desktop-nav { flex-direction: row; gap: 4px; }
+  .desktop-app .desktop-nav button { flex: 1; min-width: 0; padding: 8px 4px; font-size: 12px; text-align: center; }
+  .desktop-app .desktop-trip-nav { min-height: 0; flex: 0 0 auto; gap: 4px; }
+  .desktop-app .desktop-trip-list { flex-direction: row; overflow-x: auto; }
+  .desktop-app .desktop-trip-list-item { width: auto; flex: 0 0 auto; padding: 6px 10px; }
+  .desktop-app .desktop-sidebar-foot { flex-direction: row; align-items: center; }
+  .desktop-app .desktop-sync { padding: 4px 8px; }
+  .desktop-app .desktop-header { min-height: 72px; padding: 10px 12px; gap: 8px; }
+  .desktop-app .desktop-header h1 { font-size: 17px; }
+  .desktop-app .desktop-trip-weather-card { padding: 4px 6px; gap: 6px; }
+  .desktop-app .desktop-trip-weather-card .trip-weather-metrics { font-size: 10px; }
+  .desktop-app .desktop-trip-weather-card .trip-weather-icon { width: 22px; height: 22px; font-size: 18px; }
+  .desktop-app .desktop-pane:not(.desktop-itinerary), .desktop-app .desktop-itinerary { padding: 16px 12px; }
+  .desktop-app .desktop-money-toolbar { flex-wrap: wrap; gap: 12px; }
+  .desktop-app .desktop-expense-form, .desktop-app .desktop-wallet-form { grid-template-columns: minmax(0, 1fr); }
+  .desktop-app .desktop-money-layout { grid-template-columns: minmax(0, 1fr); }
+  .desktop-ledger-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .desktop-ledger-summary > div { padding: 10px 8px; }
+  .desktop-ledger-summary strong { overflow-wrap: anywhere; }
+  .desktop-ledger-form { grid-template-columns: minmax(0, 1fr); }
+  .desktop-ledger-row { grid-template-columns: 82px minmax(0, 1fr) 60px; gap: 8px; }
+  .desktop-ledger-table-head { display: none; }
+  .desktop-ledger-row .desktop-ledger-amount { grid-column: 2; justify-self: start; text-align: left; }
+  .desktop-ledger-row .desktop-ledger-actions { grid-column: 3; }
+  .desktop-app .desktop-modal-mask { padding: 16px; }
+  .desktop-app .desktop-modal { max-height: calc(100dvh - 32px); }
+  .desktop-app .desktop-money-hero-value { font-size: 28px; }
 }

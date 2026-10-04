@@ -1,10 +1,10 @@
-// version: 20261003.2
+// version: 20261004.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20261003.2';
+  const VERSION = '20261004.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const IMAGE_STORAGE_PREFIX = 'travel_prepare_images_v1::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
@@ -762,9 +762,14 @@
                唯一擋住它的就是這個 disabled。勾選是冪等的，重送不會產生重複資料。 -->
           <input type="checkbox" ${item.checked ? 'checked' : ''} />
           <span class="prep-item-text">${escapeHtml(item.text)}</span>
-          <button class="prep-icon-btn prep-image-add" title="加圖片" type="button">📷</button>
-          <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️</button>
-          <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕</button>
+          <details class="prep-item-menu">
+            <summary title="更多操作" aria-label="更多操作">⋯</summary>
+            <div class="prep-item-menu-actions">
+              <button class="prep-icon-btn prep-image-add" title="加圖片" type="button">📷 <span>加圖片</span></button>
+              <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️ <span>編輯</span></button>
+              <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕ <span>刪除</span></button>
+            </div>
+          </details>
         </div>
         ${renderItemImages(item.id)}
       </div>`;
@@ -893,11 +898,12 @@
         <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
       </div>
       </div>
+      <div class="prep-detail-col">
       <div class="prep-section-list">${hasSections ? state.sections.map(renderSection).join('') : ''}</div>
       <div class="prep-bottom-actions" style="${hasSections ? '' : 'display:none;'}">
         <button class="prep-action-btn secondary prep-clear-checks" type="button">清空勾選</button>
         <button class="prep-action-btn danger prep-delete-all" type="button">刪除全部</button>
-      </div>`;
+      </div></div>`;
   }
 
   function render() {

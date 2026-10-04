@@ -6,13 +6,34 @@
   --cloud-primary-strong: #1D4ED8;
   --cloud-accent: #F59E0B;
   --cloud-sky: #E0F2FE;
-  --cloud-sky-2: #F8FBFF;
-  --cloud-surface: rgba(255,255,255,.82);
-  --cloud-border: rgba(216,232,248,.92);
+  --cloud-sky-2: #F6F8FA;
+  --cloud-surface: #FFFFFF;
+  --cloud-canvas: #F0F7FF;
+  --cloud-sidebar-surface: #F6FAFF;
+  --cloud-section-surface: #EEF4FF;
+  --cloud-control-surface: #F8FAFC;
+  --cloud-section-border: #DCE7F7;
+  --cloud-weather-surface: #EFF6FF;
+  --cloud-vivid-blue: #0B63FF;
+  --cloud-vivid-blue-strong: #1A55C9;
+  --cloud-active-surface: #DDEBFF;
+  --cloud-header-start: #F1F9FF;
+  --cloud-header-sky: #E3F1FF;
+  --cloud-header-end: #F5FAFF;
+  --cloud-header-cloud: rgba(255,255,255,.72);
+  --cloud-art-wash: rgba(255,255,255,.45);
+  --cloud-title-ink: #101A3C;
+  --cloud-title-wash: #EDF6FF;
+  --cloud-title-mountain: #DCEBFF;
+  --cloud-travel-border: #D7E5F8;
+  --cloud-travel-shadow: 0 2px 8px rgba(37,99,235,.04);
+  --cloud-border: #DCE2E8;
   --cloud-text: #0F172A;
   --cloud-muted: #64748B;
-  --cloud-shadow: 0 16px 38px rgba(37,99,235,.16);
-  --cloud-shadow-soft: 0 10px 28px rgba(15,23,42,.08);
+  --cloud-radius: 8px;
+  --cloud-radius-modal: 12px;
+  --cloud-shadow: 0 3px 10px rgba(15,23,42,.06);
+  --cloud-shadow-soft: 0 1px 2px rgba(15,23,42,.03);
 
   /* 語意色：桌面重繪需要「正／負／輔助」三組，原本的色票只有藍系。
      手機版目前沒有引用點，純加法。desktop.css 禁止寫死色碼
@@ -28,8 +49,8 @@
 
   /* 主色漸層與按鈕陰影：desktop.css 的主要按鈕、導覽選取態共用同一組，
      抽出來才不會在 desktop.css 內寫死 rgba 品牌色。 */
-  --cloud-primary-gradient: linear-gradient(135deg, var(--cloud-primary), var(--cloud-primary-2));
-  --cloud-shadow-btn: 0 8px 18px rgba(37,99,235,.22);
+  --cloud-primary-gradient: linear-gradient(var(--cloud-primary), var(--cloud-primary));
+  --cloud-shadow-btn: 0 1px 2px rgba(15,23,42,.08);
 
   /* 半透明填色與線條：桌面重繪的淡底、hover 底色、虛線框共用。
      直接寫 rgba 才能保留穿透玻璃底的效果（實色會蓋掉 backdrop-filter）。 */
@@ -963,5 +984,434 @@ button.bg-gray-700,
   .ledger-note-field { grid-column: auto; }
   .bottom-nav button { min-width: 0; }
   .bottom-nav button .text-2xl { font-size: 20px; }
+}
+
+/* Shared visual hierarchy for the mobile and desktop workspaces. */
+html, body, .mobile-container {
+  background: var(--cloud-sky-2) !important;
+}
+html { font-size: 16px; }
+body { font-size: 14px; line-height: 1.5; }
+button, input, select, textarea { font-family: inherit; }
+button { font-weight: 600; }
+h1, h2, h3 { letter-spacing: 0; }
+.mobile-container { box-shadow: none !important; }
+.mobile-container .font-bold, .mobile-container .font-extrabold { font-weight: 600; }
+.mobile-container h1, .mobile-container h2, .mobile-container h3,
+.modal-card h3 { font-weight: 700; }
+.mobile-container .card h2, .mobile-container .card h3 { font-size: 16px; line-height: 1.5; }
+.trip-weather-card {
+  background: var(--cloud-tint-gray) !important; border-color: var(--cloud-border);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.trip-weather-icon { background: transparent !important; box-shadow: none !important; }
+.trip-weather-temp, .money-summary strong, .ledger-summary strong {
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.mobile-container::before, .mobile-container::after, .app-header::after {
+  display: none;
+}
+.app-header {
+  background: var(--cloud-surface) !important;
+  color: var(--cloud-text) !important;
+  border-bottom: 1px solid var(--cloud-border);
+  border-radius: 0;
+  box-shadow: none !important;
+}
+.card, #app .itinerary-card-v2, #app .shared-wallet-card, #app .personal-expense-card,
+#prep-checklist-root .prep-add-box, #prep-checklist-root .prep-section,
+#prep-checklist-root .prep-owner-box, #prep-checklist-root .prep-empty {
+  background: var(--cloud-surface) !important;
+  border: 1px solid var(--cloud-border) !important;
+  border-radius: var(--cloud-radius) !important;
+  box-shadow: var(--cloud-shadow-soft) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+input:not([type="checkbox"]):not([type="radio"]), select, textarea,
+#prep-checklist-root input:not([type="checkbox"]), #prep-checklist-root select {
+  background: var(--cloud-surface) !important;
+  border-color: var(--cloud-border) !important;
+  border-radius: var(--cloud-radius) !important;
+  box-shadow: none;
+}
+button.bg-blue-600, button.bg-teal-600, button.bg-gray-800, button.bg-gray-700,
+.w-full.bg-blue-600, .map-mode-btn-active, .day-tab-active, .bg-blue-600,
+#prep-checklist-root .prep-add-box button, #prep-checklist-root .prep-section-add button {
+  background: var(--cloud-primary) !important;
+  box-shadow: none !important;
+}
+.day-tab-active, .day-tab-inactive, .day-btn-wrap button,
+.map-mode-btn, .icon-btn, .suggestions-list, .itinerary-message {
+  border-radius: var(--cloud-radius) !important;
+}
+.day-tab-inactive, .day-btn-wrap button:not(.day-tab-active) {
+  border-color: var(--cloud-border) !important;
+  box-shadow: none;
+}
+.modal-card {
+  background: var(--cloud-surface);
+  border: 1px solid var(--cloud-border);
+  border-radius: var(--cloud-radius-modal);
+}
+.mobile-container .app-header {
+  background: var(--cloud-surface) !important; color: var(--cloud-text) !important;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
+  gap: 8px;
+}
+.mobile-container .trip-weather-card {
+  border-radius: var(--cloud-radius);
+  box-shadow: none !important;
+  padding: 8px 12px;
+  gap: 8px;
+}
+.mobile-container .trip-weather-icon { width: 36px; height: 36px; font-size: 22px; }
+.mobile-container .trip-weather-temp { font-size: 22px; }
+.mobile-container .app-header-compact .trip-weather-card {
+  grid-template-columns: 24px auto minmax(0, 1fr);
+  padding: 6px 10px;
+  gap: 8px;
+}
+.mobile-container .app-header-compact .trip-weather-icon {
+  width: 24px; height: 24px; font-size: 18px; background: transparent; box-shadow: none;
+}
+.mobile-container .app-header-compact .trip-weather-main {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px;
+}
+.mobile-container .app-header-compact .trip-weather-temp { font-size: 16px; }
+.mobile-container .app-header-compact .trip-weather-desc,
+.mobile-container .app-header-compact .trip-weather-range { font-size: 11px; }
+.mobile-container .app-header-compact .trip-weather-metrics {
+  flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 2px 8px; font-size: 10px;
+}
+.mobile-container .trip-lobby-card { padding: 16px; }
+.mobile-container .content-scroll.p-6 { padding: 24px 16px; justify-content: flex-start; }
+.mobile-container .card { margin-bottom: 12px; }
+.mobile-container .itinerary-card-v2 { margin-bottom: 0; }
+.mobile-container .itinerary-title { font-size: 16px; line-height: 1.5; font-weight: 600; }
+.mobile-container .app-header-subtitle { color: var(--cloud-muted); }
+.mobile-container .app-header > button {
+  min-height: 44px; min-width: 44px; background: transparent; color: var(--cloud-primary-strong);
+  border-radius: var(--cloud-radius); backdrop-filter: none;
+}
+.mobile-container .app-header-sync-status { border-color: var(--cloud-border); font-size: 11px; }
+.mobile-container .itinerary-day-stack { gap: 16px; }
+.mobile-container .itinerary-timeline-row { grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
+.mobile-container .itinerary-rail-time {
+  font-family: inherit; font-weight: 600; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--cloud-text-2); text-shadow: none;
+}
+.mobile-container .itinerary-rail::before { background: var(--cloud-border); width: 1px; }
+.mobile-container .itinerary-rail-node {
+  width: 32px; height: 32px; font-size: 17px;
+  background: var(--cloud-surface); border: 1px solid var(--cloud-border); box-shadow: none;
+}
+.mobile-container .itinerary-card-v2 { grid-template-columns: 12px minmax(0, 1fr); gap: 8px; padding: 12px; }
+.mobile-container .itinerary-card-v2::before { background: var(--cloud-border); width: 2px; }
+.mobile-container .itinerary-card-footer { grid-column: 2; }
+.mobile-container .itinerary-actions {
+  grid-column: 2; grid-row: 3; flex-direction: row; justify-content: flex-end; align-self: end;
+  gap: 4px; padding: 4px 0 0; border-left: 0; border-top: 1px solid var(--cloud-border);
+}
+.mobile-container .itinerary-actions .icon-btn {
+  width: 44px; height: 44px; background: transparent !important; color: var(--cloud-text-2) !important;
+}
+.mobile-container .itinerary-actions .icon-btn-danger { color: var(--cloud-negative) !important; }
+.mobile-container .itinerary-action-btn { min-height: 44px; font-weight: 600; }
+.mobile-container .itinerary-action-btn:first-child {
+  background: var(--cloud-primary); color: white; border-color: var(--cloud-primary);
+}
+.mobile-container .day-tab-active {
+  background: var(--cloud-surface) !important; color: var(--cloud-primary-strong) !important;
+  border-color: var(--cloud-primary) !important;
+}
+.mobile-container .map-mode-btn { min-height: 44px; }
+.mobile-container .map-mode-btn-active {
+  background: var(--cloud-tint-blue) !important; color: var(--cloud-primary-strong) !important;
+  border-color: var(--cloud-border) !important;
+}
+.mobile-container .itinerary-category { font-weight: 500; font-size: 12px; }
+.mobile-container .transport-summary span {
+  background: var(--cloud-tint-gray); color: var(--cloud-text-2); border-color: var(--cloud-border); font-weight: 500;
+}
+.mobile-container input:not([type="checkbox"]):not([type="radio"]),
+.mobile-container select, .mobile-container textarea { min-height: 44px; font-size: 16px; }
+.mobile-container .ledger-owner-options button,
+.mobile-container .personal-category-options button,
+.mobile-container .wallet-category-options button,
+.mobile-container .wallet-person-options button,
+.mobile-container .shared-wallet-mode button {
+  min-height: 44px; border-radius: var(--cloud-radius); font-weight: 600;
+}
+.mobile-container .shared-wallet-entry-actions button,
+.mobile-container .personal-expense-entry-actions button,
+.mobile-container .ledger-entry-actions button { width: 44px; height: 44px; }
+.mobile-container .money-summary { padding: 16px; }
+.mobile-container .settings-page > button:first-child {
+  background: var(--cloud-surface) !important; color: var(--cloud-text-2) !important;
+  border: 1px solid var(--cloud-border); height: 44px; font-size: 14px; margin-bottom: 16px;
+}
+.mobile-container .money-summary-total { gap: 12px; align-items: baseline; }
+.mobile-container .ledger-analysis { padding: 16px; box-shadow: none; }
+.mobile-container #prep-checklist-root .prep-add-box { padding: 16px; }
+.mobile-container #prep-checklist-root .prep-section-title { padding: 12px 16px; }
+.mobile-container #prep-checklist-root .prep-section-title .prep-icon-btn,
+.mobile-container #prep-checklist-root .prep-item-menu summary { width: 44px; height: 44px; }
+.mobile-container #prep-checklist-root .prep-item-menu { flex-basis: 44px; }
+.mobile-container #prep-checklist-root .prep-item-menu[open] { flex-basis: 100%; grid-template-columns: 44px minmax(0, 1fr); }
+.mobile-container #prep-checklist-root .prep-item-menu-actions .prep-icon-btn { height: 44px; }
+.mobile-container #prep-checklist-root .prep-section-add button,
+.mobile-container #prep-checklist-root .prep-action-btn { min-height: 44px; }
+.mobile-container .itinerary-category { color: var(--cloud-muted); }
+.mobile-container .bottom-nav { box-shadow: none !important; min-height: 64px; }
+.mobile-container .bottom-nav button { flex: 1; transform: none; gap: 3px; }
+.mobile-container .bottom-nav button.scale-110::before { width: 28px; height: 3px; background: var(--cloud-primary); }
+.mobile-container .bottom-nav button .text-2xl { font-size: 21px; }
+.mobile-container .bottom-nav button .text-\[10px\] { font-size: 12px; }
+.money-summary {
+  background: var(--cloud-surface) !important;
+  color: var(--cloud-text) !important;
+  box-shadow: var(--cloud-shadow-soft) !important;
+}
+.money-summary-total > span, .money-summary-breakdown, .settlement-plan-title,
+.settlement-plan-arrow { color: var(--cloud-muted); }
+.money-summary-total > strong { font-size: 26px; font-family: inherit; overflow-wrap: anywhere; }
+.money-summary-breakdown strong, .settlement-plan-amount { color: var(--cloud-text); }
+.money-summary-members, .settlement-plan { border-color: var(--cloud-border); }
+.money-summary .text-green-400 { color: var(--cloud-positive); }
+.money-summary .text-red-400 { color: var(--cloud-negative); }
+.settlement-plan-from, .settlement-plan-to { color: var(--cloud-text); }
+.shared-wallet-mode button.active {
+  background: var(--cloud-primary); color: white; box-shadow: none;
+}
+.shared-wallet-submit { background: var(--cloud-primary); }
+.shared-wallet-entry, .personal-expense-entry {
+  grid-template-columns: 32px minmax(0, 1fr) 112px;
+  border-color: var(--cloud-border);
+}
+.shared-wallet-entry-main > strong,
+.shared-wallet-entry.is-payment .shared-wallet-entry-main > strong,
+.personal-expense-entry-main > strong { color: var(--cloud-text); font-size: 14px; }
+.shared-wallet-entry-main > span, .personal-expense-entry-main > span {
+  font-size: 12px;
+}
+.shared-wallet-entry-kind { color: var(--cloud-muted) !important; font-size: 12px !important; }
+.shared-wallet-entry-actions > strong, .personal-expense-entry-actions > strong {
+  max-width: 100%; overflow-wrap: anywhere; text-align: right;
+}
+.shared-wallet-entry-actions button, .personal-expense-entry-actions button {
+  width: 36px; height: 36px;
+}
+.wallet-category-options button.active, .wallet-person-options button.active {
+  background: var(--cloud-tint-sky); border-color: var(--cloud-primary-soft); color: var(--cloud-primary-strong);
+}
+.mobile-container button.text-amber-700 {
+  color: var(--cloud-text-2) !important; border-color: var(--cloud-border) !important;
+}
+.ledger-owner-options button.active, .ledger-submit, .ledger-edit-actions button.primary {
+  background: var(--cloud-primary); border-color: var(--cloud-primary); color: white;
+}
+.ledger-summary .ledger-summary-total { background: var(--cloud-tint-gray); color: var(--cloud-text); }
+.ledger-source-split, .ledger-source-wallet, .ledger-source-manual {
+  background: var(--cloud-tint-gray); color: var(--cloud-text-2); font-size: 12px;
+}
+.ledger-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ledger-summary > div { padding: 10px; border-bottom: 0; border-right: 1px solid var(--cloud-border); }
+.ledger-summary strong { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ledger-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ledger-note-field { grid-column: 1 / -1; }
+.ledger-owner-section h2 { font-size: 20px; }
+.ledger-summary span, .ledger-form-grid label > span { font-size: 12px; }
+.ledger-form-grid label > span { font-weight: 500; color: var(--cloud-text-2); }
+.ledger-analysis-line strong, .ledger-entry-side > strong { font-weight: 600; }
+#prep-checklist-root .prep-item-text { font-weight: 500; line-height: 1.5; }
+#prep-checklist-root .prep-section-name { font-weight: 600; }
+#prep-checklist-root .prep-owner-box, #prep-checklist-root .prep-add-box { box-shadow: none !important; }
+#prep-checklist-root .prep-item { min-height: 52px; gap: 10px; }
+#prep-checklist-root .prep-item.is-checked .prep-item-text { color: var(--cloud-muted); }
+#prep-checklist-root .prep-icon-btn { width: 40px; height: 40px; border-radius: var(--cloud-radius); }
+#prep-checklist-root .prep-section-name { white-space: normal; overflow-wrap: anywhere; }
+#prep-checklist-root .prep-item-menu { flex: 0 0 40px; align-self: center; }
+#prep-checklist-root .prep-item-menu summary {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; list-style: none; border: 1px solid var(--cloud-border);
+  border-radius: var(--cloud-radius); background: var(--cloud-surface); color: var(--cloud-text-2);
+  font-size: 24px; cursor: pointer;
+}
+#prep-checklist-root .prep-item-menu summary::-webkit-details-marker { display: none; }
+#prep-checklist-root .prep-item:has(.prep-item-menu[open]) { flex-wrap: wrap; }
+#prep-checklist-root .prep-item-menu[open] { flex-basis: 100%; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; }
+#prep-checklist-root .prep-item-menu-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#prep-checklist-root .prep-item-menu-actions .prep-icon-btn {
+  width: auto; min-height: 40px; padding: 0 10px; gap: 6px;
+  opacity: 1; filter: none; color: var(--cloud-text-2); background: var(--cloud-tint-gray);
+}
+#prep-checklist-root .prep-item-menu-actions .is-danger { color: var(--cloud-negative); }
+#prep-checklist-root summary:focus-visible, #prep-checklist-root button:focus-visible {
+  outline: 2px solid var(--cloud-primary); outline-offset: 2px;
+}
+#prep-checklist-root .prep-action-btn.secondary {
+  background: var(--cloud-tint-gray) !important; color: var(--cloud-text-2); box-shadow: none !important;
+}
+#prep-checklist-root .prep-action-btn.danger {
+  background: var(--cloud-tint-red) !important; color: var(--cloud-negative); box-shadow: none !important;
+}
+@media (max-width: 350px) {
+  .shared-wallet-entry, .personal-expense-entry { grid-template-columns: 32px minmax(0, 1fr) 96px; }
+  .ledger-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .ledger-note-field { grid-column: auto; }
+  #prep-checklist-root .prep-item-menu-actions { gap: 4px; }
+  #prep-checklist-root .prep-item-menu-actions .prep-icon-btn { padding: 0 8px; }
+}
+
+/* Mobile counterpart of the desktop travel surfaces and title hierarchy. */
+.mobile-container {
+  --cloud-primary: var(--cloud-vivid-blue);
+  --cloud-primary-strong: var(--cloud-vivid-blue-strong);
+  --cloud-primary-gradient: linear-gradient(var(--cloud-primary), var(--cloud-primary));
+  --cloud-border: var(--cloud-travel-border);
+  background: var(--cloud-canvas) !important;
+}
+.mobile-container .app-header {
+  isolation: isolate;
+  background:
+    linear-gradient(var(--cloud-art-wash), var(--cloud-art-wash)),
+    url('./desktop/travel-sky.png') center 75% / auto 220% no-repeat,
+    var(--cloud-header-sky) !important;
+  border-bottom-color: var(--cloud-section-border);
+}
+.mobile-container .app-header::before,
+.mobile-container .app-header::after {
+  content: '';
+  display: block;
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  bottom: auto;
+  box-shadow: none;
+}
+.mobile-container .app-header::before {
+  right: 31%;
+  top: calc(env(safe-area-inset-top, 0px) + 23px);
+  width: 64px;
+  height: 28px;
+  background: transparent;
+  border-top: 2px dashed var(--cloud-header-cloud);
+  border-radius: 60% 70% 0 0;
+  transform: rotate(-12deg);
+}
+.mobile-container .app-header::after {
+  right: 25%;
+  top: calc(env(safe-area-inset-top, 0px) + 9px);
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+  background: url('./desktop/travel-plane.png') center / contain no-repeat;
+  transform: none;
+}
+.mobile-container .app-map-mode .app-header::before { right: 46%; }
+.mobile-container .app-map-mode .app-header::after { right: 40%; }
+.mobile-container .app-header h1,
+.mobile-container .ledger-owner-section h2,
+.mobile-container .content-scroll.p-6 > h1 {
+  color: var(--cloud-title-ink);
+}
+.mobile-container .content-scroll.p-6 {
+  background:
+    linear-gradient(var(--cloud-art-wash), var(--cloud-art-wash)) top / 100% 150px no-repeat,
+    url('./desktop/travel-sky.png') center top / auto 150px no-repeat,
+    var(--cloud-canvas) !important;
+}
+.mobile-container .trip-weather-card {
+  background: var(--cloud-surface) !important;
+  border-color: var(--cloud-section-border) !important;
+  box-shadow: var(--cloud-travel-shadow) !important;
+}
+.mobile-container .day-tab-inactive,
+.mobile-container .day-btn-wrap button:not(.day-tab-active) {
+  background: var(--cloud-control-surface) !important;
+  border-color: var(--cloud-section-border) !important;
+}
+.mobile-container .day-tab-active,
+.mobile-container .map-mode-btn-active {
+  background: var(--cloud-active-surface) !important;
+  color: var(--cloud-primary-strong) !important;
+  border-color: var(--cloud-section-border) !important;
+}
+.mobile-container .bottom-nav {
+  background: var(--cloud-surface) !important;
+  border-top-color: var(--cloud-section-border);
+}
+.mobile-container .ledger-summary .ledger-summary-total {
+  background: var(--cloud-active-surface);
+  color: var(--cloud-title-ink);
+}
+.mobile-container .ledger-analysis-bar span,
+.mobile-container .stat-bar {
+  background: var(--cloud-primary) !important;
+}
+.mobile-container .trip-lobby-card::before,
+.mobile-container .personal-expense-submit,
+.mobile-container .currency-settings-submit {
+  background: var(--cloud-primary);
+}
+.mobile-container input[type="checkbox"] { accent-color: var(--cloud-primary); }
+.mobile-container .toggle-control input:checked + span { background: var(--cloud-primary); }
+#app.mobile-container .shared-wallet-card { border-color: var(--cloud-border) !important; }
+.mobile-container .shared-wallet-header strong { color: var(--cloud-title-ink); }
+.mobile-container .shared-wallet-heading-row span:first-child {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.mobile-container :is(.money-entry-title, .money-category-analysis > h3,
+  .ledger-analysis > h3, .ledger-entry-form > h3,
+  .shared-wallet-heading-row, #prep-checklist-root .prep-section-title) {
+  position: relative;
+  isolation: isolate;
+  color: var(--cloud-title-ink);
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(100deg, var(--cloud-title-wash), var(--cloud-header-end));
+}
+.mobile-container :is(.money-entry-title, .money-category-analysis > h3,
+  .ledger-analysis > h3, .ledger-entry-form > h3, .shared-wallet-heading-row) {
+  padding-left: 14px;
+}
+.mobile-container :is(.money-entry-title, .money-category-analysis > h3,
+  .ledger-analysis > h3, .ledger-entry-form > h3,
+  .shared-wallet-heading-row, #prep-checklist-root .prep-section-title)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 5px;
+  height: 18px;
+  border-radius: 3px;
+  transform: translateY(-50%);
+  background: var(--cloud-primary);
+  pointer-events: none;
+}
+.mobile-container #prep-checklist-root .prep-section-title::before { left: 6px; }
+.mobile-container :is(.money-entry-title, .money-category-analysis > h3,
+  .ledger-analysis > h3, .ledger-entry-form > h3,
+  .shared-wallet-heading-row, #prep-checklist-root .prep-section-title)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 35%;
+  height: 65%;
+  background: var(--cloud-title-mountain);
+  clip-path: polygon(0 100%, 8% 75%, 15% 90%, 28% 20%, 32% 12%, 43% 60%, 48% 45%, 60% 88%, 72% 5%, 77% 0, 90% 65%, 95% 40%, 100% 65%, 100% 100%);
+  opacity: .7;
+  pointer-events: none;
+  z-index: -1;
+}
+.mobile-container :is(.shared-wallet-ledger-wrap > h3,
+  .personal-expense-ledger-wrap > h3, .ledger-list-section > h3,
+  .settings-page h3) {
+  color: var(--cloud-title-ink);
+  font-weight: 700;
 }
 
