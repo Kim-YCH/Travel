@@ -4,12 +4,12 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261004.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261014.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
       'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport',
-      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug', 'TravelPersonalLedger'
+      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug', 'TravelPersonalLedger', 'TravelIcons'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -27,6 +27,7 @@ createApp({
     const TravelSyncQueue = window.TravelSyncQueue;
     const TravelSyncDebug = window.TravelSyncDebug;
     const TravelPersonalLedger = window.TravelPersonalLedger;
+    const { renderIcon, getNavIcon, getTripIcon, getItineraryTypeIcon } = window.TravelIcons;
 
     const {
       normalizeManualEntry,
@@ -5254,6 +5255,7 @@ createApp({
 
     return {
       APP_VERSION,
+      renderIcon, getNavIcon, getTripIcon, getItineraryTypeIcon,
       currentView, currentTrip, trips, newTripName, newTripCity, showCreateTripModal,
       currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,
       showSyncDebugModal, syncDebugEntries, handleDebugTitleClick, closeSyncDebugModal,

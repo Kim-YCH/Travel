@@ -1,0 +1,662 @@
+/* Visual layer only: existing prep CSS owns layout, selection and visibility. */
+body.journal-theme #app #prep-checklist-root {
+  color: var(--journal-ink);
+  background: var(--journal-paper);
+  font-family: inherit;
+  line-height: 1.5;
+  letter-spacing: 0;
+  min-width: 0;
+}
+
+/* These properties are important in cloud-theme.css and desktop.css. */
+body.journal-theme #app #prep-checklist-root .prep-section,
+body.journal-theme #app #prep-checklist-root .prep-empty {
+  background: var(--journal-surface) !important;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--journal-shadow) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  min-width: 0;
+  padding: 16px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-box,
+body.journal-theme #app #prep-checklist-root .prep-add-box,
+body.journal-theme #app #prep-checklist-root .prep-cat-rail {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  min-width: 0;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-box {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--journal-line) !important;
+  margin-bottom: 18px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-add-box {
+  padding: 16px 0;
+  border-top: 1px solid var(--journal-line) !important;
+  gap: 10px;
+}
+
+/* The add-category caption has an inline legacy color. */
+body.journal-theme #app #prep-checklist-root .prep-add-box > div:first-child {
+  color: var(--journal-muted) !important;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-row label,
+body.journal-theme #app #prep-checklist-root .prep-owner-chips-label,
+body.journal-theme #app #prep-checklist-root .prep-cat-rail-title {
+  color: var(--journal-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-status-line {
+  color: var(--journal-muted);
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 14px;
+  font-size: 12px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-status-right {
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-updated-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-sync-pill {
+  background: var(--journal-sage) !important;
+  color: var(--journal-ink) !important;
+  border: 1px solid var(--journal-line);
+  border-radius: 5px;
+  padding: 4px 8px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+/* Do not set display on owner-select/chips, rails or section lists. */
+body.journal-theme #app #prep-checklist-root .prep-owner-chip,
+body.journal-theme #app #prep-checklist-root .prep-cat-item {
+  --prep-tag-surface: var(--journal-sky);
+  background: var(--prep-tag-surface);
+  color: var(--journal-ink);
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  min-height: 44px;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  box-shadow: none;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-chip {
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-cat-item {
+  padding: 10px;
+  border-left-width: 3px;
+  border-left-color: transparent;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-chip:nth-of-type(5n + 2),
+body.journal-theme #app #prep-checklist-root .prep-cat-item:nth-of-type(5n + 2) {
+  --prep-tag-surface: var(--journal-sage);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-chip:nth-of-type(5n + 3),
+body.journal-theme #app #prep-checklist-root .prep-cat-item:nth-of-type(5n + 3) {
+  --prep-tag-surface: var(--journal-yellow);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-chip:nth-of-type(5n + 4),
+body.journal-theme #app #prep-checklist-root .prep-cat-item:nth-of-type(5n + 4) {
+  --prep-tag-surface: var(--journal-lavender);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-chip:nth-of-type(5n + 5),
+body.journal-theme #app #prep-checklist-root .prep-cat-item:nth-of-type(5n + 5) {
+  --prep-tag-surface: var(--journal-coral);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-chip.is-active,
+body.journal-theme #app #prep-checklist-root .prep-cat-item.is-active {
+  background: var(--journal-coral);
+  border-color: var(--journal-outline);
+  color: var(--journal-coral-ink);
+  font-weight: 700;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-cat-list {
+  gap: 8px;
+  padding: 4px;
+  scrollbar-color: var(--journal-line) var(--journal-paper);
+  scrollbar-width: thin;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-cat-name,
+body.journal-theme #app #prep-checklist-root .prep-section-name {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  line-height: 1.5;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-category-label {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-category-symbol {
+  display: inline-block;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-cat-count,
+body.journal-theme #app #prep-checklist-root .prep-cat-item.is-active .prep-cat-count {
+  color: var(--journal-ink);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-cat-rail-total,
+body.journal-theme #app #prep-checklist-root .prep-section-count {
+  background: var(--journal-yellow);
+  border: 1px solid var(--journal-line);
+  border-radius: 5px;
+  padding: 3px 8px;
+  line-height: 1.5;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The section count's font size and color are inline and desktop-important. */
+body.journal-theme #app #prep-checklist-root .prep-section-count {
+  color: var(--journal-ink) !important;
+  font-size: 12px !important;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-title {
+  background: var(--journal-sky);
+  color: var(--journal-ink);
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 7px 7px 0 0;
+  margin: -16px -16px 10px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-name {
+  flex: 1 1 100px;
+  font-weight: 700;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-actions {
+  gap: 6px;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-progress {
+  margin: 0 -16px 8px;
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--journal-line);
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-progress-track,
+body.journal-theme #app #prep-checklist-root .prep-section-progress-track {
+  background: var(--journal-paper);
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  height: 10px;
+  min-width: 0;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-progress-track {
+  flex: 1 1 100px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-progress-bar,
+body.journal-theme #app #prep-checklist-root .prep-section-progress-bar {
+  background: var(--journal-sage);
+  border-radius: 2px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-progress-text {
+  color: var(--journal-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-wrap {
+  border-top: 1px solid var(--journal-line);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-wrap:first-of-type {
+  border-top: 0;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item {
+  color: var(--journal-ink);
+  background: transparent;
+  border-radius: 0;
+  min-height: 60px;
+  padding: 8px 0;
+  margin: 0;
+  gap: 10px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-text {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item.is-checked .prep-item-text {
+  color: var(--journal-muted);
+  text-decoration-color: var(--journal-line);
+}
+
+/* Keep native checkmarks; never apply text-field sizing to these inputs. */
+body.journal-theme #app #prep-checklist-root .prep-item input[type="checkbox"] {
+  appearance: auto;
+  accent-color: var(--journal-sage);
+  background: var(--journal-surface) !important;
+  border-color: var(--journal-outline) !important;
+  border-radius: 4px !important;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-select,
+body.journal-theme #app #prep-checklist-root .prep-new-section-title,
+body.journal-theme #app #prep-checklist-root .prep-new-item-input {
+  background: var(--journal-surface) !important;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 6px !important;
+  color: var(--journal-ink);
+  height: 44px;
+  min-height: 44px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  box-shadow: none;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-owner-select {
+  background: var(--journal-sky) !important;
+}
+
+body.journal-theme #app #prep-checklist-root input::placeholder {
+  color: var(--journal-muted);
+  opacity: 1;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-add {
+  background: transparent;
+  border: 0;
+  border-top: 1px dashed var(--journal-line);
+  border-radius: 0;
+  padding: 12px 0 0;
+  margin-top: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-add-box button,
+body.journal-theme #app #prep-checklist-root .prep-section-add button,
+body.journal-theme #app #prep-checklist-root .prep-action-btn {
+  background: var(--journal-coral) !important;
+  box-shadow: none !important;
+  color: var(--journal-coral-ink);
+  border: 1px solid var(--journal-outline);
+  border-radius: 6px;
+  height: auto;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-section-add button {
+  background: var(--journal-sage) !important;
+  color: var(--journal-ink);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-action-btn.secondary {
+  background: var(--journal-surface) !important;
+  color: var(--journal-ink);
+  border-color: var(--journal-line);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-action-btn.danger {
+  background: var(--journal-coral) !important;
+  color: var(--journal-coral-ink);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-bottom-actions {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-icon-btn,
+body.journal-theme #app #prep-checklist-root .prep-item-menu summary,
+body.journal-theme #app #prep-checklist-root .prep-refresh-btn,
+body.journal-theme #app #prep-checklist-root .prep-close {
+  background: var(--journal-surface);
+  color: var(--journal-ink);
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  opacity: 1;
+  filter: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-icon-btn.is-danger {
+  background: var(--journal-coral);
+  color: var(--journal-coral-ink);
+  border-color: var(--journal-coral-ink);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-image-add {
+  background: var(--journal-sky);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-refresh-btn {
+  width: auto;
+  padding: 8px 12px;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-menu {
+  flex: 0 0 44px;
+  min-width: 0;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-menu[open] {
+  flex-basis: 100%;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-menu[open] summary {
+  background: var(--journal-yellow);
+  border-color: var(--journal-outline);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-menu-actions {
+  min-width: 0;
+  gap: 6px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-menu-actions .prep-icon-btn {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  padding: 8px 10px;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-item-images {
+  padding: 4px 0 12px 34px;
+  gap: 10px;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-thumb {
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  background: var(--journal-surface);
+  box-shadow: none;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-thumb-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--journal-coral-ink);
+  border-radius: 4px;
+  background: var(--journal-coral);
+  color: var(--journal-coral-ink);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-thumb-spinner {
+  background: var(--journal-paper);
+  color: var(--journal-muted);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-muted,
+body.journal-theme #app #prep-checklist-root .prep-cat-empty {
+  color: var(--journal-muted);
+  border-color: var(--journal-line);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-offline-note {
+  background: var(--journal-yellow);
+  color: var(--journal-ink);
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  line-height: 1.6;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme #app #prep-checklist-root button:disabled,
+body.journal-theme #app #prep-checklist-root .prep-icon-btn.is-busy,
+body.journal-theme #app #prep-checklist-root.prep-disabled button:not(.prep-close),
+body.journal-theme #app #prep-checklist-root .prep-disabled button:not(.prep-close) {
+  opacity: .55;
+  cursor: default;
+}
+
+body.journal-theme #app #prep-checklist-root :is(button, summary, input, select):focus-visible {
+  outline: 2px solid var(--journal-outline);
+  outline-offset: 2px;
+}
+
+/* Legacy input:focus uses important color and a blue halo. */
+body.journal-theme #app #prep-checklist-root input:focus,
+body.journal-theme #app #prep-checklist-root select:focus {
+  border-color: var(--journal-outline) !important;
+  box-shadow: none !important;
+}
+
+@media (hover: hover) {
+  body.journal-theme #app #prep-checklist-root .prep-owner-chip:not(.is-active):hover,
+  body.journal-theme #app #prep-checklist-root .prep-cat-item:not(.is-active):hover {
+    background: var(--prep-tag-surface);
+    border-color: var(--journal-outline);
+    color: var(--journal-ink);
+  }
+
+  body.journal-theme #app #prep-checklist-root .prep-item:hover {
+    background: var(--journal-paper);
+  }
+
+  body.journal-theme #app #prep-checklist-root .prep-section-add:hover,
+  body.journal-theme #app #prep-checklist-root .prep-section-add:focus-within {
+    background: transparent;
+    border-color: var(--journal-line);
+  }
+
+  body.journal-theme #app #prep-checklist-root .prep-icon-btn:hover,
+  body.journal-theme #app #prep-checklist-root .prep-item-menu summary:hover,
+  body.journal-theme #app #prep-checklist-root .prep-refresh-btn:hover {
+    border-color: var(--journal-outline);
+    transform: none;
+  }
+}
+
+/* Dormant overlay presentation retains its existing opening/closing rules. */
+body.journal-theme #app #prep-checklist-root .prep-overlay {
+  background: rgba(48, 41, 37, .42);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-panel {
+  background: var(--journal-paper) !important;
+  border: 1px solid var(--journal-line);
+  border-radius: 8px 8px 0 0 !important;
+  box-shadow: var(--journal-shadow);
+}
+
+body.journal-theme #app #prep-checklist-root .prep-header {
+  background: var(--journal-coral) !important;
+  color: var(--journal-ink);
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-header::after {
+  content: none;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-body {
+  background: var(--journal-paper) !important;
+}
+
+body.journal-theme #app #prep-checklist-root .prep-fab {
+  background: var(--journal-coral) !important;
+  color: var(--journal-coral-ink);
+  border: 1px solid var(--journal-outline);
+  border-radius: 6px;
+  box-shadow: var(--journal-shadow) !important;
+  min-height: 44px;
+}
+
+/* Viewer is appended to body, outside #app. Style controls, never its image. */
+body.journal-theme > .prep-img-viewer .prep-img-viewer-btn,
+body.journal-theme > .prep-img-viewer .prep-img-viewer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--journal-surface);
+  color: var(--journal-ink);
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+}
+
+body.journal-theme > .prep-img-viewer button:focus-visible {
+  outline: 2px solid var(--journal-yellow);
+  outline-offset: 3px;
+}
+
+@media (max-width: 600px), (pointer: coarse) {
+  body.journal-theme #app #prep-checklist-root .prep-thumb-delete {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Compact add row preserves the existing delegated-event DOM. */
+body.journal-theme #app.mobile-container #prep-checklist-root .prep-owner-box {
+  border-bottom: 0 !important;
+  padding-bottom: 0;
+  margin-bottom: 12px;
+}
+
+body.journal-theme #app.mobile-container #prep-checklist-root .prep-add-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+body.journal-theme #app.mobile-container #prep-checklist-root .prep-add-box > div:first-child { grid-column: 1 / -1; }
+body.journal-theme #app.mobile-container #prep-checklist-root .prep-add-row { grid-template-columns: minmax(0, 1fr); margin: 0; }
+body.journal-theme #app.mobile-container #prep-checklist-root .prep-add-section-btn { width: 100%; padding: 8px; font-size: 13px; margin: 0; }
+
+@media (max-width: 420px) {
+  body.journal-theme #app #prep-checklist-root .prep-section-title {
+    padding: 10px 12px;
+  }
+
+  body.journal-theme #app #prep-checklist-root .prep-item-menu-actions {
+    gap: 6px;
+  }
+
+  body.journal-theme #app #prep-checklist-root .prep-bottom-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.journal-theme #app #prep-checklist-root .prep-progress-bar,
+  body.journal-theme #app #prep-checklist-root .prep-section-progress-bar,
+  body.journal-theme #app #prep-checklist-root .prep-owner-chip,
+  body.journal-theme #app #prep-checklist-root .prep-cat-item,
+  body.journal-theme #app #prep-checklist-root .prep-icon-btn,
+  body.journal-theme #app #prep-checklist-root .prep-item,
+  body.journal-theme #app #prep-checklist-root .prep-section-add {
+    transition: none;
+  }
+}

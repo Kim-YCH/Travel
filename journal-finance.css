@@ -1,0 +1,1029 @@
+/* Load after the shared journal theme, Tailwind, and both legacy stylesheets.
+   Shared tokens, shell, fields, and modal lifecycle belong to the parent theme. */
+
+/* Finance pages keep their existing layout and independently scrolling lists. */
+body.journal-theme .mobile-container#app :is(.money-page, .ledger-page, .settings-page),
+body.journal-theme .desktop-app#app :is(.desktop-money, .desktop-ledger, .desktop-settings) {
+  color: var(--journal-ink);
+  letter-spacing: 0;
+  --travel-icon-ink: var(--journal-outline);
+}
+
+body.journal-theme .mobile-container#app .money-page > .card,
+body.journal-theme .desktop-app#app .desktop-money-layout .card {
+  background: var(--journal-surface) !important;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+/* These two legacy card selectors carry an ID and important borders. */
+body.journal-theme .mobile-container#app .money-page .money-entry-card {
+  background: var(--journal-surface) !important;
+  border-color: var(--journal-line) !important;
+  border-radius: 8px !important;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-grid > .card:not(.desktop-money-hero),
+body.journal-theme .desktop-app#app .desktop-money-rail > .card {
+  padding: 16px 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--journal-line) !important;
+  border-radius: 0 !important;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-grid > .desktop-money-hero,
+body.journal-theme .mobile-container#app .money-page > .money-summary {
+  padding: 18px !important;
+  background: var(--journal-yellow) !important;
+  color: var(--journal-ink) !important;
+  border-color: var(--journal-outline) !important;
+  box-shadow: var(--journal-shadow) !important;
+}
+
+body.journal-theme .mobile-container#app .money-summary-total {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+body.journal-theme .mobile-container#app .money-summary-total > span,
+body.journal-theme .desktop-app#app .desktop-money-hero-label {
+  color: var(--journal-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+body.journal-theme .mobile-container#app .money-summary-total > strong,
+body.journal-theme .desktop-app#app .desktop-money-hero-value {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--journal-ink);
+  font-family: inherit;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-hero-value {
+  font-size: 34px;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-hero-top {
+  flex-wrap: wrap;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-hero-sub,
+body.journal-theme .mobile-container#app .money-summary-breakdown {
+  color: var(--journal-ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+body.journal-theme .mobile-container#app .money-summary-breakdown:not(.money-summary-wallet-breakdown) {
+  flex-wrap: wrap;
+}
+
+body.journal-theme .mobile-container#app .money-summary-breakdown strong {
+  min-width: 0;
+  color: var(--journal-ink);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .mobile-container#app .money-summary-wallet-breakdown {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+body.journal-theme .mobile-container#app .money-summary-wallet-breakdown strong {
+  text-align: right;
+}
+
+body.journal-theme .mobile-container#app :is(.money-summary-members, .settlement-plan) {
+  border-color: var(--journal-line);
+}
+
+body.journal-theme .mobile-container#app .money-summary-members > div {
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--journal-line);
+}
+
+body.journal-theme .mobile-container#app .money-summary-members > div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .mobile-container#app .money-summary-members > div > span:last-child {
+  min-width: 0;
+  max-width: 55%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .mobile-container#app .money-summary .text-green-400,
+body.journal-theme .desktop-app#app .desktop-money .desktop-balance-pos {
+  color: #36563b !important;
+}
+
+body.journal-theme .mobile-container#app .money-summary .text-red-400,
+body.journal-theme .desktop-app#app .desktop-money .desktop-balance-neg {
+  color: var(--journal-coral-ink) !important;
+}
+
+body.journal-theme .mobile-container#app :is(.settlement-plan-title, .settlement-plan-arrow),
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-rail-subhead, .desktop-balance-zero) {
+  color: var(--journal-muted);
+  letter-spacing: 0;
+}
+
+body.journal-theme .mobile-container#app :is(.settlement-plan-from, .settlement-plan-to) {
+  padding: 3px 6px;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  color: var(--journal-ink);
+  background: var(--journal-coral);
+}
+
+body.journal-theme .mobile-container#app .settlement-plan-to {
+  background: var(--journal-sage);
+}
+
+body.journal-theme .mobile-container#app .settlement-plan-row {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+body.journal-theme .mobile-container#app .settlement-plan-amount {
+  min-width: 0;
+  color: var(--journal-ink);
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Section headings replace the legacy blue bars and mountain pseudo-elements. */
+body.journal-theme .mobile-container#app :is(.money-entry-title, .shared-wallet-heading-row,
+  .money-category-analysis > h3, .ledger-analysis > h3, .ledger-entry-form > h3),
+body.journal-theme .desktop-app#app .desktop-money-section-head {
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--journal-ink);
+  box-shadow: none;
+}
+
+body.journal-theme .mobile-container#app :is(.money-entry-title, .shared-wallet-heading-row,
+  .money-category-analysis > h3, .ledger-analysis > h3, .ledger-entry-form > h3)::before,
+body.journal-theme .mobile-container#app :is(.money-entry-title, .shared-wallet-heading-row,
+  .money-category-analysis > h3, .ledger-analysis > h3, .ledger-entry-form > h3)::after,
+body.journal-theme .desktop-app#app .desktop-money-section-head::after,
+body.journal-theme .desktop-app#app .desktop-money-section-head h3::before,
+body.journal-theme .desktop-app#app :is(.desktop-money-section-head h3, .desktop-rail-head h3,
+  .desktop-ledger-grid h3, .desktop-ledger-analysis h3, .desktop-settings h3)::after {
+  content: none;
+}
+
+body.journal-theme .mobile-container#app :is(.money-entry-title, .shared-wallet-heading-row,
+  .money-category-analysis > h3, .ledger-analysis > h3, .ledger-entry-form > h3,
+  .shared-wallet-ledger-wrap > h3, .personal-expense-ledger-wrap > h3, .ledger-list-section > h3),
+body.journal-theme .desktop-app#app :is(.desktop-money-section-head h3, .desktop-rail-head h3,
+  .desktop-ledger-grid h3, .desktop-ledger-analysis h3) {
+  color: var(--journal-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-section-head p,
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-form-field, .desktop-money-field) > span,
+body.journal-theme .desktop-app#app .desktop-ledger-form label > span,
+body.journal-theme .mobile-container#app .money-field > span,
+body.journal-theme .mobile-container#app .ledger-form-grid label > span {
+  color: var(--journal-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+body.journal-theme .mobile-container#app .shared-wallet-header strong {
+  max-width: 100%;
+  color: var(--journal-ink);
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Mode controls keep borders and dimensions identical in every state. */
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-money-mode, .desktop-money-submode),
+body.journal-theme .mobile-container#app .shared-wallet-mode {
+  padding: 4px;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px;
+  background: var(--journal-paper) !important;
+  box-shadow: none !important;
+}
+
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-money-mode, .desktop-money-submode) button,
+body.journal-theme .mobile-container#app .shared-wallet-mode button {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--journal-muted);
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: none;
+}
+
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-money-mode, .desktop-money-submode) button.is-active,
+body.journal-theme .mobile-container#app .shared-wallet-mode button.active {
+  background: var(--journal-coral) !important;
+  border-color: var(--journal-outline);
+  color: var(--journal-ink) !important;
+  box-shadow: none !important;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-wallet-toggle {
+  max-width: 100%;
+  border-color: var(--journal-line);
+  border-radius: 6px;
+  background: var(--journal-surface);
+  color: var(--journal-ink);
+  white-space: normal;
+}
+
+body.journal-theme .desktop-app#app .desktop-wallet-toggle input {
+  flex: 0 0 auto;
+  accent-color: var(--journal-coral-ink);
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-money-mode-status,
+body.journal-theme .desktop-app#app .desktop-money .desktop-rail-badge {
+  max-width: 100%;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  background: var(--journal-lavender);
+  color: var(--journal-ink) !important;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-chips > div {
+  padding: 10px 12px;
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  background: var(--journal-sky);
+}
+
+body.journal-theme .desktop-app#app .desktop-money-chips > div:nth-child(2) {
+  background: var(--journal-sage);
+}
+
+body.journal-theme .desktop-app#app .desktop-money-chips > div:nth-child(3) {
+  background: var(--journal-yellow);
+}
+
+body.journal-theme .desktop-app#app .desktop-money-chips span,
+body.journal-theme .desktop-app#app .desktop-money-bar-label {
+  color: var(--journal-ink);
+}
+
+body.journal-theme .desktop-app#app .desktop-money-chips strong,
+body.journal-theme .desktop-app#app .desktop-money-bar-value {
+  min-width: 0;
+  color: var(--journal-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-bar-pct {
+  color: var(--journal-muted);
+}
+
+/* Categories and member selections remain real buttons and checkboxes. */
+body.journal-theme .mobile-container#app :is(.personal-category-options, .wallet-category-options,
+  .wallet-person-options) button,
+body.journal-theme .mobile-container#app .personal-member-option span,
+body.journal-theme .mobile-container#app .ledger-owner-options button,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people > button,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people-check-option span,
+body.journal-theme .desktop-app#app .desktop-ledger-owners button {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 7px 11px;
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  background: var(--journal-surface);
+  color: var(--journal-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: none;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-people.desktop-category-options > button {
+  width: 76px;
+  padding: 7px 4px;
+  gap: 5px;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-category-options > button .desktop-cat-icon {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-category-options > button:is(:hover, .is-active) .desktop-cat-icon {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+body.journal-theme .mobile-container#app :is(.personal-category-options, .wallet-category-options) button.active,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people.desktop-category-options > button.is-active {
+  background: var(--journal-yellow) !important;
+  border-color: var(--journal-outline);
+  color: var(--journal-ink) !important;
+}
+
+body.journal-theme .mobile-container#app .wallet-person-options button.active,
+body.journal-theme .mobile-container#app .personal-member-option input:checked + span,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people-check-option input:checked + span,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people:not(.desktop-category-options) > button.is-active {
+  background: var(--journal-sage) !important;
+  border-color: var(--journal-outline);
+  color: var(--journal-ink) !important;
+}
+
+body.journal-theme .mobile-container#app .ledger-owner-options button.active,
+body.journal-theme .desktop-app#app .desktop-ledger-owners button.is-active {
+  background: var(--journal-lavender) !important;
+  border-color: var(--journal-outline);
+  color: var(--journal-ink) !important;
+}
+
+body.journal-theme .mobile-container#app .personal-member-option,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people-check-option {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+body.journal-theme .mobile-container#app .personal-member-option input:focus-visible + span,
+body.journal-theme .desktop-app#app .desktop-money .desktop-people-check-option input:focus-visible + span {
+  outline: 2px solid var(--journal-outline);
+  outline-offset: 2px;
+}
+
+body.journal-theme .mobile-container#app :is(.personal-category-options, .wallet-category-options,
+  .wallet-person-options, .ledger-owner-options, .shared-wallet-mode) button:focus-visible,
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-people, .desktop-money-mode,
+  .desktop-money-submode) > button:focus-visible,
+body.journal-theme .desktop-app#app .desktop-ledger-owners button:focus-visible {
+  outline: 2px solid var(--journal-outline);
+  outline-offset: 2px;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-layout .desktop-form-field :is(input, select) {
+  border-radius: 8px !important;
+}
+
+body.journal-theme .mobile-container#app :is(.personal-expense-submit, .shared-wallet-submit,
+  .ledger-submit, .currency-settings-submit),
+body.journal-theme .desktop-app#app :is(.desktop-money, .desktop-ledger, .desktop-settings) .desktop-primary,
+body.journal-theme .mobile-container#app .settings-page .hotel-search-card > button,
+body.journal-theme .mobile-container#app .settings-page > .flex.gap-2 > button {
+  min-height: 44px;
+  border: 1px solid var(--journal-outline);
+  border-radius: 8px !important;
+  background: var(--journal-coral) !important;
+  color: var(--journal-ink) !important;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+/* Transaction rows: retain existing column tracks, actions and scroll heights. */
+body.journal-theme .mobile-container#app :is(.shared-wallet-ledger-wrap, .personal-expense-ledger-wrap,
+  .ledger-list, .ledger-empty),
+body.journal-theme .desktop-app#app :is(.desktop-table-expense, .desktop-table-wallet, .desktop-ledger-table) {
+  border-color: var(--journal-line);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-ledger, .personal-expense-ledger, .ledger-list),
+body.journal-theme .desktop-app#app :is(.desktop-table-expense, .desktop-table-wallet, .desktop-ledger-table) {
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--journal-line) var(--journal-paper);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry, .personal-expense-entry, .ledger-entry),
+body.journal-theme .desktop-app#app :is(.desktop-table-expense, .desktop-table-wallet) .desktop-tr,
+body.journal-theme .desktop-app#app .desktop-ledger-row {
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+body.journal-theme .desktop-app#app :is(.desktop-table-expense, .desktop-table-wallet) .desktop-tr {
+  flex-shrink: 0;
+}
+
+body.journal-theme .desktop-app#app :is(.desktop-table-expense, .desktop-table-wallet) .desktop-th,
+body.journal-theme .desktop-app#app .desktop-ledger-table-head {
+  border-color: var(--journal-line);
+  background: var(--journal-paper);
+  color: var(--journal-muted);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+body.journal-theme .desktop-app#app :is(.desktop-table-expense, .desktop-table-wallet) .desktop-tr:not(.desktop-th):hover,
+body.journal-theme .desktop-app#app .desktop-ledger-row:hover {
+  background: var(--journal-paper);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-icon, .personal-expense-entry-icon) {
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  background: var(--journal-sky);
+  color: var(--journal-ink);
+}
+
+body.journal-theme .mobile-container#app .shared-wallet-entry.is-deposit .shared-wallet-entry-icon {
+  background: var(--journal-sage);
+}
+
+body.journal-theme .mobile-container#app .shared-wallet-entry.is-payment .shared-wallet-entry-icon {
+  background: var(--journal-coral);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-main, .personal-expense-entry-main) > strong,
+body.journal-theme .mobile-container#app .ledger-entry-heading strong,
+body.journal-theme .desktop-app#app .desktop-money .desktop-tr > strong,
+body.journal-theme .desktop-app#app .desktop-ledger-row > div:nth-child(2) strong {
+  color: var(--journal-ink);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+body.journal-theme .mobile-container#app .shared-wallet-entry.is-payment .shared-wallet-entry-main > strong {
+  color: var(--journal-ink);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-main, .personal-expense-entry-main) > span,
+body.journal-theme .mobile-container#app .ledger-entry-main > :is(span, small),
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-td-date, .desktop-td-involved),
+body.journal-theme .desktop-app#app .desktop-table-wallet .desktop-tr > span:nth-child(3),
+body.journal-theme .desktop-app#app .desktop-ledger-row :is(time, small) {
+  color: var(--journal-muted);
+  font-size: 12px;
+}
+
+body.journal-theme .mobile-container#app .shared-wallet-entry-main > .shared-wallet-entry-kind {
+  align-self: flex-start;
+  padding: 2px 5px;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  background: var(--journal-lavender);
+  color: var(--journal-ink) !important;
+  font-size: 11px !important;
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-actions, .personal-expense-entry-actions) > strong,
+body.journal-theme .mobile-container#app .shared-wallet-entry.is-payment .shared-wallet-entry-actions > strong,
+body.journal-theme .mobile-container#app .ledger-entry-side > strong,
+body.journal-theme .desktop-app#app .desktop-money .desktop-td-amount,
+body.journal-theme .desktop-app#app .desktop-table-wallet .desktop-tr:not(.desktop-th) > span:nth-child(4),
+body.journal-theme .desktop-app#app .desktop-ledger-amount {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--journal-ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-th .desktop-td-amount {
+  color: var(--journal-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-td-payer, .desktop-td-cat) {
+  justify-self: start;
+  max-width: 100%;
+  padding: 3px 5px;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  background: var(--journal-lavender);
+  color: var(--journal-ink);
+  font-size: 12px;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-td-cat {
+  background: var(--journal-yellow);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-actions, .personal-expense-entry-actions,
+  .ledger-entry-actions) button,
+body.journal-theme .desktop-app#app :is(.desktop-money, .desktop-ledger, .desktop-settings) .desktop-icon-btn {
+  border: 1px solid var(--journal-line);
+  border-radius: 6px !important;
+  background: var(--journal-surface);
+  color: var(--journal-ink);
+  box-shadow: none;
+  opacity: 1;
+  filter: none;
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-actions, .personal-expense-entry-actions,
+  .ledger-entry-actions) button[title*="\522a\9664"],
+body.journal-theme .desktop-app#app :is(.desktop-money, .desktop-ledger, .desktop-settings) .desktop-icon-danger {
+  color: var(--journal-coral-ink);
+}
+
+body.journal-theme .mobile-container#app :is(.shared-wallet-entry-actions, .personal-expense-entry-actions,
+  .ledger-entry-actions) button:disabled,
+body.journal-theme .desktop-app#app :is(.desktop-money, .desktop-ledger, .desktop-settings) .desktop-icon-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Settlement rail is a ruled member list rather than a stack of nested cards. */
+body.journal-theme .desktop-app#app .desktop-money .desktop-rail-head {
+  flex-wrap: wrap;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-balance-list p,
+body.journal-theme .desktop-app#app .desktop-money .desktop-settle-row {
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-balance-name {
+  padding: 3px 6px;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  background: var(--journal-lavender);
+  color: var(--journal-ink);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-balance-list strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-settle-progress-note, .desktop-analysis-figure em) {
+  color: var(--journal-muted);
+}
+
+body.journal-theme .desktop-app#app .desktop-money :is(.desktop-settle-progress-note strong,
+  .desktop-settle-people, .desktop-settle-amount, .desktop-analysis-name, .desktop-analysis-figure strong) {
+  color: var(--journal-ink);
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-settle-people {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-settle-people em {
+  color: var(--journal-coral-ink);
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-settle-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, .8fr);
+}
+
+body.journal-theme .desktop-app#app .desktop-money .desktop-settle-amount {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* Analysis tracks retain their data-driven widths and reduced-motion behavior. */
+body.journal-theme .desktop-app#app :is(.desktop-money-bar-track, .desktop-settle-progress,
+  .desktop-analysis-bar, .desktop-ledger-analysis-bar),
+body.journal-theme .mobile-container#app .ledger-analysis-bar,
+body.journal-theme .mobile-container#app .money-category-analysis .bg-gray-100 {
+  border-radius: 3px;
+  background: var(--journal-paper);
+  box-shadow: inset 0 0 0 1px var(--journal-line);
+}
+
+body.journal-theme .desktop-app#app .desktop-money-bar-fill.is-personal,
+body.journal-theme .desktop-app#app .desktop-analysis-bar > span,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis-bar > span,
+body.journal-theme .mobile-container#app .ledger-analysis-bar > span,
+body.journal-theme .mobile-container#app .money-category-analysis .stat-bar {
+  border-radius: 3px;
+  background: var(--journal-coral) !important;
+}
+
+body.journal-theme .desktop-app#app .desktop-money-bar-fill.is-shared,
+body.journal-theme .desktop-app#app .desktop-settle-progress > span {
+  border-radius: 3px;
+  background: var(--journal-sage);
+}
+
+body.journal-theme .mobile-container#app .money-category-analysis .space-y-3 > div:nth-child(3n + 2) .stat-bar,
+body.journal-theme .mobile-container#app .ledger-analysis-row:nth-of-type(3n + 2) .ledger-analysis-bar > span,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis-row:nth-child(3n + 2) .desktop-ledger-analysis-bar > span,
+body.journal-theme .desktop-app#app .desktop-analysis-list > p:nth-child(3n + 2) .desktop-analysis-bar > span {
+  background: var(--journal-sage) !important;
+}
+
+body.journal-theme .mobile-container#app .money-category-analysis .space-y-3 > div:nth-child(3n) .stat-bar,
+body.journal-theme .mobile-container#app .ledger-analysis-row:nth-of-type(3n) .ledger-analysis-bar > span,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis-row:nth-child(3n) .desktop-ledger-analysis-bar > span,
+body.journal-theme .desktop-app#app .desktop-analysis-list > p:nth-child(3n) .desktop-analysis-bar > span {
+  background: var(--journal-lavender) !important;
+}
+
+body.journal-theme .mobile-container#app .money-category-analysis :is(.text-gray-600, .text-gray-800),
+body.journal-theme .mobile-container#app .ledger-analysis-line,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis-line {
+  color: var(--journal-ink);
+}
+
+body.journal-theme .mobile-container#app .ledger-analysis-line,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis-line {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+body.journal-theme .mobile-container#app .ledger-analysis-line strong,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis-line strong {
+  max-width: 100%;
+  color: var(--journal-ink);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Personal ledger: pastel accounting summaries and source labels. */
+body.journal-theme .mobile-container#app .ledger-owner-section h2,
+body.journal-theme .desktop-app#app .desktop-ledger-head h2 {
+  color: var(--journal-ink);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+body.journal-theme .mobile-container#app .ledger-summary,
+body.journal-theme .desktop-app#app .desktop-ledger-summary {
+  min-width: 0;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px;
+  background: var(--journal-sky) !important;
+  color: var(--journal-ink);
+  box-shadow: none !important;
+}
+
+body.journal-theme .mobile-container#app .ledger-summary > div,
+body.journal-theme .desktop-app#app .desktop-ledger-summary > div {
+  border-right-color: var(--journal-line);
+}
+
+body.journal-theme .mobile-container#app .ledger-summary > div:nth-child(2),
+body.journal-theme .desktop-app#app .desktop-ledger-summary > div:nth-child(2) {
+  background: var(--journal-lavender);
+}
+
+body.journal-theme .mobile-container#app .ledger-summary .ledger-summary-total,
+body.journal-theme .desktop-app#app .desktop-ledger-summary .is-total {
+  background: var(--journal-yellow) !important;
+  color: var(--journal-ink);
+}
+
+body.journal-theme .mobile-container#app .ledger-summary span,
+body.journal-theme .desktop-app#app .desktop-ledger-summary span {
+  color: var(--journal-ink);
+  font-size: 12px;
+}
+
+body.journal-theme .mobile-container#app .ledger-summary strong,
+body.journal-theme .desktop-app#app .desktop-ledger-summary strong {
+  color: var(--journal-ink);
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .mobile-container#app .ledger-entry-form,
+body.journal-theme .desktop-app#app .desktop-ledger-form,
+body.journal-theme .desktop-app#app .desktop-ledger-table {
+  background: var(--journal-surface);
+  border-color: var(--journal-line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+body.journal-theme .mobile-container#app .ledger-analysis,
+body.journal-theme .desktop-app#app .desktop-ledger-analysis {
+  padding: 14px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body.journal-theme .mobile-container#app .ledger-source,
+body.journal-theme .desktop-app#app .desktop-ledger-source {
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  background: var(--journal-paper);
+  color: var(--journal-ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .mobile-container#app .ledger-source.ledger-source-split,
+body.journal-theme .desktop-app#app .desktop-ledger-source.is-split {
+  background: var(--journal-sky);
+}
+
+body.journal-theme .mobile-container#app .ledger-source.ledger-source-wallet,
+body.journal-theme .desktop-app#app .desktop-ledger-source.is-wallet {
+  background: var(--journal-sage);
+}
+
+body.journal-theme .mobile-container#app .ledger-source.ledger-source-manual,
+body.journal-theme .desktop-app#app .desktop-ledger-source.is-manual {
+  background: var(--journal-lavender);
+}
+
+body.journal-theme .mobile-container#app :is(.ledger-empty, .ledger-owner-empty),
+body.journal-theme .desktop-app#app :is(.desktop-money, .desktop-ledger) .desktop-empty,
+body.journal-theme .desktop-app#app .desktop-ledger-owner-empty {
+  color: var(--journal-muted);
+  border-color: var(--journal-line);
+}
+
+/* Settings are ruled page sections, not floating cards. */
+body.journal-theme .mobile-container#app .settings-page > .card,
+body.journal-theme .mobile-container#app .settings-page > .wallet-setting-row,
+body.journal-theme .desktop-app#app .desktop-settings .card {
+  padding: 16px 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--journal-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body.journal-theme .mobile-container#app .settings-page h3,
+body.journal-theme .desktop-app#app .desktop-settings h3 {
+  color: var(--journal-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+body.journal-theme .mobile-container#app .settings-page > h3 {
+  margin-left: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--journal-line);
+}
+
+body.journal-theme .mobile-container#app .settings-page > h3 .inline-icon,
+body.journal-theme .desktop-app#app .desktop-settings-lodging .desktop-place-icon {
+  color: var(--journal-coral-ink);
+}
+
+body.journal-theme .mobile-container#app .settings-page .currency-settings-help,
+body.journal-theme .mobile-container#app .settings-page .wallet-setting-row > div > span,
+body.journal-theme .desktop-app#app .desktop-settings :is(.currency-settings-help, .desktop-place-main em),
+body.journal-theme .desktop-app#app .desktop-settings .desktop-form-field > span {
+  color: var(--journal-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+body.journal-theme .mobile-container#app .settings-page .wallet-setting-row strong,
+body.journal-theme .desktop-app#app .desktop-settings-lodging .desktop-place-main strong {
+  color: var(--journal-ink);
+}
+
+body.journal-theme .mobile-container#app .settings-page .toggle-control > span[aria-hidden="true"] {
+  border: 1px solid var(--journal-line);
+  background: var(--journal-paper);
+}
+
+body.journal-theme .mobile-container#app .settings-page .toggle-control > span[aria-hidden="true"]::after {
+  background: var(--journal-outline);
+  box-shadow: none;
+}
+
+body.journal-theme .mobile-container#app .settings-page .toggle-control input:checked + span {
+  border-color: var(--journal-outline);
+  background: var(--journal-sage);
+}
+
+body.journal-theme .mobile-container#app .settings-page .toggle-control input:focus-visible + span {
+  outline: 2px solid var(--journal-outline);
+  outline-offset: 3px;
+}
+
+body.journal-theme .mobile-container#app .settings-page .toggle-control input:disabled + span {
+  opacity: .5;
+}
+
+body.journal-theme .desktop-app#app .desktop-settings .desktop-hotel-row {
+  border-color: var(--journal-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Mobile settings currently exposes utility-only hooks for hotels and members. */
+body.journal-theme .mobile-container#app .settings-page > .space-y-2 > div {
+  border: 0;
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.journal-theme .mobile-container#app .settings-page > .space-y-2 .text-gray-800 {
+  color: var(--journal-ink);
+}
+
+body.journal-theme .mobile-container#app .settings-page > .space-y-2 .text-gray-500 {
+  color: var(--journal-muted);
+}
+
+body.journal-theme .desktop-app#app .desktop-settings .desktop-member-row {
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--journal-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+body.journal-theme .desktop-app#app .desktop-settings .desktop-member-row > span,
+body.journal-theme .mobile-container#app .settings-page > .space-y-2.mb-10 > div > span {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--journal-line);
+  border-radius: 4px;
+  background: var(--journal-lavender);
+  color: var(--journal-ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body.journal-theme .desktop-app#app .desktop-settings .desktop-member-row:nth-child(3n + 2) > span,
+body.journal-theme .mobile-container#app .settings-page > .space-y-2.mb-10 > div:nth-child(3n + 2) > span {
+  background: var(--journal-sky);
+}
+
+body.journal-theme .desktop-app#app .desktop-settings .desktop-member-row:nth-child(3n) > span,
+body.journal-theme .mobile-container#app .settings-page > .space-y-2.mb-10 > div:nth-child(3n) > span {
+  background: var(--journal-sage);
+}
+
+body.journal-theme .desktop-app#app .desktop-settings .desktop-member-row > button,
+body.journal-theme .mobile-container#app .settings-page > .space-y-2.mb-10 > div > button {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--journal-line);
+  border-radius: 6px;
+  background: var(--journal-surface);
+  color: var(--journal-coral-ink);
+  opacity: 1;
+  filter: none;
+  box-shadow: none;
+}
+
+body.journal-theme .mobile-container#app .settings-page > button,
+body.journal-theme .desktop-app#app .desktop-settings .desktop-ghost,
+body.journal-theme .mobile-container#app .settings-page .clone-copy-button {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px;
+  background: var(--journal-surface) !important;
+  color: var(--journal-ink) !important;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: none !important;
+}
+
+body.journal-theme .mobile-container#app .settings-page > button:first-child {
+  border-color: var(--journal-outline) !important;
+  background: var(--journal-yellow) !important;
+  color: var(--journal-ink) !important;
+}
+
+body.journal-theme .mobile-container#app .settings-page > .border-t {
+  border-color: var(--journal-line);
+}
+
+/* Match the parent's map-exclusion specificity without repeating the app ID.
+   Desktop deletion has no danger class; keep its structural hook local. */
+body.journal-theme .desktop-app#app .desktop-settings .desktop-settings-actions:last-child > button:last-child:not(#map *),
+body.journal-theme .mobile-container#app .settings-page > .border-t > button {
+  min-height: 44px;
+  border: 1px solid var(--journal-coral-ink) !important;
+  border-radius: 8px;
+  background: var(--journal-coral-ink) !important;
+  color: var(--journal-surface) !important;
+  box-shadow: none !important;
+}
+
+/* Narrow layouts wrap text, not table tracks or reserved action columns. */
+@media (max-width: 760px) {
+  body.journal-theme .desktop-app#app .desktop-money :is(.desktop-money-mode, .desktop-money-submode) {
+    max-width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  body.journal-theme .desktop-app#app .desktop-money-bar-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  body.journal-theme .desktop-app#app .desktop-money-bar-label {
+    grid-column: 1 / -1;
+  }
+
+  body.journal-theme .desktop-app#app .desktop-ledger-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body.journal-theme .desktop-app#app .desktop-ledger-row .desktop-ledger-amount {
+    text-align: left;
+  }
+}
+
+@media (max-width: 430px) {
+  body.journal-theme .mobile-container#app .money-summary-total > strong {
+    font-size: 28px;
+  }
+
+  body.journal-theme .mobile-container#app .money-category-analysis .flex.justify-between {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  body.journal-theme .mobile-container#app .money-category-analysis .flex.justify-between > span {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  body.journal-theme .mobile-container#app .settings-page > .flex.gap-2 > input {
+    min-width: 0;
+    width: 0;
+  }
+
+  body.journal-theme .mobile-container#app .settings-page .hotel-search-card .flex > select {
+    min-width: 0;
+  }
+}

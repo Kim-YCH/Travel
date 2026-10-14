@@ -4468,3 +4468,14 @@ button.suggestion-item {
   .desktop-app .desktop-modal { max-height: calc(100dvh - 32px); }
   .desktop-app .desktop-money-hero-value { font-size: 28px; }
 }
+
+/* The same SVG sizes are used by the mobile navigation and category labels. */
+.desktop-app .desktop-nav button { display: flex; align-items: center; gap: 8px; }
+.desktop-app .trip-destination { display: flex; align-items: center; gap: 6px; }
+.desktop-app .desktop-itinerary .desktop-place-icon .travel-icon { width: 24px; height: 24px; }
+.desktop-app .desktop-cat-icon .travel-icon,
+.desktop-app .desktop-td-cat-icon .travel-icon,
+.desktop-app .desktop-analysis-icon .travel-icon { width: 20px; height: 20px; }
+.desktop-app #prep-checklist-root .prep-cat-name .prep-category-label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

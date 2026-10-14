@@ -1,0 +1,406 @@
+/* Travel journal visual layer. Business/layout modules and map internals stay authoritative. */
+body.journal-theme {
+  --journal-paper: #FFF9EF;
+  --journal-surface: #FFFCF6;
+  --journal-coral: #F5B6AE;
+  --journal-sky: #BFE3F5;
+  --journal-sage: #C7E3C0;
+  --journal-yellow: #F8DC99;
+  --journal-lavender: #E5D4F5;
+  --journal-ink: #302925;
+  --journal-muted: #776C63;
+  --journal-line: #B8A89A;
+  --journal-outline: #493B35;
+  --journal-coral-ink: #7C3531;
+  --journal-shadow: 2px 3px 0 rgba(73,59,53,.08);
+  --cloud-primary: #B75E57;
+  --cloud-primary-strong: #7C3531;
+  --cloud-primary-2: #B75E57;
+  --cloud-primary-soft: var(--journal-coral);
+  --cloud-vivid-blue: #B75E57;
+  --cloud-vivid-blue-strong: #7C3531;
+  --cloud-primary-gradient: var(--journal-coral);
+  --cloud-canvas: var(--journal-paper);
+  --cloud-surface: var(--journal-surface);
+  --cloud-sky-2: var(--journal-paper);
+  --cloud-sidebar-surface: var(--journal-surface);
+  --cloud-section-surface: #F9EADF;
+  --cloud-control-surface: #F5F0E7;
+  --cloud-active-surface: #FBE1D9;
+  --cloud-border: var(--journal-line);
+  --cloud-travel-border: var(--journal-line);
+  --cloud-section-border: #DACBBC;
+  --cloud-border-strong: var(--journal-outline);
+  --cloud-text: var(--journal-ink);
+  --cloud-title-ink: var(--journal-ink);
+  --cloud-text-2: var(--journal-muted);
+  --cloud-muted: var(--journal-muted);
+  --cloud-muted-2: #887D72;
+  --cloud-tint-blue: #FBE1D9;
+  --cloud-tint-sky: #E3F1F5;
+  --cloud-tint-sky-soft: #F2F7F5;
+  --cloud-tint-gray: #F5F0E7;
+  --cloud-tint-red: #FBE1D9;
+  --cloud-positive: #386443;
+  --cloud-positive-2: #78A58A;
+  --cloud-positive-3: var(--journal-sage);
+  --cloud-negative: #9C3E35;
+  --cloud-teal: #416F70;
+  --cloud-teal-2: var(--journal-sage);
+  --cloud-accent: #9A6A28;
+  --cloud-line: #E4D9CC;
+  --cloud-track: #E8E0D6;
+  --cloud-shadow: var(--journal-shadow);
+  --cloud-shadow-soft: none;
+  --cloud-shadow-btn: 1px 2px 0 rgba(73,59,53,.12);
+  --cloud-travel-shadow: none;
+  --travel-icon-ink: var(--journal-outline);
+  background: var(--journal-paper) !important;
+  color: var(--journal-ink);
+  font-family: "Segoe UI", "Microsoft JhengHei", -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+html:has(body.journal-theme) { background: #FFF9EF !important; }
+body.journal-theme #app {
+  --cloud-primary: #B75E57;
+  --cloud-primary-strong: #7C3531;
+  --cloud-primary-gradient: var(--journal-coral);
+  --cloud-border: var(--journal-line);
+  background: var(--journal-paper) !important;
+  color: var(--journal-ink);
+  box-shadow: none !important;
+}
+
+/* Shared paper surfaces and controls, deliberately excluding Google Maps descendants. */
+body.journal-theme #app .card,
+body.journal-theme #app .modal-card,
+body.journal-theme #app .desktop-modal {
+  background: var(--journal-surface) !important;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--journal-shadow) !important;
+  backdrop-filter: none !important;
+}
+body.journal-theme #app :is(.tab-panel, .desktop-pane, .modal-card, .desktop-modal, .content-scroll)
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not(#map *) {
+  background: #FFFEFA !important;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+  color: var(--journal-ink) !important;
+  font-family: inherit;
+}
+body.journal-theme #app :is(input, textarea)::placeholder { color: #8A8076; opacity: 1; }
+body.journal-theme #app :is(button, input, select, textarea, summary):not(#map *):focus-visible {
+  outline: 2px solid var(--journal-coral-ink) !important;
+  outline-offset: 3px;
+}
+body.journal-theme #app button:is(.desktop-primary, .itinerary-action-btn:first-child, .route-open-btn, .bg-blue-600, .bg-teal-600):not(#map *) {
+  background: var(--journal-coral) !important;
+  color: var(--journal-ink) !important;
+  border: 1px solid #AD6F63 !important;
+  border-radius: 8px !important;
+  box-shadow: 1px 2px 0 rgba(73,59,53,.12) !important;
+}
+body.journal-theme #app :is(.desktop-ghost, .small-btn, .route-mode-btn, .day-add-button, .desktop-day-add, .desktop-trip-create-btn):not(#map *) {
+  background: var(--journal-surface) !important;
+  color: var(--journal-ink) !important;
+  border: 1px solid var(--journal-line) !important;
+  box-shadow: none !important;
+  border-radius: 7px !important;
+}
+body.journal-theme #app :is(.icon-btn, .desktop-icon-btn):not(#map *) {
+  background: #F5F0E7 !important;
+  border: 1px solid #D5C8BA !important;
+  color: var(--journal-muted) !important;
+  border-radius: 6px !important;
+  opacity: 1;
+  filter: none;
+  box-shadow: none !important;
+}
+body.journal-theme #app :is(.icon-btn-danger, .desktop-icon-danger):not(#map *) { color: #9C3E35 !important; background: #FBE9E3 !important; }
+body.journal-theme #app :is(button:disabled, input:disabled, select:disabled):not(#map *) { opacity: .55; }
+body.journal-theme #app .suggestions-list {
+  background: var(--journal-surface) !important;
+  border-color: var(--journal-line) !important;
+  box-shadow: var(--journal-shadow) !important;
+  border-radius: 8px !important;
+}
+body.journal-theme #app :is(.suggestion-item, .route-mode-btn):hover:not(:disabled) { background: #F9EADF !important; }
+body.journal-theme #app .route-mode-btn-active:not(#map *) { background: var(--journal-coral) !important; color: var(--journal-ink) !important; }
+body.journal-theme #app :is(.modal-card, .desktop-modal) > :is(h2,h3,.font-bold) { color: var(--journal-ink); }
+
+/* Desktop artwork and weather use separate tracks; mobile keeps a compact illustrated cover. */
+body.journal-theme #app .app-header {
+  background: var(--journal-paper) url('./desktop/journal-travel.webp') right bottom / auto 100% no-repeat !important;
+  color: var(--journal-ink) !important;
+  border-bottom: 1px solid var(--journal-line);
+  box-shadow: none !important;
+  isolation: isolate;
+}
+body.journal-theme #app .app-header::before,
+body.journal-theme #app .app-header::after,
+body.journal-theme #app.mobile-container::before,
+body.journal-theme #app.mobile-container::after { content: none !important; }
+body.journal-theme #app .app-header h1 { color: var(--journal-ink) !important; font-weight: 800; letter-spacing: 0; line-height: 1.3; }
+body.journal-theme #app .journal-header-copy,
+body.journal-theme #app .app-header-title { position: relative; z-index: 1; min-width: 0; }
+body.journal-theme #app .journal-members { display: inline-flex; font-size: 12px; font-weight: 600; color: var(--journal-muted); margin-top: 6px; }
+body.journal-theme #app .trip-weather-card {
+  background: #FFFCF2 !important;
+  border: 1px solid var(--journal-line) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: var(--journal-ink) !important;
+}
+body.journal-theme #app .trip-weather-icon { background: transparent !important; box-shadow: none !important; }
+body.journal-theme #app :is(.trip-weather-temp, .trip-weather-desc, .trip-weather-metrics, .trip-weather-range) { color: var(--journal-ink) !important; }
+body.journal-theme #app .trip-weather-kind { background: #E6EFDF !important; color: #386443 !important; border-color: #B3C7A7 !important; }
+body.journal-theme #app :is(.app-header-sync-status, .desktop-sync).sync-badge-synced { background: #E6EFDF !important; color: #386443 !important; border-color: #B3C7A7 !important; }
+body.journal-theme #app :is(.app-header-sync-status, .desktop-sync).sync-badge-syncing { background: var(--journal-sky) !important; color: #2A4B5D !important; border-color: #8DAFBD !important; }
+body.journal-theme #app :is(.app-header-sync-status, .desktop-sync).sync-badge-queued { background: var(--journal-yellow) !important; color: #5B441E !important; border-color: #B79B61 !important; }
+body.journal-theme #app :is(.app-header-sync-status, .desktop-sync).sync-badge-error { background: #FBE1D9 !important; color: #8E3932 !important; border-color: #BE8D7C !important; }
+
+/* Category stickers remain derived from the existing itinerary classifier. */
+body.journal-theme #app .itinerary-category {
+  --journal-tag: var(--journal-sky);
+  display: inline-flex;
+  padding: 3px 8px;
+  border: 1px solid #B6B9AC;
+  border-radius: 5px;
+  background: var(--journal-tag);
+  color: var(--journal-ink) !important;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+body.journal-theme #app :is(.itinerary-category-food, .itinerary-category-coffee) { --journal-tag: var(--journal-yellow); }
+body.journal-theme #app :is(.itinerary-category-hotel, .itinerary-category-transport) { --journal-tag: var(--journal-sage); }
+body.journal-theme #app :is(.itinerary-category-shopping, .itinerary-category-activity, .itinerary-category-other) { --journal-tag: var(--journal-lavender); }
+body.journal-theme #app .transport-summary span { background: #EDF3E7; border-color: #CCD6C4; color: #456247; font-size: 12px; }
+
+/* Desktop shell and notebook navigation. */
+body.journal-theme #app .desktop-sidebar {
+  background: #FFFCF5 !important;
+  border-right: 1px solid var(--journal-line);
+  backdrop-filter: none;
+  padding: 18px 14px;
+  gap: 18px;
+}
+body.journal-theme #app .desktop-brand {
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 0;
+  color: var(--journal-ink);
+  font-size: 28px;
+  font-weight: 800;
+  position: relative;
+}
+body.journal-theme #app .desktop-brand .travel-icon { width: 28px; height: 28px; }
+body.journal-theme #app .desktop-brand small { display: block; padding-left: 32px; font-size: 11px; font-weight: 500; color: var(--journal-muted); }
+body.journal-theme #app .desktop-nav { gap: 5px; }
+body.journal-theme #app .desktop-nav button {
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--journal-ink);
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+body.journal-theme #app .desktop-nav button:hover { background: #F5EDE1; }
+body.journal-theme #app .desktop-nav button.is-active,
+body.journal-theme #app .desktop-nav button.is-active:hover { background: #FBE1D9 !important; border-color: #E8B6A7; color: var(--journal-coral-ink); }
+body.journal-theme #app .desktop-trip-nav h3 { color: var(--journal-ink); font-size: 14px; }
+body.journal-theme #app .desktop-trip-list { gap: 8px; }
+body.journal-theme #app .desktop-trip-list-item { padding: 11px 10px; border: 1px solid transparent; border-radius: 7px; box-shadow: none; }
+body.journal-theme #app .desktop-trip-list-item strong { color: var(--journal-ink); font-size: 14px; line-height: 1.5; }
+body.journal-theme #app .desktop-trip-list-item span { color: var(--journal-muted); font-size: 12px; }
+body.journal-theme #app .desktop-trip-list-item.is-active { background: #FBE7DE !important; border-color: #E1B5A4; box-shadow: none !important; color: var(--journal-ink); }
+body.journal-theme #app :is(.desktop-version-refresh, .desktop-sync) { background: #F6F1E6 !important; border-color: #D6C8B8; color: var(--journal-muted); }
+body.journal-theme #app .desktop-header {
+  display: grid !important;
+  grid-template-columns: fit-content(220px) minmax(0, 1fr) auto;
+  min-height: 190px;
+  padding: 0 26px;
+  gap: 12px;
+  background: var(--journal-paper) !important;
+  border: 1px solid var(--journal-line);
+}
+body.journal-theme #app .desktop-header::after {
+  content: '' !important;
+  display: block;
+  position: absolute;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: 84px;
+  background: url('./desktop/journal-header-mist.webp') center / 100% 100% no-repeat;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  opacity: .8;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 65%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 65%, transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+body.journal-theme #app .journal-header-copy { align-self: start; padding: 24px 0; z-index: 2; }
+body.journal-theme #app .journal-header-art {
+  align-self: start;
+  min-width: 0;
+  height: 160px;
+  background: url('./desktop/journal-panorama.webp') center bottom / 100% 100% no-repeat;
+  filter: saturate(.65);
+  opacity: .78;
+  -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent);
+  mask-image: linear-gradient(to bottom, #000 65%, transparent);
+  z-index: 0;
+  pointer-events: none;
+}
+body.journal-theme #app .desktop-header h1 { font-size: 30px; }
+body.journal-theme #app .desktop-header-meta { justify-content: flex-start; margin-top: 8px; }
+body.journal-theme #app .desktop-header-meta p { color: var(--journal-ink); font-size: 13px; line-height: 1.6; background: #FFF9EFE8; border-radius: 3px; }
+body.journal-theme #app .desktop-trip-weather-card { margin-left: auto !important; margin-top: 28px !important; align-self: start; flex: 0 0 auto; padding: 12px; position: relative; z-index: 2; }
+
+/* Desktop itinerary: same sortable articles, a true time rail and readable note hierarchy. */
+body.journal-theme #app .desktop-itinerary { padding: 20px 24px; gap: 24px; grid-template-columns: minmax(420px, .92fr) minmax(0, 1fr); }
+body.journal-theme #app .desktop-day-bar { background: var(--journal-paper); border-color: #E0D4C6; padding: 0 0 12px; }
+body.journal-theme #app .desktop-day-tabs { flex-wrap: nowrap; gap: 9px; overflow-x: auto; padding: 2px 0 4px; }
+body.journal-theme #app .desktop-day-tabs button {
+  flex: 0 0 76px; min-height: 58px; padding: 7px 10px;
+  background: var(--journal-surface); border: 1px solid #CDBDAA; border-radius: 7px;
+  color: var(--journal-ink); box-shadow: none;
+}
+body.journal-theme #app .desktop-day-tabs strong { font-size: 14px; }
+body.journal-theme #app .desktop-day-tabs em { font-size: 11px; color: var(--journal-muted); margin-top: 3px; }
+body.journal-theme #app .desktop-day-tabs button.is-active { background: #FBE0D7 !important; color: var(--journal-coral-ink); border-color: #B66B5F; box-shadow: 1px 2px 0 #ECD3C1; }
+body.journal-theme #app .desktop-itinerary-actions { gap: 12px; margin-bottom: 4px; }
+body.journal-theme #app .desktop-itinerary-actions button { height: 42px; font-size: 14px; }
+body.journal-theme #app .desktop-list-block { position: relative; }
+body.journal-theme #app .desktop-list-block > h3 {
+  width: fit-content; margin: 2px 0 15px; padding: 6px 13px;
+  border-radius: 3px; background: #F7E4D5; color: var(--journal-ink);
+  font-size: 16px; font-weight: 800; letter-spacing: 0;
+}
+body.journal-theme #app .desktop-list-block > h3::before { display: none; }
+body.journal-theme #app .desktop-block-count { background: var(--journal-surface); color: var(--journal-muted); border: 1px solid #DAC6B3; }
+body.journal-theme #app .desktop-block-plan::before { content: ''; position: absolute; left: 26px; top: 65px; bottom: 20px; border-left: 1px dashed #BCA38A; pointer-events: none; }
+body.journal-theme #app .desktop-itinerary .desktop-block-plan > .card.desktop-place-card {
+  position: relative; margin: 0 0 16px 68px; padding: 14px 13px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main actions" "main handle";
+  gap: 5px 10px; overflow: visible;
+  border-color: #BFAF9D !important; box-shadow: none !important;
+}
+body.journal-theme #app .desktop-block-plan .desktop-place-time {
+  position: absolute; left: -68px; top: 1px; width: 54px; min-height: 26px;
+  justify-content: center; padding: 3px 0; border: 1px solid #DFCEB6;
+  border-radius: 4px; background: #F9EACA; color: var(--journal-ink); font-size: 13px;
+}
+body.journal-theme #app .desktop-block-plan .desktop-place-icon {
+  position: absolute; left: -61px; top: 36px; width: 40px; height: 40px; min-height: 40px;
+  border: 1px solid #CDAA99; border-radius: 50%; background: #FBE0D7;
+}
+body.journal-theme #app .desktop-block-plan .desktop-drag-handle { min-height: 20px; justify-content: flex-end; justify-self: end; color: #9E8B7A; width: 32px; }
+body.journal-theme #app .desktop-itinerary .desktop-place-main { padding: 0; }
+body.journal-theme #app .desktop-itinerary .desktop-place-main .itinerary-category { display: inline-flex; margin: 0 0 7px; font-size: 11px; }
+body.journal-theme #app .desktop-itinerary .desktop-place-main strong { display: block; font-size: 18px; line-height: 1.5; color: var(--journal-ink); }
+body.journal-theme #app .desktop-itinerary .desktop-place-main em { display: block; margin-top: 7px; font-size: 13px; line-height: 1.65; color: var(--journal-muted); font-style: normal; }
+body.journal-theme #app .desktop-itinerary .desktop-place-actions { flex-direction: row; gap: 6px; opacity: 1; }
+body.journal-theme #app .desktop-itinerary .desktop-icon-btn { width: 32px; height: 32px; min-height: 32px; }
+body.journal-theme #app .desktop-itinerary .desktop-alt-row { padding: 13px; margin-bottom: 10px; background: #FFF7E5 !important; }
+body.journal-theme #app .desktop-itinerary .desktop-alt-row > strong { color: var(--journal-ink); font-size: 15px; line-height: 1.6; }
+body.journal-theme #app .desktop-itinerary .desktop-hotel-row { padding: 15px; background: #F2F5EA !important; }
+body.journal-theme #app .desktop-itinerary .desktop-hotel-row strong { font-size: 16px; }
+body.journal-theme #app .desktop-itinerary .desktop-empty { background: #FFFCF6; border-color: #CDBDAA; color: var(--journal-muted); padding: 20px; }
+body.journal-theme #app .desktop-map-head { background: #E7F1EA; border: 1px solid var(--journal-line); border-radius: 8px; box-shadow: none; padding: 12px 14px; }
+body.journal-theme #app .desktop-map-head::after { content: none; }
+body.journal-theme #app .desktop-map-head h3 { color: var(--journal-ink); font-size: 16px; }
+body.journal-theme #app .desktop-map-actions button { background: var(--journal-surface); color: var(--journal-ink); border: 1px solid var(--journal-line); border-radius: 6px; }
+body.journal-theme #app .desktop-itinerary #map { border: 1px solid var(--journal-line); border-radius: 8px !important; box-shadow: none; }
+
+/* Mobile is its own compact notebook, not a scaled desktop. */
+body.journal-theme #app.mobile-container { background: var(--journal-paper) !important; }
+body.journal-theme #app.mobile-container .content-scroll { background: transparent !important; }
+body.journal-theme #app.mobile-container > .content-scroll { padding: 24px 18px; justify-content: flex-start; background: var(--journal-paper) url('./desktop/journal-travel.webp') right top / auto 180px no-repeat !important; }
+body.journal-theme #app.mobile-container > .content-scroll > h1 { font-size: 30px; color: var(--journal-ink); margin-top: 14px; }
+body.journal-theme #app.mobile-container > .content-scroll > button { background: var(--journal-surface) !important; border-color: var(--journal-line) !important; color: var(--journal-coral-ink) !important; box-shadow: none !important; }
+body.journal-theme #app.mobile-container .trip-lobby-card { padding: 17px 15px; border-left-width: 1px !important; }
+body.journal-theme #app.mobile-container .trip-lobby-card::before { display: none; }
+body.journal-theme #app.mobile-container .trip-lobby-card .text-xl { font-size: 18px; color: var(--journal-ink); }
+body.journal-theme #app.mobile-container .trip-lobby-card .text-gray-500 { color: var(--journal-muted); }
+body.journal-theme #app.mobile-container .trip-lobby-card:nth-child(3n+1) { border-color: #BFAE9A !important; }
+body.journal-theme #app.mobile-container .app-header { padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px 8px; gap: 8px; background-size: auto 105px !important; background-position: right top !important; }
+body.journal-theme #app.mobile-container .app-header-sync-row { flex: 0 0 100%; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+body.journal-theme #app.mobile-container .app-header-sync-row button { min-height: 32px; min-width: 44px; margin: 0; padding: 4px 9px; font-size: 11px; line-height: 1.4; border-radius: 6px; }
+body.journal-theme #app.mobile-container .app-header-sync-action { background: var(--journal-surface) !important; color: var(--journal-muted) !important; border: 1px solid #CDBDAA; backdrop-filter: none; }
+body.journal-theme #app.mobile-container .app-map-mode .app-header { flex-wrap: nowrap; background-image: none !important; }
+body.journal-theme #app.mobile-container .app-map-mode .app-header-sync-row { flex: 0 0 auto; }
+body.journal-theme #app.mobile-container .app-header h1 { font-size: 24px; }
+body.journal-theme #app.mobile-container .app-header-title { padding-right: 15px; }
+body.journal-theme #app.mobile-container .app-header-subtitle { font-size: 11px; color: var(--journal-muted) !important; background: #FFF9EFDC; width: fit-content; border-radius: 3px; line-height: 1.6; }
+body.journal-theme #app.mobile-container .app-header-sync-status { font-size: 11px; }
+body.journal-theme #app.mobile-container .trip-weather-card { flex-basis: 100%; max-width: 100%; margin: 0 !important; padding: 8px 10px; gap: 8px; }
+body.journal-theme #app.mobile-container .trip-weather-temp { font-size: 20px; }
+body.journal-theme #app.mobile-container .tab-panel { padding: 16px 12px 90px; }
+body.journal-theme #app.mobile-container .itinerary-day-tabs { gap: 8px; padding: 3px 1px 10px; }
+body.journal-theme #app.mobile-container .day-btn-wrap > button { min-height: 56px; min-width: 76px; padding: 8px; border: 1px solid #CDBDAA !important; border-radius: 6px; box-shadow: none !important; font-size: 13px; }
+body.journal-theme #app.mobile-container .day-tab-inactive { background: var(--journal-surface) !important; color: var(--journal-ink) !important; }
+body.journal-theme #app.mobile-container .day-btn-wrap > .day-tab-active { background: #FBE0D7 !important; color: var(--journal-coral-ink) !important; border-color: #B66B5F !important; }
+body.journal-theme #app.mobile-container .day-tab-date { font-size: 10px; margin-top: 3px; }
+body.journal-theme #app.mobile-container .day-x { background: var(--journal-surface); color: var(--journal-coral-ink); border-color: #D9B5A4; }
+body.journal-theme #app.mobile-container .day-view-switch { gap: 8px; }
+body.journal-theme #app.mobile-container .itinerary-map-mode .day-view-switch { border-radius: 8px; border-color: var(--journal-line); background: var(--journal-surface); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.journal-theme #app.mobile-container .map-mode-btn { background: var(--journal-surface) !important; color: var(--journal-ink) !important; border: 1px solid var(--journal-line) !important; border-radius: 6px; box-shadow: none; }
+body.journal-theme #app.mobile-container .map-mode-btn-active { background: #FBE0D7 !important; border-color: #BE8D7C !important; }
+body.journal-theme #app.mobile-container .itinerary-action-row { gap: 10px; }
+body.journal-theme #app.mobile-container .itinerary-action-btn { height: 44px; color: var(--journal-ink); border: 1px solid var(--journal-line); border-radius: 8px; background: var(--journal-surface); box-shadow: none; }
+body.journal-theme #app.mobile-container .itinerary-day-stack { gap: 18px; }
+body.journal-theme #app.mobile-container .itinerary-timeline-row { grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
+body.journal-theme #app.mobile-container .itinerary-rail { padding-top: 0; }
+body.journal-theme #app.mobile-container .itinerary-rail::before { width: 1px; background: transparent; border-left: 1px dashed #BCA38A; }
+body.journal-theme #app.mobile-container .itinerary-rail-time { font-size: 12px; font-weight: 700; color: var(--journal-ink); background: #F9EACA; border: 1px solid #DFCEB6; border-radius: 4px; padding: 4px 0; }
+body.journal-theme #app.mobile-container .itinerary-rail-node { width: 38px; height: 38px; margin-top: 9px; background: #FBE0D7 !important; border: 1px solid #CDAA99; box-shadow: none !important; }
+body.journal-theme #app.mobile-container .hotel-node { background: var(--journal-sage) !important; }
+body.journal-theme #app.mobile-container .itinerary-card-v2 { padding: 13px 11px; grid-template-columns: 12px minmax(0, 1fr); gap: 7px; overflow: hidden; border-color: #BFAF9D !important; box-shadow: none !important; }
+body.journal-theme #app.mobile-container .itinerary-card-v2::before { content: none; }
+body.journal-theme #app.mobile-container .itinerary-title { font-size: 17px; font-weight: 800; line-height: 1.5; color: var(--journal-ink); }
+body.journal-theme #app.mobile-container :is(.itinerary-subtitle, .itinerary-address, .itinerary-message) { color: var(--journal-muted); font-size: 12px; line-height: 1.65; }
+body.journal-theme #app.mobile-container .itinerary-drag-handle { color: #9E8B7A; }
+body.journal-theme #app.mobile-container .itinerary-card-footer { border-color: #E4D9CC; margin-top: 5px; padding-top: 8px; background: transparent; }
+body.journal-theme #app.mobile-container .itinerary-status-chip { background: #EDF3E7; border-color: #CCD6C4; color: #456247; font-size: 10px; }
+body.journal-theme #app.mobile-container .itinerary-actions { gap: 7px; }
+body.journal-theme #app.mobile-container .itinerary-actions .icon-btn { width: 44px; height: 44px; }
+body.journal-theme #app.mobile-container .itinerary-message { background: transparent !important; border: 0; border-radius: 0 !important; padding: 0; box-shadow: none; }
+body.journal-theme #app.mobile-container .alternative-card { background: #FFF7E5 !important; }
+body.journal-theme #app.mobile-container .bottom-nav { background: #FFFCF5 !important; border-top: 1px solid var(--journal-line) !important; box-shadow: none !important; padding: 7px 5px calc(env(safe-area-inset-bottom, 0px) + 7px); min-height: 70px; gap: 3px; }
+body.journal-theme #app.mobile-container .bottom-nav button { min-height: 48px; border: 1px solid transparent; border-radius: 7px; color: var(--journal-muted) !important; }
+body.journal-theme #app.mobile-container .bottom-nav button.scale-110 { background: #FBE1D9; border-color: #E8B6A7; color: var(--journal-coral-ink) !important; transform: none; }
+body.journal-theme #app.mobile-container .bottom-nav button.scale-110::before { content: none; }
+body.journal-theme #app.mobile-container .bottom-nav button .nav-icon { width: 25px; height: 25px; }
+body.journal-theme #app.mobile-container .bottom-nav button > span:last-child { font-size: 11px; }
+
+@media (max-width: 1199px) and (min-width: 761px) {
+  body.journal-theme #app .desktop-itinerary { grid-template-columns: minmax(360px, 1fr) minmax(0, .9fr); gap: 16px; padding: 16px; }
+  body.journal-theme #app .desktop-header { grid-template-columns: fit-content(200px) minmax(0, 1fr) auto; padding: 0 20px; gap: 12px; }
+  body.journal-theme #app .journal-header-art { background-size: auto 100%; background-position: right bottom; }
+  body.journal-theme #app .desktop-header h1 { font-size: 25px; }
+}
+@media (max-width: 760px) {
+  body.journal-theme #app .desktop-header { grid-template-columns: minmax(0, 1fr) auto; min-height: 120px; padding: 0 16px; gap: 12px; }
+  body.journal-theme #app .desktop-header::after { height: 48px; }
+  body.journal-theme #app .journal-header-art { display: none; }
+  body.journal-theme #app .desktop-header h1 { font-size: 24px; }
+  body.journal-theme #app .desktop-itinerary { grid-template-columns: minmax(0,1fr); padding: 12px; }
+  body.journal-theme #app .desktop-brand { font-size: 20px; }
+  body.journal-theme #app .desktop-nav button { justify-content: center; }
+}
+@media (max-width: 374px) {
+  body.journal-theme #app.mobile-container .app-header h1 { font-size: 22px; }
+  body.journal-theme #app.mobile-container .tab-panel { padding-left: 10px; padding-right: 10px; }
+  body.journal-theme #app.mobile-container .itinerary-title { font-size: 16px; }
+  body.journal-theme #app.mobile-container .trip-weather-card { gap: 6px; }
+}

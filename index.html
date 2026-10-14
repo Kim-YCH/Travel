@@ -1,45 +1,48 @@
 <!DOCTYPE html>
-<!-- version: 20261004.1 -->
+<!-- version: 20261014.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261004.1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261004.1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261004.1" />
-  <link rel="manifest" href="./site.webmanifest?v=20261004.1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261014.1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261014.1" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261014.1" />
+  <link rel="manifest" href="./site.webmanifest?v=20261014.1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20261004.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20261004.1"></script>
-  <script src="./vendor/Sortable.min.js?v=20261004.1"></script>
+  <script src="./js/device-router.js?v=20261014.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20261014.1"></script>
+  <script src="./vendor/Sortable.min.js?v=20261014.1"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20261004.1" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20261004.1" />
+  <link rel="stylesheet" href="./style.css?v=20261014.1" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20261014.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20261004.1" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20261014.1" />
+  <link rel="stylesheet" href="./journal-theme.css?v=20261014.1" />
+  <link rel="stylesheet" href="./journal-finance.css?v=20261014.1" />
+  <link rel="stylesheet" href="./journal-prep.css?v=20261014.1" />
 </head>
-<body>
+<body class="journal-theme">
 
 <div id="app" class="mobile-container">
   <div v-if="isLoading" class="loading-bar"></div>
 
   <!-- Lobby -->
   <div v-if="currentView === 'lobby'" class="content-scroll p-6 justify-center bg-gray-50">
-    <h1 class="text-3xl font-bold text-gray-900 mb-1" @click="handleDebugTitleClick">✈️ 出發囉</h1>
+    <h1 class="text-3xl font-bold text-gray-900 mb-1" @click="handleDebugTitleClick"><span class="inline-icon" v-html="renderIcon('plane')"></span> 出發囉</h1>
     <div class="text-[11px] text-gray-400 mb-2 select-none">版本 {{ APP_VERSION }}</div>
     <button
       type="button"
       onclick="window.TRAVEL_FORCE_REFRESH && window.TRAVEL_FORCE_REFRESH()"
       class="mb-5 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-blue-100 bg-white text-blue-600 text-xs font-bold shadow-sm active:scale-95 transition"
-    >↻ 刷新版本 / 重新載入</button>
+    ><span class="inline-icon" v-html="renderIcon('refresh')"></span> 刷新版本 / 重新載入</button>
 
     <div class="space-y-4 mb-8">
       <div
@@ -50,7 +53,7 @@
       >
         <div class="min-w-0 flex-1">
           <div class="font-bold text-xl text-gray-900 break-words">{{ trip.name }}</div>
-          <div class="text-sm text-gray-500 break-words">📍 {{ trip.city }}</div>
+          <div class="text-sm text-gray-500 break-words"><span class="trip-icon" v-html="renderIcon(getTripIcon(trip))"></span> {{ trip.city }}</div>
           <div v-if="trip.start_date" class="text-[11px] text-gray-400 mt-1">出發日 {{ trip.start_date }}</div>
         </div>
 
@@ -99,16 +102,8 @@
         <div class="app-header-subtitle text-xs text-blue-200">
           Day {{ currentDay }} | {{ dayLabel(currentDay) }} | {{ currentTrip.city }}
         </div>
-        <button
-          @click.stop="manualSync"
-          class="app-header-sync-status mt-1 text-[10px] px-2 py-0.5 rounded-full border border-white/20 active:scale-95 transition"
-          :class="syncStatusBadgeClass"
-        >{{ syncStatusText }}</button>
+        <span class="journal-members">{{ people.length }} 位旅伴</span>
       </div>
-      <button
-        @click="manualSync"
-        class="text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95"
-      >同步</button>
 
       <!-- 只在真的有資料時才出現。原本 status !== 'idle' 會在沒資料時顯示
            「預報尚早／X 月 X 日後可查」「日期已過」這類佔位字，改成沒資料就留白。
@@ -125,6 +120,17 @@
           <span>☀️ UV {{ tripWeather.uv || '—' }}<em v-if="tripWeather.uvLabel">{{ tripWeather.uvLabel }}</em></span>
           <span>🌬️ {{ tripWeather.wind || '—' }} m/s</span>
         </div>
+      </div>
+      <div class="app-header-sync-row">
+        <button
+          @click.stop="manualSync"
+          class="app-header-sync-status mt-1 text-[10px] px-2 py-0.5 rounded-full border border-white/20 active:scale-95 transition"
+          :class="syncStatusBadgeClass"
+        >{{ syncStatusText }}</button>
+        <button
+          @click="manualSync"
+          class="app-header-sync-action text-xs bg-white/20 px-3 py-1 rounded-full text-white backdrop-blur-sm active:scale-95"
+        >同步</button>
       </div>
     </header>
 
@@ -163,7 +169,8 @@
           <button
             @click="addNewDay"
             class="day-add-button px-3 py-2 rounded-full border border-gray-300 bg-white font-bold flex-shrink-0 shadow-sm text-gray-600"
-          >+</button>
+            aria-label="新增天數" title="新增天數"
+          ><span class="inline-icon" v-html="renderIcon('add')"></span></button>
         </div>
 
         <div class="day-view-switch flex gap-2 flex-shrink-0">
@@ -183,8 +190,8 @@
              這樣清單模式的可視高度多出約 200px。
              路線那顆在 Task 4 加進同一列。 -->
         <div v-show="dayViewMode === 'list'" class="itinerary-action-row flex-shrink-0">
-          <button type="button" class="itinerary-action-btn" @click="openAddPlaceModal">＋ 新增行程</button>
-          <button type="button" class="itinerary-action-btn" @click="openRouteModal">🧭 路線查詢</button>
+          <button type="button" class="itinerary-action-btn" @click="openAddPlaceModal"><span class="inline-icon" v-html="renderIcon('add')"></span> 新增行程</button>
+          <button type="button" class="itinerary-action-btn" @click="openRouteModal"><span class="inline-icon" v-html="renderIcon('compass')"></span> 路線查詢</button>
         </div>
 
         <div v-show="dayViewMode === 'map'" class="itinerary-map-panel w-full flex flex-col flex-1 min-h-0">
@@ -205,7 +212,7 @@
               @click="toggleProbeSearch"
               title="探點搜尋"
               aria-label="探點搜尋"
-            >🔎</button>
+            ><span class="inline-icon" v-html="renderIcon('search')"></span></button>
 
             <button
               v-show="!probeSearchOpen"
@@ -216,13 +223,13 @@
               :aria-expanded="mapLocatorOpen ? 'true' : 'false'"
               aria-controls="map-locator-sheet"
             >
-              <span class="map-locator-toggle-icon" aria-hidden="true">⌖</span>
+              <span class="map-locator-toggle-icon" aria-hidden="true" v-html="renderIcon('locate')"></span>
               <span>行程定位</span>
               <span class="map-locator-count">{{ currentDayMapPoints.length }}</span>
             </button>
 
             <div v-if="selectedMapPoint && !mapLocatorOpen && !probeSearchOpen" class="map-locator-current">
-              <span aria-hidden="true">{{ selectedMapPoint.icon }}</span>
+              <span class="inline-icon" v-html="renderIcon(getItineraryTypeIcon(selectedMapPoint.category))"></span>
               <div>
                 <span>目前定位</span>
                 <strong>{{ selectedMapPoint.name }}</strong>
@@ -253,7 +260,7 @@
                     @click="closeMapLocator"
                     title="關閉"
                     aria-label="關閉行程定位"
-                  >×</button>
+                  ><span class="inline-icon" v-html="renderIcon('close')"></span></button>
                 </div>
               </div>
 
@@ -266,7 +273,7 @@
                   :class="{ 'is-selected': selectedMapPoint && selectedMapPoint.key === point.key }"
                   @click="focusItineraryMapPoint(point)"
                 >
-                  <span class="map-locator-item-icon" :class="'itinerary-icon-' + point.tone">{{ point.icon }}</span>
+                  <span class="map-locator-item-icon" :class="'itinerary-icon-' + point.tone" v-html="renderIcon(getItineraryTypeIcon(point.category))"></span>
                   <span class="map-locator-item-main">
                     <span class="map-locator-item-title">
                       <time>{{ point.timeLabel }}</time>
@@ -282,7 +289,7 @@
 
             <section v-show="probeSearchOpen" class="map-probe-panel" aria-label="探點搜尋">
               <div class="map-probe-search">
-                <span aria-hidden="true">🔎</span>
+                <span class="inline-icon" v-html="renderIcon('search')"></span>
                 <input
                   v-model="probeQuery"
                   @input="searchProbePlacesInput"
@@ -304,7 +311,7 @@
                   @click="closeProbeSearchPanel"
                   aria-label="關閉探點搜尋"
                   title="關閉探點搜尋"
-                >×</button>
+                ><span class="inline-icon" v-html="renderIcon('close')"></span></button>
               </div>
 
               <div v-if="probeIsSearching" class="map-probe-status">搜尋中...</div>
@@ -326,7 +333,7 @@
               </div>
 
               <div v-if="probePlace" class="map-probe-card">
-                <div class="font-bold">🔎 {{ probePlace.name }}</div>
+                <div class="font-bold"><span class="inline-icon" v-html="renderIcon('search')"></span> {{ probePlace.name }}</div>
                 <div v-if="probePlace.address">{{ probePlace.address }}</div>
               </div>
             </section>
@@ -343,7 +350,7 @@
             <div class="itinerary-rail">
               <!-- 沒排時間就留空，不放「未定」佔位字 -->
               <div class="itinerary-rail-time">{{ place.time ? formatTime(place.time) : '' }}</div>
-              <div class="itinerary-rail-node">{{ getItineraryIcon(place) }}</div>
+              <div class="itinerary-rail-node" v-html="renderIcon(getItineraryTypeIcon(getItineraryCategoryLabel(place)))"></div>
             </div>
 
             <div class="card itinerary-card itinerary-card-v2 active:scale-[0.99] transition">
@@ -356,7 +363,7 @@
                 <div class="itinerary-title">{{ place.name }}</div>
 
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
-                <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
+                <div v-if="place.address" class="itinerary-address"><span aria-hidden="true" v-html="renderIcon('locate')"></span> {{ place.address }}</div>
 
                 <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通資訊">
                   <span v-for="detail in getTransportSummary(place)" :key="place.id + '-' + detail">{{ detail }}</span>
@@ -389,9 +396,9 @@
                   aria-label="正式轉備案"
                   @click.stop="moveItineraryToAlternative(place)"
                   :disabled="isPromotingAlternative || isLoading"
-                >↓</button>
-                <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
-                <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading">✕</button>
+                ><span class="inline-icon" v-html="renderIcon('arrow-down')"></span></button>
+                <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+                <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
               </div>
             </div>
           </div>
@@ -403,7 +410,7 @@
           >
             <div class="itinerary-rail">
               <div class="itinerary-rail-time">住宿</div>
-              <div class="itinerary-rail-node hotel-node">🏠</div>
+              <div class="itinerary-rail-node hotel-node" v-html="renderIcon('bed')"></div>
             </div>
 
             <div class="card hotel-itinerary-card itinerary-card-v2 active:scale-[0.99] transition" @click="openHotelMap(hotel)">
@@ -413,7 +420,7 @@
                 <div class="itinerary-title">{{ hotel.name || '住宿' }}</div>
 
                 <div class="itinerary-subtitle">{{ hotelDayRangeLabel(hotel) }}</div>
-                <div v-if="hotel.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ hotel.address }}</div>
+                <div v-if="hotel.address" class="itinerary-address"><span aria-hidden="true" v-html="renderIcon('locate')"></span> {{ hotel.address }}</div>
 
                 <div class="itinerary-tags">
                   <span
@@ -432,8 +439,8 @@
               </div>
 
               <div class="itinerary-actions">
-                <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel">✏️</button>
-                <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel">✕</button>
+                <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+                <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
               </div>
             </div>
           </div>
@@ -444,7 +451,7 @@
         <!-- Alternatives -->
         <div v-show="dayViewMode === 'list'" class="card border border-amber-100 space-y-3 flex-shrink-0">
           <div>
-            <h3 class="font-bold text-gray-800">📌 Day {{ currentDay }} 備案</h3>
+            <h3 class="font-bold text-gray-800"><span class="inline-icon" v-html="renderIcon('pin')"></span> Day {{ currentDay }} 備案</h3>
       
           </div>
 
@@ -461,14 +468,14 @@
                 <div class="itinerary-category-row">
                   <span class="itinerary-type-pill itinerary-type-alternative">備案</span>
                   <span class="itinerary-category" :class="'itinerary-category-' + getItineraryTypeTone(place)">
-                    {{ getItineraryCategoryLabel(place) }}
+                    <span class="inline-icon" v-html="renderIcon(getItineraryTypeIcon(getItineraryCategoryLabel(place)))"></span> {{ getItineraryCategoryLabel(place) }}
                   </span>
                   <time v-if="place.time" class="itinerary-alternative-time">{{ formatTime(place.time) }}</time>
                 </div>
                 <div class="itinerary-title">{{ place.name }}</div>
 
                 <div v-if="place.name_ko" class="itinerary-subtitle">{{ place.name_ko }}</div>
-                <div v-if="place.address" class="itinerary-address"><span aria-hidden="true">⌖</span> {{ place.address }}</div>
+                <div v-if="place.address" class="itinerary-address"><span aria-hidden="true" v-html="renderIcon('locate')"></span> {{ place.address }}</div>
 
                 <div v-if="getTransportSummary(place).length" class="transport-summary" aria-label="交通資訊">
                   <span v-for="detail in getTransportSummary(place)" :key="'alternative-' + place.id + '-' + detail">{{ detail }}</span>
@@ -501,9 +508,9 @@
                   aria-label="轉為正式行程"
                   @click.stop="promoteAlternativeToItinerary(place)"
                   :disabled="isPromotingAlternative || isLoading"
-                >↑</button>
-                <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading">✏️</button>
-                <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading">✕</button>
+                ><span class="inline-icon" v-html="renderIcon('arrow-up')"></span></button>
+                <button class="icon-btn" title="編輯" @click.stop="openEditModal(place)" :disabled="isLoading"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+                <button class="icon-btn icon-btn-danger" title="刪除" @click.stop="removePlace(place.id)" :disabled="isLoading"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
               </div>
             </div>
 
@@ -688,7 +695,7 @@
             <h3>共同錢包紀錄</h3>
             <div class="shared-wallet-ledger">
               <div v-for="item in sharedWalletRecords" :key="'wallet-' + item.id" class="shared-wallet-entry" :class="'is-' + item.type">
-                <span class="shared-wallet-entry-icon" aria-hidden="true">{{ item.type === 'deposit' ? '💰' : getExpenseCategoryIcon(item.category) }}</span>
+                <span class="shared-wallet-entry-icon" aria-hidden="true" v-html="renderIcon(item.type === 'deposit' ? 'wallet' : getItineraryTypeIcon(item.category))"></span>
                 <div class="shared-wallet-entry-main">
                   <span v-if="item.type === 'payment'" class="shared-wallet-entry-kind">{{ item.person ? '個人使用' : '所有人分攤' }}</span>
                   <strong>{{ item.type === 'deposit' ? (item.person || '存入') : item.title }}</strong>
@@ -699,8 +706,8 @@
                 <div class="shared-wallet-entry-actions">
                     <strong>{{ item.type === 'deposit' ? '+' : '-' }}{{ formatTransactionAmount(item) }}</strong>
                   <div class="shared-wallet-entry-buttons">
-                    <button type="button" @click="openEditWalletModal(item)" title="編輯錢包紀錄" aria-label="編輯錢包紀錄" :disabled="isSavingSharedWallet">✎</button>
-                    <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet">×</button>
+                    <button type="button" @click="openEditWalletModal(item)" title="編輯錢包紀錄" aria-label="編輯錢包紀錄" :disabled="isSavingSharedWallet"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+                    <button type="button" @click="removeSharedWalletTransaction(item)" title="刪除錢包紀錄" aria-label="刪除錢包紀錄" :disabled="isSavingSharedWallet"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
                   </div>
                 </div>
               </div>
@@ -774,7 +781,7 @@
               <h3>個人分帳紀錄</h3>
               <div v-if="filteredExpenses.length" class="personal-expense-ledger">
                 <div v-for="exp in filteredExpenses" :key="exp.id" class="personal-expense-entry">
-                  <span class="personal-expense-entry-icon" aria-hidden="true">{{ getExpenseCategoryIcon(exp.category) }}</span>
+                  <span class="personal-expense-entry-icon" aria-hidden="true" v-html="renderIcon(getItineraryTypeIcon(exp.category))"></span>
                     <div class="personal-expense-entry-main">
                       <strong>{{ exp.title }}</strong>
                     <span>{{ expenseDateLabel(exp) }}｜{{ exp.payer }}先付｜{{ formatInvolved(exp.involved) }}分攤</span>
@@ -782,8 +789,8 @@
                   <div class="personal-expense-entry-actions">
                     <strong>-{{ formatTransactionAmount(exp) }}</strong>
                     <div>
-                      <button type="button" @click="openEditExpenseModal(exp)" title="編輯" aria-label="編輯個人分帳" :disabled="isSavingExpense">✏️</button>
-                      <button type="button" @click="removeExpense(exp.id)" title="刪除" aria-label="刪除個人分帳" :disabled="isSavingExpense">×</button>
+                      <button type="button" @click="openEditExpenseModal(exp)" title="編輯" aria-label="編輯個人分帳" :disabled="isSavingExpense"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+                      <button type="button" @click="removeExpense(exp.id)" title="刪除" aria-label="刪除個人分帳" :disabled="isSavingExpense"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
                     </div>
                   </div>
                 </div>
@@ -793,7 +800,7 @@
         </template>
 
         <div v-if="categoryAnalysis.length > 0" class="card money-category-analysis">
-          <h3 class="font-bold text-gray-700 text-sm mb-3">📊 旅程消費分析</h3>
+          <h3 class="font-bold text-gray-700 text-sm mb-3"><span class="inline-icon" v-html="renderIcon('ledger')"></span> 旅程消費分析</h3>
           <div class="space-y-3">
             <div v-for="cat in categoryAnalysis" :key="cat.name" class="text-xs">
               <div class="flex justify-between mb-1">
@@ -839,7 +846,7 @@
           <h3 id="ledger-analysis-title">分類分析</h3>
           <div v-for="row in personalLedgerCategoryAnalysis" :key="row.name" class="ledger-analysis-row">
             <div class="ledger-analysis-line">
-              <span>{{ getExpenseCategoryIcon(row.name) }} {{ row.name }}</span>
+              <span><span class="inline-icon" v-html="renderIcon(getItineraryTypeIcon(row.name))"></span> {{ row.name }}</span>
               <strong>NT${{ Math.round(row.total).toLocaleString('en-US') }} · {{ row.percent }}%</strong>
             </div>
             <div class="ledger-analysis-bar" aria-hidden="true"><span :style="{ width: row.percent + '%' }"></span></div>
@@ -886,8 +893,8 @@
               <div class="ledger-entry-side">
                 <strong>{{ formatTransactionAmount(entry) }}</strong>
                 <div v-if="!entry.readOnly" class="ledger-entry-actions">
-                  <button type="button" title="編輯" aria-label="編輯記帳" @click="openEditPersonalLedgerModal(entry)">✏️</button>
-                  <button type="button" title="刪除" aria-label="刪除記帳" @click="removePersonalLedgerEntry(entry)">×</button>
+                  <button type="button" title="編輯" aria-label="編輯記帳" @click="openEditPersonalLedgerModal(entry)"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+                  <button type="button" title="刪除" aria-label="刪除記帳" @click="removePersonalLedgerEntry(entry)"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
                 </div>
               </div>
             </article>
@@ -906,9 +913,9 @@
         <button
           @click="exitTrip"
           class="w-full bg-gray-700 text-white h-[54px] rounded-lg font-bold mb-6 shadow text-lg"
-        >🔙 切換旅程</button>
+        ><span class="inline-icon" v-html="renderIcon('back')"></span> 切換旅程</button>
 
-        <h3 class="font-bold text-gray-700 ml-1">📋 資料管理</h3>
+        <h3 class="font-bold text-gray-700 ml-1"><span class="inline-icon" v-html="renderIcon('document')"></span> 資料管理</h3>
         <div class="wallet-setting-row">
           <div>
             <strong>共同旅費錢包</strong>
@@ -926,7 +933,7 @@
           </label>
         </div>
         <div class="card currency-settings-card">
-          <h3>💱 貨幣設定</h3>
+          <h3><span class="inline-icon" v-html="renderIcon('currency')"></span> 貨幣設定</h3>
           <p class="currency-settings-help">外幣交易會依這裡的匯率自動換算成台幣。</p>
           <div class="currency-settings-grid">
             <label class="money-field">
@@ -946,14 +953,14 @@
         <button
           @click="shareItinerary"
           class="w-full bg-white text-blue-600 border border-blue-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
-        ><span>📤</span> 分享行程</button>
+    ><span class="inline-icon" v-html="renderIcon('share')"></span> 分享行程</button>
 
         <button
           @click="downloadBackupHtml"
           class="w-full bg-white text-amber-700 border border-amber-200 h-[54px] rounded-lg font-bold shadow-sm active:scale-95 transition flex justify-center items-center gap-2"
-        ><span>🗂️</span> 產生備份網頁</button>
+    ><span class="inline-icon" v-html="renderIcon('download')"></span> 產生備份網頁</button>
 
-        <h3 class="font-bold text-gray-700 mt-6 ml-1">🏨 住宿設定</h3>
+        <h3 class="font-bold text-gray-700 mt-6 ml-1"><span class="inline-icon" v-html="renderIcon('bed')"></span> 住宿設定</h3>
         <div class="card hotel-search-card border border-teal-100 space-y-3 relative z-30">
      
           <div class="relative">
@@ -974,7 +981,7 @@
                 @click="selectHotelPlace(item)"
                 class="suggestion-item hover:bg-teal-50"
               >
-                <span class="text-xl">🏨</span>
+                <span class="inline-icon" v-html="renderIcon('bed')"></span>
                 <div class="overflow-hidden">
                   <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
                   <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
@@ -1007,19 +1014,19 @@
             @click="openHotelMap(hotel)"
           >
             <div class="min-w-0">
-              <div class="font-bold text-gray-800 break-words">🏠 {{ hotel.name }}</div>
+              <div class="font-bold text-gray-800 break-words"><span class="inline-icon" v-html="renderIcon('bed')"></span> {{ hotel.name }}</div>
               <div class="text-xs text-gray-500 mt-1 break-words">
                 {{ hotelDayRangeLabel(hotel) }}<span v-if="hotel.address">｜{{ hotel.address }}</span>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0 pl-2">
-              <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel">✏️</button>
-          <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel">✕</button>
+              <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
+          <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
             </div>
           </div>
         </div>
 
-        <h3 class="font-bold text-gray-700 mt-6 ml-1">👥 成員管理</h3>
+        <h3 class="font-bold text-gray-700 mt-6 ml-1"><span class="inline-icon" v-html="renderIcon('people')"></span> 成員管理</h3>
         <div class="flex gap-2">
           <input v-model="newPerson" placeholder="名字" class="flex-1">
           <button @click="addPerson" class="bg-gray-800 text-white px-4 rounded-lg font-bold">新增</button>
@@ -1058,26 +1065,26 @@
           <button
             @click="deleteTripTotally"
             class="w-full bg-red-500 text-white border border-red-600 py-3 rounded-lg font-bold mb-3 shadow-md hover:bg-red-600 transition"
-          >❌ 刪除此旅程</button>
+          ><span class="inline-icon" v-html="renderIcon('delete')"></span> 刪除此旅程</button>
         </div>
       </div>
     </main>
 
     <nav class="bottom-nav bg-white border-t flex justify-around pt-2 z-50 flex-shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='itinerary'?'text-blue-600 scale-110':'text-gray-400'">
-        <span class="text-2xl mb-0.5">📍</span><span class="text-[10px] font-bold">行程</span>
+        <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('itinerary'))"></span><span class="text-[10px] font-bold">行程</span>
       </button>
       <button @click="switchTab('money')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='money'?'text-green-600 scale-110':'text-gray-400'">
-        <span class="text-2xl mb-0.5">💰</span><span class="text-[10px] font-bold">分帳</span>
+        <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('money'))"></span><span class="text-[10px] font-bold">分帳</span>
       </button>
       <button @click="switchTab('ledger')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='ledger'?'text-emerald-700 scale-110':'text-gray-400'">
-        <span class="text-2xl mb-0.5">🧾</span><span class="text-[10px] font-bold">記帳</span>
+        <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('ledger'))"></span><span class="text-[10px] font-bold">記帳</span>
       </button>
       <button @click="switchTab('prep')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='prep'?'text-blue-600 scale-110':'text-gray-400'">
-        <span class="text-2xl mb-0.5">🎒</span><span class="text-[10px] font-bold">準備</span>
+        <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('prep'))"></span><span class="text-[10px] font-bold">準備</span>
       </button>
       <button @click="switchTab('settings')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='settings'?'text-gray-800 scale-110':'text-gray-400'">
-        <span class="text-2xl mb-0.5">⚙️</span><span class="text-[10px] font-bold">設定</span>
+        <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('settings'))"></span><span class="text-[10px] font-bold">設定</span>
       </button>
     </nav>
   </div>
@@ -1098,22 +1105,23 @@
         >
         <button
           @click="addPlace"
+          aria-label="新增行程" title="新增行程"
           class="bg-blue-600 text-white w-[54px] h-[54px] rounded-xl text-3xl shadow active:scale-95 transition flex items-center justify-center pb-1 flex-shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
           :disabled="isAddingPlace || isResolvingMapUrl"
-        >+</button>
+        ><span class="inline-icon" v-html="renderIcon('add')"></span></button>
 
         <div v-if="newPlace.length > 0 && (searchResults.length > 0 || isSearching || isResolvingMapUrl || mapUrlResolveError || isCoordinateMode)" class="suggestions-list">
           <div v-if="isSearching" class="p-3 text-center text-gray-400 text-sm">搜尋中...</div>
           <div v-if="isResolvingMapUrl" class="p-3 text-center text-gray-500 text-sm">正在解析 {{ mapUrlProvider === 'naver' ? 'Naver Map' : 'Google Maps' }} 網址...</div>
           <div v-if="!isResolvingMapUrl && mapUrlResolveError" class="p-3 text-sm text-rose-600">網址解析失敗：{{ mapUrlResolveError }}</div>
-          <div v-if="translatedSearchHint" class="px-3 py-2 text-xs text-blue-600 bg-blue-50 border-b border-blue-100">🌐 {{ translatedSearchHint }}</div>
+          <div v-if="translatedSearchHint" class="px-3 py-2 text-xs text-blue-600 bg-blue-50 border-b border-blue-100"><span class="inline-icon" v-html="renderIcon('document')"></span> {{ translatedSearchHint }}</div>
 
           <div
             v-if="isCoordinateMode"
             @click="useCoordinateInput"
             class="suggestion-item bg-green-50 hover:bg-green-100 border-green-200"
           >
-            <span class="text-xl">📍</span>
+            <span class="text-xl inline-icon" v-html="renderIcon('pin')"></span>
             <div>
               <div class="font-bold text-green-700 text-sm">{{ resolvedCoordName || '座標模式' }}</div>
               <div class="text-xs text-green-600">點擊使用</div>
@@ -1127,7 +1135,7 @@
             class="suggestion-item hover:bg-blue-50"
           >
             <!-- Naver 在地結果用藍色圖釘，Google 維持紅色。 -->
-            <span class="text-xl" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }">📍</span>
+            <span class="text-xl inline-icon" :class="{ 'suggestion-pin-naver': isNaverPlace(item) }" v-html="renderIcon('pin')"></span>
             <div class="overflow-hidden">
               <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
               <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
@@ -1140,9 +1148,12 @@
 
       <div class="itinerary-meta-row">
         <input v-model="newTime" type="time" class="itinerary-time-input text-center font-mono">
-        <select v-model="newPlaceType" class="itinerary-type-select">
+        <label class="icon-select-field itinerary-type-select">
+        <span class="inline-icon" v-html="renderIcon(getItineraryTypeIcon(newPlaceType))"></span>
+        <select v-model="newPlaceType" aria-label="行程類型">
           <option v-for="type in itineraryTypes" :key="'new-place-type-' + type" :value="type">{{ type }}</option>
         </select>
+        </label>
       </div>
 
       <button type="button" class="w-full border text-gray-600 small-btn active:scale-95" @click="closeAddPlaceModal">關閉</button>
@@ -1152,7 +1163,7 @@
   <!-- 路線查詢 modal：內容從常駐卡片搬過來，展開收合狀態改由彈窗開關取代 -->
   <div v-if="isModalRendered('route', showRouteModal)" class="modal-mask" :class="modalMaskPresentationClass('route', showRouteModal)" @click.self="closeRouteModal" @keydown.esc="closeRouteModal">
     <div class="modal-card space-y-3 t-modal" :class="modalPresentationClass('route', showRouteModal)" role="dialog" aria-modal="true" tabindex="-1">
-      <div class="font-bold text-gray-800 text-lg">🧭 路線查詢</div>
+      <div class="font-bold text-gray-800 text-lg"><span class="inline-icon" v-html="renderIcon('compass')"></span> 路線查詢</div>
 
       <div class="route-panel-body">
         <label class="route-field">
@@ -1227,9 +1238,12 @@
         <input v-model="editPlace.name" placeholder="地點名稱">
 
         <div class="text-xs font-bold text-gray-500 ml-1">類型</div>
-        <select v-model="editPlace.type">
+        <label class="icon-select-field">
+        <span class="inline-icon" v-html="renderIcon(getItineraryTypeIcon(editPlace.type))"></span>
+        <select v-model="editPlace.type" aria-label="行程類型">
           <option v-for="type in itineraryTypes" :key="'edit-place-type-' + type" :value="type">{{ type }}</option>
         </select>
+        </label>
 
         <div class="text-xs font-bold text-gray-500 ml-1">Day</div>
         <select v-model.number="editPlace.day">
@@ -1297,7 +1311,7 @@
               @click="selectEditHotelPlace(item)"
               class="suggestion-item hover:bg-teal-50"
             >
-              <span class="text-xl">🏠</span>
+              <span class="inline-icon" v-html="renderIcon('bed')"></span>
               <div class="overflow-hidden">
                 <div class="font-bold text-gray-800 text-sm truncate">{{ item.structured_formatting.main_text }}</div>
                 <div class="text-xs text-gray-500 truncate">{{ item.structured_formatting.secondary_text }}</div>
@@ -1510,7 +1524,7 @@
           <h2 id="sync-debug-title">同步診斷紀錄</h2>
           <p>僅保留這台裝置最近 30 筆事件</p>
         </div>
-        <button type="button" class="sync-debug-close" title="關閉" aria-label="關閉" @click="closeSyncDebugModal">×</button>
+        <button type="button" class="sync-debug-close" title="關閉" aria-label="關閉" @click="closeSyncDebugModal"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
       </header>
       <div class="sync-debug-actions">
         <button type="button" @click="copySyncDebugLog">複製全部</button>
@@ -1528,26 +1542,27 @@
   </div>
 </div>
 
-<script src="./config.js?v=20261004.1"></script>
-<script src="./cache-refresh.js?v=20261004.1"></script>
-<script src="./keyword-map.js?v=20261004.1"></script>
-<script src="./js/utils.js?v=20261004.1"></script>
-<script src="./js/api.js?v=20261004.1"></script>
-<script src="./js/cache.js?v=20261004.1"></script>
-<script src="./js/maps.js?v=20261004.1"></script>
-<script src="./js/places.js?v=20261004.1"></script>
-<script src="./js/itinerary.js?v=20261004.1"></script>
-<script src="./js/hotels.js?v=20261004.1"></script>
-<script src="./js/expenses.js?v=20261004.1"></script>
-<script src="./js/sync-queue.js?v=20261004.1"></script>
-<script src="./js/sync-debug.js?v=20261004.1"></script>
-<script src="./js/personal-ledger.js?v=20261004.1"></script>
-<script src="./js/weather.js?v=20261004.1"></script>
-<script src="./js/export.js?v=20261004.1"></script>
-<script src="./js/probe-search.js?v=20261004.1"></script>
-<script src="./app.js?v=20261004.1"></script>
-<script src="./search-zh-label.js?v=20261004.1"></script>
-<script src="./prep-checklist.js?v=20261004.1"></script>
+<script src="./config.js?v=20261014.1"></script>
+<script src="./cache-refresh.js?v=20261014.1"></script>
+<script src="./keyword-map.js?v=20261014.1"></script>
+<script src="./js/utils.js?v=20261014.1"></script>
+<script src="./js/api.js?v=20261014.1"></script>
+<script src="./js/cache.js?v=20261014.1"></script>
+<script src="./js/maps.js?v=20261014.1"></script>
+<script src="./js/places.js?v=20261014.1"></script>
+<script src="./js/itinerary.js?v=20261014.1"></script>
+<script src="./js/hotels.js?v=20261014.1"></script>
+<script src="./js/expenses.js?v=20261014.1"></script>
+<script src="./js/sync-queue.js?v=20261014.1"></script>
+<script src="./js/sync-debug.js?v=20261014.1"></script>
+<script src="./js/personal-ledger.js?v=20261014.1"></script>
+<script src="./js/weather.js?v=20261014.1"></script>
+<script src="./js/export.js?v=20261014.1"></script>
+<script src="./js/probe-search.js?v=20261014.1"></script>
+<script src="./js/icon-system.js?v=20261014.1"></script>
+<script src="./app.js?v=20261014.1"></script>
+<script src="./search-zh-label.js?v=20261014.1"></script>
+<script src="./prep-checklist.js?v=20261014.1"></script>
 
 </body>
 </html>

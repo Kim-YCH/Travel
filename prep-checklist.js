@@ -1,10 +1,10 @@
-// version: 20261004.1
+// version: 20261014.1
 // 準備清單功能：資料庫為主、前端只做快取；新增 / 編輯 / 刪除 / 勾選改成單筆 CRUD API。
 // 20260705.1：移除整份覆蓋式 prep_checklist_save，避免手機舊 localStorage 覆蓋 Google Sheet。
 // 20260705.1：離線時只允許查看，不允許新增、編輯、刪除、勾選或清空。
 // 20260705.1：新增 / 編輯 / 刪除改成樂觀式局部 UI；背景排隊寫入，不再成功後整面重畫。
 (function () {
-  const VERSION = '20261004.1';
+  const VERSION = '20261014.1';
   const STORAGE_PREFIX = 'travel_prepare_checklist_v5_cache::';
   const IMAGE_STORAGE_PREFIX = 'travel_prepare_images_v1::';
   const PREP_PENDING_QUEUE_PREFIX = 'travel_prepare_checklist_pending_v1::';
@@ -170,6 +170,16 @@
     const emoji = String(section && section.emoji || '').trim();
     const title = String(section && section.title || '').trim();
     return `${emoji ? emoji + ' ' : ''}${title}`.trim() || '未命名分類';
+  }
+
+  function renderSectionName(section) {
+    const icons = window.TravelIcons;
+    if (!icons) return escapeHtml(getSectionDisplayName(section));
+    return icons.renderPrepCategory(section);
+  }
+
+  function actionIcon(name) {
+    return window.TravelIcons ? window.TravelIcons.renderIcon(name) : '';
   }
 
   function getCurrentTripCache() {
@@ -763,11 +773,11 @@
           <input type="checkbox" ${item.checked ? 'checked' : ''} />
           <span class="prep-item-text">${escapeHtml(item.text)}</span>
           <details class="prep-item-menu">
-            <summary title="更多操作" aria-label="更多操作">⋯</summary>
+            <summary title="更多操作" aria-label="更多操作">${actionIcon('more')}</summary>
             <div class="prep-item-menu-actions">
-              <button class="prep-icon-btn prep-image-add" title="加圖片" type="button">📷 <span>加圖片</span></button>
-              <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">✏️ <span>編輯</span></button>
-              <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">✕ <span>刪除</span></button>
+              <button class="prep-icon-btn prep-image-add" title="加圖片" type="button">${actionIcon('image-add')} <span>加圖片</span></button>
+              <button class="prep-icon-btn prep-edit-item" title="編輯" type="button">${actionIcon('edit')} <span>編輯</span></button>
+              <button class="prep-icon-btn prep-delete-item is-danger" title="刪除" type="button">${actionIcon('delete')} <span>刪除</span></button>
             </div>
           </details>
         </div>
@@ -784,7 +794,7 @@
       const imageId = escapeHtml(img.id || '');
       return `<div class="prep-thumb" data-item-id="${id}" data-image-id="${imageId}">
           <img src="${url}" alt="準備品項圖片" loading="lazy" draggable="false" />
-          <button class="prep-thumb-delete" title="刪除圖片" type="button" aria-label="刪除圖片">✕</button>
+          <button class="prep-thumb-delete" title="刪除圖片" type="button" aria-label="刪除圖片">${actionIcon('close')}</button>
         </div>`;
     }).join('');
     const uploading = uploadingByItem[itemId] || 0;
@@ -829,11 +839,11 @@
     return `
       <div class="prep-section ${isActive ? 'is-active' : ''}" data-section-id="${escapeHtml(section.id)}">
         <div class="prep-section-title">
-          <span class="prep-section-name">${escapeHtml(getSectionDisplayName(section))}</span>
+          <span class="prep-section-name">${renderSectionName(section)}</span>
           <span class="prep-section-actions">
             <span class="prep-section-count" style="font-size:12px;color:#94a3b8;">${count}</span>
-            <button class="prep-icon-btn prep-edit-section" title="編輯" type="button">✏️</button>
-            <button class="prep-icon-btn prep-delete-section is-danger" title="刪除" type="button">✕</button>
+            <button class="prep-icon-btn prep-edit-section" title="編輯" type="button">${actionIcon('edit')}</button>
+            <button class="prep-icon-btn prep-delete-section is-danger" title="刪除" type="button">${actionIcon('delete')}</button>
           </span>
         </div>
         <div class="prep-section-progress">
@@ -861,7 +871,7 @@
     const active = String(section.id) === String(selectedSectionId);
     return `
           <button class="prep-cat-item ${active ? 'is-active' : ''}" type="button" data-cat-id="${escapeHtml(section.id)}" aria-pressed="${active ? 'true' : 'false'}">
-            <span class="prep-cat-name">${escapeHtml(getSectionDisplayName(section))}</span>
+            <span class="prep-cat-name">${renderSectionName(section)}</span>
             <span class="prep-cat-count">${formatSectionCount(section)}</span>
           </button>`;
   }
@@ -894,8 +904,8 @@
       ${renderCategoryRail()}
       <div class="prep-add-box">
         <div style="font-size:13px;font-weight:900;color:#334155;">新增分類</div>
-        <div class="prep-add-row"><input class="prep-new-section-title" placeholder="例如 🪪 證件" /></div>
-        <button class="prep-add-section-btn" type="button">＋ 新增分類</button>
+        <div class="prep-add-row"><input class="prep-new-section-title" placeholder="例如：證件" /></div>
+        <button class="prep-add-section-btn" type="button">${actionIcon('add')} 新增分類</button>
       </div>
       </div>
       <div class="prep-detail-col">
@@ -920,7 +930,7 @@
         <div class="prep-status-line">
           <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
           <span class="prep-status-right">
-            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0) ? 'disabled' : ''}>↻ 更新資料</button>
+            <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0) ? 'disabled' : ''}>${actionIcon('refresh')} 更新資料</button>
             <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
           </span>
         </div>
@@ -936,16 +946,16 @@
     }
 
     root.innerHTML = `
-      <button class="prep-fab" type="button" aria-label="開啟準備清單">🎒 準備清單</button>
+      <button class="prep-fab" type="button" aria-label="開啟準備清單">${actionIcon('backpack')} 準備清單</button>
       <div class="prep-overlay" role="dialog" aria-modal="true">
         <div class="prep-panel${disabledClass}">
           <div class="prep-header">
             <div class="prep-title-row">
               <div>
-                <div style="font-size:18px;font-weight:900;">🎒 準備清單</div>
+                <div style="font-size:18px;font-weight:900;">${actionIcon('backpack')} 準備清單</div>
                 <div class="prep-summary" style="font-size:12px;opacity:.85;margin-top:2px;">${escapeHtml(tripName)}｜${escapeHtml(ownerText)}${selectedOwner ? `｜${stats.done}/${stats.total}（${stats.percent}%）` : ''}</div>
               </div>
-              <button class="prep-close" type="button" aria-label="關閉">×</button>
+              <button class="prep-close" type="button" aria-label="關閉">${actionIcon('close')}</button>
             </div>
             <div class="prep-progress-track"><div class="prep-progress-bar" style="width:${selectedOwner ? stats.percent : 0}%"></div></div>
           </div>
@@ -953,7 +963,7 @@
             <div class="prep-status-line">
               <span class="prep-updated-text">${selectedOwner ? (lastSyncedAt ? `更新 ${escapeHtml(formatTime(lastSyncedAt))}` : `版本 ${VERSION}`) : ''}</span>
               <span class="prep-status-right">
-                <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0) ? 'disabled' : ''}>↻ 更新資料</button>
+                <button class="prep-refresh-btn" type="button" style="${selectedOwner ? '' : 'display:none;'}" ${(!selectedOwner || !isBrowserOnline() || pendingWrites > 0 || pendingMutations.length > 0) ? 'disabled' : ''}>${actionIcon('refresh')} 更新資料</button>
                 <span class="prep-sync-pill" style="${syncText ? '' : 'display:none;'}">${escapeHtml(syncText)}</span>
               </span>
             </div>
@@ -1071,8 +1081,8 @@
     const catEl = root.querySelector(`.prep-cat-item[data-cat-id="${cssEscape(section.id)}"]`);
     if (!catEl) return;
     const nameEl = catEl.querySelector('.prep-cat-name');
-    // 跟右欄標題用同一支 getSectionDisplayName()，兩邊永遠顯示同一個字串
-    if (nameEl) nameEl.textContent = getSectionDisplayName(section);
+    // Sidebar and detail titles share the same presentation, including rollback.
+    if (nameEl) nameEl.innerHTML = renderSectionName(section);
   }
 
   // 右欄卡片的 0/N、右欄進度條、左欄的 0/N 三處一起更新。
@@ -1296,7 +1306,7 @@
     saveLocal(true);
 
     const name = sectionEl.querySelector('.prep-section-name');
-    if (name) name.textContent = getSectionDisplayName(section);
+    if (name) name.innerHTML = renderSectionName(section);
     updateCategoryLabel(section);
     updateSyncUI();
 
@@ -1311,7 +1321,7 @@
         section.title = oldTitle;
         section.emoji = oldEmoji;
         saveLocal(false);
-        if (name) name.textContent = getSectionDisplayName(section);
+        if (name) name.innerHTML = renderSectionName(section);
         updateCategoryLabel(section);
       }
     });
@@ -1837,10 +1847,10 @@
     const overlay = document.createElement('div');
     overlay.className = 'prep-img-viewer';
     overlay.innerHTML = `
-      <button class="prep-img-viewer-close" type="button" aria-label="關閉">✕</button>
-      <button class="prep-img-viewer-btn prep-img-viewer-prev" type="button" aria-label="上一張">‹</button>
+      <button class="prep-img-viewer-close" type="button" aria-label="關閉">${actionIcon('close')}</button>
+      <button class="prep-img-viewer-btn prep-img-viewer-prev" type="button" aria-label="上一張">${actionIcon('back')}</button>
       <img src="" alt="準備品項圖片" />
-      <button class="prep-img-viewer-btn prep-img-viewer-next" type="button" aria-label="下一張">›</button>
+      <button class="prep-img-viewer-btn prep-img-viewer-next" type="button" aria-label="下一張">${actionIcon('next')}</button>
       <div class="prep-img-viewer-count"></div>`;
     const imgEl = overlay.querySelector('img');
     imgEl.addEventListener('error', handlePhotoError);

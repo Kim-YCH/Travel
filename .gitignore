@@ -9,3 +9,4 @@ apps-script-backend.gs
 docs/
 tests/
 keyword-map-reference.md
+.worktrees/
