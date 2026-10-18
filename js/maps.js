@@ -180,9 +180,29 @@
     return savedAddress ? `https://map.naver.com/p/search/${encodeURIComponent(savedAddress)}` : '';
   };
 
-  /**
-   * Google Maps 路線連結（非韓國行程用）。同一個 https 網址在手機上會直接開 App。
-   */
+  // Keep the original Maps query intact; only change how a mobile device launches it.
+  const buildGoogleAppUrl = (webUrl, { userAgent = '', platform = '', maxTouchPoints = 0 } = {}) => {
+    let url;
+    try { url = new URL(webUrl); } catch (err) { return ''; }
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return '';
+    const isMapsUrl = url.hostname === 'maps.google.com'
+      || (['google.com', 'www.google.com'].includes(url.hostname) && /^\/maps(?:\/|$)/.test(url.pathname));
+    if (!isMapsUrl) return '';
+
+    url.hash = '';
+    const target = url.href;
+    if (/android/i.test(userAgent)) {
+      return target.replace(/^https?:/, 'intent:')
+        + '#Intent;scheme=' + url.protocol.slice(0, -1)
+        + ';package=com.google.android.apps.maps;S.browser_fallback_url='
+        + encodeURIComponent(target) + ';end';
+    }
+    const isIOS = /iphone|ipad|ipod/i.test(userAgent)
+      || ((platform === 'MacIntel' || /macintosh/i.test(userAgent)) && Number(maxTouchPoints) > 1);
+    return isIOS ? target.replace(/^https?:\/\//, 'comgooglemapsurl://') : '';
+  };
+
+  /** Google Maps route URL; the shared opener handles mobile app handoff. */
   const buildGoogleRouteUrl = ({ mode = 'transit', start = null, goal = null } = {}) => {
     const origin = normalizeRoutePoint(start);
     const target = normalizeRoutePoint(goal);
@@ -201,6 +221,7 @@
     buildNaverRouteUrl,
     buildNaverPlaceUrl,
     buildNaverWebPlaceUrl,
-    buildGoogleRouteUrl
+    buildGoogleRouteUrl,
+    buildGoogleAppUrl
   });
 })(window);
