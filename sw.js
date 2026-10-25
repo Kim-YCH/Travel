@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const VERSION = '20261018.1';
+const VERSION = '20261025.2';
 const SHELL_CACHE = `travel-shell-${VERSION}`;
 const PREP_IMAGE_CACHE = 'travel-prep-images-v1';
 const PREP_IMAGE_CACHE_LIMIT = 60;
@@ -33,6 +33,9 @@ const SHELL_ASSETS = [
   `./journal-theme.css?v=${VERSION}`,
   `./journal-finance.css?v=${VERSION}`,
   `./journal-prep.css?v=${VERSION}`,
+  `./flights.css?v=${VERSION}`,
+  `./js/flights.js?v=${VERSION}`,
+  `./js/flight-ui.js?v=${VERSION}`,
   './desktop/journal-travel.webp',
   './desktop/journal-panorama.webp',
   './desktop/journal-header-mist.webp',

@@ -1,15 +1,16 @@
 const { createApp, ref, computed, onMounted, onBeforeUnmount, nextTick, watch } = Vue;
 
 createApp({
+  components: window.TravelFlightUI.components,
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261018.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261025.2';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
       'TravelHotels', 'TravelMaps', 'TravelExpenses', 'TravelWeather', 'TravelPlaces', 'TravelExport',
-      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug', 'TravelPersonalLedger', 'TravelIcons'
+      'TravelProbeSearch', 'TravelSyncQueue', 'TravelSyncDebug', 'TravelPersonalLedger', 'TravelIcons', 'TravelFlights'
     ].forEach((name) => {
       if (!window[name]) throw new Error(`缺少必要模組 ${name}，請確認 index.html 的載入順序`);
     });
@@ -27,6 +28,7 @@ createApp({
     const TravelSyncQueue = window.TravelSyncQueue;
     const TravelSyncDebug = window.TravelSyncDebug;
     const TravelPersonalLedger = window.TravelPersonalLedger;
+    const TravelFlights = window.TravelFlights;
     const { renderIcon, getNavIcon, getTripIcon, getItineraryTypeIcon } = window.TravelIcons;
 
     const {
@@ -119,6 +121,23 @@ createApp({
     const sharedWalletTransactions = ref([]);
     const personalLedgerManualEntries = ref([]);
     const hotels = ref([]);
+    const flights = ref([]);
+    const flightMeta = ref(null);
+    const flightCountry = ref(TravelFlights.countryFromCity(''));
+    const showFlightsTab = computed(() => Boolean(currentTrip.value && flightCountry.value.eligible));
+    const flightBackendReady = computed(() => flightMeta.value?.supported === true && flightMeta.value?.writeReady === true);
+    const flightSchemaWarning = computed(() => flightMeta.value?.schemaWarning || (flightMeta.value?.supported ? '' : '航班後端尚未更新，請先部署 Apps Script 航班版本。'));
+    const isSavingFlight = ref(false);
+    const showFlightModal = ref(false);
+    const flightForm = ref(TravelFlights.flightToForm());
+    const flightError = ref('');
+    const flightPageError = ref('');
+    const focusedFlightId = ref('');
+    let flightEditorTripId = '';
+    let flightEditingId = '';
+    let flightDataRevision = 0;
+    let flightCountryGeneration = 0;
+    const flightFailuresByTrip = new Map();
     const alternatives = ref([]); // 舊版備案表保留但不再使用；新版備案改存在 itinerary.is_alternative
 
     const newPlace = ref('');
@@ -971,6 +990,8 @@ createApp({
           personalLedgerEntries: personalLedgerManualEntries.value,
           people: people.value,
           hotels: hotels.value,
+          flights: TravelFlights.normalizeFlights(flights.value, tripId),
+          flightsMeta: flightMeta.value,
           alternatives: alternatives.value,
           trip: currentTrip.value,
           ts: Date.now()
@@ -998,6 +1019,8 @@ createApp({
         syncPersonSelections();
         syncLedgerOwnerSelection();
         hotels.value    = Array.isArray(c.hotels) ? c.hotels.map(normalizeHotelRecord) : [];
+        flights.value = TravelFlights.normalizeFlights(c.flights, tripId);
+        flightMeta.value = c.flightsMeta || null;
         alternatives.value = Array.isArray(c.alternatives) ? c.alternatives.map(normalizeAlternativeRecord) : [];
 
         if (c.trip) currentTrip.value = { ...currentTrip.value, ...c.trip };
@@ -1305,6 +1328,159 @@ createApp({
         }
         throw err;
       }
+    };
+
+    const resolveFlightCountry = TravelFlights.createCountryResolver({
+      read: key => TravelCache.readJSON(key),
+      write: (key, value) => TravelCache.writeJSON(key, value),
+      geocode: async city => {
+        if (navigator.onLine === false) return '';
+        await loadGoogleMaps();
+        if (!window.google?.maps?.Geocoder) return '';
+        return new Promise(resolve => {
+          new window.google.maps.Geocoder().geocode({ address: city }, (results, status) => {
+            const codes = status === 'OK' && Array.isArray(results)
+              ? [...new Set(results.map(result => result.address_components?.find(part => part.types?.includes('country'))?.short_name).filter(Boolean))]
+              : [];
+            resolve(codes.length === 1 ? codes[0] : '');
+          });
+        });
+      }
+    });
+    const updateFlightCountry = async () => {
+      const generation = ++flightCountryGeneration;
+      const tripId = String(currentTrip.value?.id || '');
+      const city = String(currentTrip.value?.city || '');
+      flightCountry.value = TravelFlights.countryFromCity(city);
+      if (currentTab.value === 'flights' && !flightCountry.value.eligible) currentTab.value = 'itinerary';
+      const result = await resolveFlightCountry(city);
+      if (generation !== flightCountryGeneration || String(currentTrip.value?.id || '') !== tripId || String(currentTrip.value?.city || '') !== city) return;
+      flightCountry.value = result;
+      if (city && !result.countryCode) console.debug('Flight destination unresolved', { city, reason: result.reason });
+      if (currentTab.value === 'flights' && !result.eligible) currentTab.value = 'itinerary';
+    };
+    const flightCards = computed(() => flights.value.map(flight => TravelFlights.presentFlight(flight, currentTrip.value, totalDays.value)));
+    const flightSlots = computed(() => TravelFlights.timelineSlots(showFlightsTab.value ? flightCards.value : [], [], currentDay.value));
+    const closeFlightModal = () => {
+      if (!isSavingFlight.value) showFlightModal.value = false;
+    };
+    const openFlightModal = (id = '') => {
+      if (!showFlightsTab.value || !flightBackendReady.value || isSavingFlight.value) return;
+      const item = id ? flights.value.find(flight => flight.id === String(id)) : null;
+      if (id && !item) return;
+      flightEditingId = item?.id || '';
+      flightEditorTripId = String(currentTrip.value.id);
+      flightForm.value = TravelFlights.flightToForm(item || {});
+      if (!item) {
+        const start = TravelFlights.validDate(String(currentTrip.value.start_date || '').slice(0, 10));
+        if (start) {
+          const day = new Date(Date.parse(start + 'T00:00:00Z') + (currentDay.value - 1) * 86400000).toISOString().slice(0, 10);
+          flightForm.value.depart_date = day;
+          flightForm.value.arrive_date = day;
+        }
+      }
+      flightError.value = '';
+      showFlightModal.value = true;
+    };
+    // Only server-confirmed flight mutations change the UI/cache; failed writes are never shown as synced.
+    const writeFlightMutation = async (payload, apply) => {
+      if (isSavingFlight.value) return false;
+      if (!flightBackendReady.value) throw Error('請先更新航班後端與工作表欄位');
+      if (navigator.onLine === false) throw Error('目前離線，請連線後再儲存航班');
+      const tripId = String(currentTrip.value?.id || '');
+      if (!tripId) return false;
+      isSavingFlight.value = true;
+      flightPageError.value = '';
+      try {
+        const response = await postJSON(payload, { queueOnFail: false });
+        flightFailuresByTrip.delete(tripId);
+        if (String(currentTrip.value?.id || '') === tripId) {
+          flightPageError.value = '';
+          flightDataRevision++;
+          flights.value = TravelFlights.normalizeFlights(apply(flights.value, response), tripId);
+          saveTripCache(tripId);
+        } else {
+          const cached = TravelCache.readJSON(cacheKey(tripId));
+          if (cached) TravelCache.writeJSON(cacheKey(tripId), { ...cached, flights: TravelFlights.normalizeFlights(apply(cached.flights || [], response), tripId) });
+        }
+        return true;
+      } finally {
+        isSavingFlight.value = false;
+      }
+    };
+    const recordFlightFailure = (tripId, err) => {
+      const message = String(err?.message || '航班儲存失敗');
+      flightFailuresByTrip.set(tripId, message);
+      if (String(currentTrip.value?.id || '') === tripId) flightPageError.value = message;
+      return message;
+    };
+    const saveFlight = async () => {
+      if (isSavingFlight.value || !showFlightModal.value) return;
+      const originTripId = flightEditorTripId;
+      flightError.value = '';
+      try {
+        if (String(currentTrip.value?.id || '') !== flightEditorTripId) throw Error('旅程已切換，請重新開啟航班表單');
+        const data = TravelFlights.flightFromForm(flightForm.value, flightEditorTripId);
+        if (!data.id) {
+          data.id = window.crypto?.randomUUID?.() || 'flight-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+          data.flight_id = data.id;
+          flightForm.value.id = data.id;
+          flightForm.value.flight_id = data.id;
+        }
+        let confirmed;
+        const adding = !flightEditingId;
+        const ok = await writeFlightMutation({ action: adding ? 'add' : 'edit', type: 'flights', data }, (items, response) => {
+          const saved = TravelFlights.normalizeFlight(response.flight || data);
+          confirmed = saved;
+          return items.filter(item => String(item.flight_id || item.id) !== data.id).concat(saved);
+        });
+        if (ok && adding && confirmed && JSON.stringify(confirmed) !== JSON.stringify(data)
+          && String(currentTrip.value?.id || '') === originTripId && showFlightModal.value) {
+          flightEditingId = confirmed.id;
+          flightError.value = '航班已存在，本次修改已保留在表單；請再次儲存以更新這筆航班。';
+          return;
+        }
+        if (ok) showFlightModal.value = false;
+      } catch (err) {
+        const message = recordFlightFailure(originTripId, err);
+        if (String(currentTrip.value?.id || '') === originTripId) flightError.value = message;
+      }
+    };
+    const removeFlight = async id => {
+      if (isSavingFlight.value) return;
+      const item = flights.value.find(flight => flight.id === String(id));
+      if (!item || !confirm('確定刪除此航班？每日行程中的航班也會一併移除。')) return;
+      const originTripId = String(currentTrip.value.id);
+      try {
+        await writeFlightMutation({ action: 'del', type: 'flights', id: item.id, tripId: String(currentTrip.value.id) }, items => items.filter(flight => String(flight.flight_id || flight.id) !== item.id));
+      } catch (err) { recordFlightFailure(originTripId, err); }
+    };
+    const setFlightVisibility = async visible => {
+      if (isSavingFlight.value) return;
+      const originTripId = String(currentTrip.value?.id || '');
+      try {
+        await writeFlightMutation({ action: 'set_flight_visibility', type: 'flights', tripId: String(currentTrip.value.id), show_in_itinerary: Boolean(visible) }, (items, response) => response.flights || items.map(flight => ({ ...flight, show_in_itinerary: Boolean(visible) })));
+      } catch (err) { recordFlightFailure(originTripId, err); }
+    };
+    const focusFlight = async id => {
+      if (!showFlightsTab.value) return;
+      focusedFlightId.value = String(id);
+      await switchTab('flights');
+      await nextTick();
+      const card = document.getElementById('flight-' + id);
+      card?.scrollIntoView({ block: 'center', behavior: 'auto' });
+      card?.focus({ preventScroll: true });
+    };
+    const openFlightAirport = id => {
+      const flight = flights.value.find(item => item.id === String(id));
+      if (!flight?.depart_airport) return;
+      const airport = TravelFlights.resolveAirport(flight.depart_airport);
+      const place = TravelFlights.airportMapPlace(flight.depart_airport);
+      if (isKoreaTrip.value && airport?.timeZone === 'Asia/Seoul') {
+        openNaverMap({ name: place.name, nameKo: place.name_ko, address: place.name_ko || place.name, lat: null, lng: null });
+        return;
+      }
+      openMapWindow('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place.name));
     };
 
     const saveTripsCache = () => {
@@ -2228,6 +2404,15 @@ createApp({
       newSharedWalletDeposit.value = { person: '', amount: '', currency: 'TWD', note: '' };
       newSharedWalletPayment.value = { title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
       hotels.value = [];
+      flights.value = [];
+      flightMeta.value = null;
+      flightDataRevision++;
+      showFlightModal.value = false;
+      flightError.value = '';
+      flightPageError.value = flightFailuresByTrip.get(String(trip.id)) || '';
+      focusedFlightId.value = '';
+      flightCountry.value = TravelFlights.countryFromCity(trip.city);
+      if (currentTab.value === 'flights' && !flightCountry.value.eligible) currentTab.value = 'itinerary';
       hotelSearchQuery.value = '';
       hotelSearchResults.value = [];
       hotelSelectedPlaceData.value = null;
@@ -2272,6 +2457,10 @@ createApp({
       lastMoneyRefreshAt = 0;
       currentView.value = 'lobby';
       currentTrip.value = null;
+      flights.value = [];
+      flightMeta.value = null;
+      flightDataRevision++;
+      showFlightModal.value = false;
       personalLedgerManualEntries.value = [];
       selectedLedgerOwner.value = '';
       pendingSyncQueue.value = [];
@@ -2311,7 +2500,7 @@ createApp({
       const trip = trips.value.find(t => String(t.id) === String(saved.tripId));
       if (!trip) return;
       await selectTrip(trip);
-      if (saved.tab) currentTab.value = saved.tab;
+      if (saved.tab) currentTab.value = saved.tab === 'flights' && !showFlightsTab.value ? 'itinerary' : saved.tab;
     };
 
     const deleteTripTotally = async () => {
@@ -2378,6 +2567,7 @@ createApp({
       if(!currentTrip.value) return false;
 
       const tripId = currentTrip.value.id;
+      const flightReadRevision = flightDataRevision;
       const t_start = performance.now();
       const showLoading = options.silent !== true;
       if (showLoading) isLoading.value = true;
@@ -2389,7 +2579,9 @@ createApp({
         const data = await apiGet(params);
         const t_api_end = performance.now();
 
-        console.log("tripData response ms =", Math.round(t_api_end - t_api_start), data);
+        if (String(currentTrip.value?.id || '') !== String(tripId)) return false;
+
+        console.log("tripData response ms =", Math.round(t_api_end - t_api_start));
         if (!data || data.status === 'error') {
           throw new Error(data?.message || 'tripData refresh failed');
         }
@@ -2414,6 +2606,10 @@ createApp({
         syncLedgerOwnerSelection();
         if (walletPayload) sharedWalletTransactions.value = walletPayload.map(normalizeSharedWalletTransaction);
         hotels.value = htl.map(normalizeHotelRecord);
+        if (flightReadRevision === flightDataRevision) {
+          flights.value = TravelFlights.normalizeFlights(data.flights, tripId);
+          flightMeta.value = data.flightsMeta || null;
+        }
         alternatives.value = [];
 
         if (trip) {
@@ -2440,6 +2636,7 @@ createApp({
         }
 
         await ensureAllDayOrdersSynced(tripId);
+        if (String(currentTrip.value?.id || '') !== String(tripId)) return false;
 
         await nextTick();
         scheduleSortableInit();
@@ -2868,6 +3065,7 @@ createApp({
         group: 'itinerary-day-split',
         animation: 150,
         handle: '.drag-handle',
+        draggable: '[data-id]',
         ghostClass: 'opacity-50',
         onEnd: async () => {
           await syncDragGroups();
@@ -3004,6 +3202,7 @@ createApp({
       ['create-trip', showCreateTripModal],
       ['add-place', showAddPlaceModal],
       ['route', showRouteModal],
+      ['flight', showFlightModal],
       ['day', showDayModal],
       ['edit-place', showEditModal],
       ['edit-hotel', showEditHotelModal],
@@ -5127,6 +5326,7 @@ createApp({
     };
 
     const switchTab = async (tab) => {
+      if (tab === 'flights' && !showFlightsTab.value) tab = 'itinerary';
       currentTab.value = tab;
       if (tab === 'itinerary') {
         dayViewMode.value = 'list';
@@ -5202,6 +5402,8 @@ createApp({
     watch([currentTrip, people], () => syncLedgerOwnerSelection(), { deep: true });
     watch([itinerary, expenses, sharedWalletTransactions, personalLedgerManualEntries, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
+    watch(flights, () => scheduleTripCacheSave(), { deep: true });
+    watch([() => currentTrip.value?.id, () => currentTrip.value?.city], () => updateFlightCountry());
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
     const handleAppResume = () => {
@@ -5265,6 +5467,10 @@ createApp({
 
     return {
       APP_VERSION,
+      flights, showFlightsTab, flightCountry, flightBackendReady, flightSchemaWarning,
+      flightCards, flightSlots, isSavingFlight, showFlightModal, flightForm,
+      flightError, flightPageError, focusedFlightId, openFlightModal, closeFlightModal,
+      saveFlight, removeFlight, setFlightVisibility, focusFlight, openFlightAirport,
       renderIcon, getNavIcon, getTripIcon, getItineraryTypeIcon,
       currentView, currentTrip, trips, newTripName, newTripCity, showCreateTripModal,
       currentTab, dayViewMode, moneyDisplayMode, isLoading, isCreatingTrip, syncStatusText, syncStatusBadgeClass, manualSync,

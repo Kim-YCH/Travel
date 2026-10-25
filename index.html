@@ -1,33 +1,34 @@
 <!DOCTYPE html>
-<!-- version: 20261018.1 -->
+<!-- version: 20261025.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261018.1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261018.1" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261018.1" />
-  <link rel="manifest" href="./site.webmanifest?v=20261018.1" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261025.2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261025.2" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261025.2" />
+  <link rel="manifest" href="./site.webmanifest?v=20261025.2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20261018.1" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20261018.1"></script>
-  <script src="./vendor/Sortable.min.js?v=20261018.1"></script>
+  <script src="./js/device-router.js?v=20261025.2" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20261025.2"></script>
+  <script src="./vendor/Sortable.min.js?v=20261025.2"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20261018.1" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20261018.1" />
+  <link rel="stylesheet" href="./style.css?v=20261025.2" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20261025.2" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20261018.1" />
-  <link rel="stylesheet" href="./journal-theme.css?v=20261018.1" />
-  <link rel="stylesheet" href="./journal-finance.css?v=20261018.1" />
-  <link rel="stylesheet" href="./journal-prep.css?v=20261018.1" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20261025.2" />
+  <link rel="stylesheet" href="./journal-theme.css?v=20261025.2" />
+  <link rel="stylesheet" href="./journal-finance.css?v=20261025.2" />
+  <link rel="stylesheet" href="./journal-prep.css?v=20261025.2" />
+  <link rel="stylesheet" href="./flights.css?v=20261025.2" />
 </head>
 <body class="journal-theme">
 
@@ -139,6 +140,7 @@
       :class="currentTab === 'itinerary' && dayViewMode === 'map' ? 'content-fixed' : 'content-scroll'"
     >
       <!-- Itinerary -->
+      <flight-page v-if="showFlightsTab" v-show="currentTab === 'flights'" :cards="flightCards" :backend-ready="flightBackendReady" :busy="isSavingFlight" :error="flightPageError" :focused-id="focusedFlightId" :schema-warning="flightSchemaWarning" @add="openFlightModal()" @edit="openFlightModal($event)" @remove="removeFlight" @visibility="setFlightVisibility"></flight-page>
       <!-- 左右滑動換天。只綁 touchstart / touchend，處理函式自己會檢查
            dayViewMode === 'list'，地圖模式不接手勢（橫向拖曳屬於地圖平移）。
            刻意不綁 touchmove、也絕不 preventDefault —— 垂直捲動要維持原樣。 -->
@@ -341,9 +343,8 @@
         </div>
 
         <div v-show="dayViewMode === 'list'" class="itinerary-day-stack pb-20" ref="itineraryListEl">
+          <template v-for="place in filteredItinerary" :key="place.id">
           <div
-            v-for="place in filteredItinerary"
-            :key="place.id"
             :data-id="place.id"
             class="itinerary-timeline-row"
           >
@@ -403,49 +404,9 @@
             </div>
           </div>
 
-          <div
-            v-for="hotel in currentDayHotels"
-            :key="'hotel-itinerary-' + hotel.id"
-            class="itinerary-timeline-row hotel-timeline-row"
-          >
-            <div class="itinerary-rail">
-              <div class="itinerary-rail-time">住宿</div>
-              <div class="itinerary-rail-node hotel-node" v-html="renderIcon('bed')"></div>
-            </div>
+          </template>
 
-            <div class="card hotel-itinerary-card itinerary-card-v2 active:scale-[0.99] transition" @click="openHotelMap(hotel)">
-              <div class="itinerary-drag-handle hotel-static-icon select-none">•</div>
-              <div class="itinerary-content">
-                <div class="itinerary-category itinerary-category-hotel">住宿</div>
-                <div class="itinerary-title">{{ hotel.name || '住宿' }}</div>
-
-                <div class="itinerary-subtitle">{{ hotelDayRangeLabel(hotel) }}</div>
-                <div v-if="hotel.address" class="itinerary-address"><span aria-hidden="true" v-html="renderIcon('locate')"></span> {{ hotel.address }}</div>
-
-                <div class="itinerary-tags">
-                  <span
-                    v-if="hasMapCoordinates(hotel)"
-                    class="itinerary-status-chip is-located"
-                  >已定位</span>
-                  <span
-                    v-else
-                    class="itinerary-status-chip is-unlocated"
-                  >無座標</span>
-                </div>
-              </div>
-
-              <div v-if="hotel.note" class="itinerary-card-footer" @click.stop>
-                <div class="itinerary-message">{{ hotel.note }}</div>
-              </div>
-
-              <div class="itinerary-actions">
-                <button class="icon-btn" title="編輯住宿" @click.stop="openEditHotelModal(hotel)" :disabled="isSavingHotel"><span class="inline-icon" v-html="renderIcon('edit')"></span></button>
-                <button class="icon-btn icon-btn-danger" title="刪除住宿" @click.stop="removeHotel(hotel.id)" :disabled="isDeletingHotel"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="filteredItinerary.length===0 && currentDayHotels.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
+          <div v-if="filteredItinerary.length===0 && currentDayHotels.length===0 && flightSlots.tail.length===0" class="text-center text-gray-400 mt-10">尚無行程</div>
         </div>
 
         <!-- Alternatives -->
@@ -518,6 +479,10 @@
               行程拖曳到這裡，即可設為備案
             </div>
           </div>
+        </div>
+        <div v-show="dayViewMode === 'list'" class="itinerary-day-stack">
+          <stay-timeline :hotels="currentDayHotels" :busy="isSavingHotel || isDeletingHotel" @open="openHotelMap" @edit="openEditHotelModal" @remove="removeHotel"></stay-timeline>
+          <flight-timeline :flights="flightSlots.tail" @open="openFlightAirport"></flight-timeline>
         </div>
       </div>
 
@@ -1070,9 +1035,12 @@
       </div>
     </main>
 
-    <nav class="bottom-nav bg-white border-t flex justify-around pt-2 z-50 flex-shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <nav class="bottom-nav bg-white border-t flex justify-around pt-2 z-50 flex-shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]" :class="{ 'bottom-nav--six': showFlightsTab }">
       <button @click="switchTab('itinerary')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='itinerary'?'text-blue-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('itinerary'))"></span><span class="text-[10px] font-bold">行程</span>
+      </button>
+      <button v-if="showFlightsTab" type="button" @click="switchTab('flights')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='flights'?'text-blue-600 scale-110':'text-gray-400'">
+        <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('flights'))"></span><span class="text-[10px] font-bold">航班</span>
       </button>
       <button @click="switchTab('money')" class="flex flex-col items-center w-full transition duration-200" :class="currentTab==='money'?'text-green-600 scale-110':'text-gray-400'">
         <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('money'))"></span><span class="text-[10px] font-bold">分帳</span>
@@ -1087,6 +1055,12 @@
         <span class="text-2xl mb-0.5 nav-icon" v-html="renderIcon(getNavIcon('settings'))"></span><span class="text-[10px] font-bold">設定</span>
       </button>
     </nav>
+  </div>
+
+  <div v-if="isModalRendered('flight', showFlightModal)" class="modal-mask flight-modal-mask" :class="modalMaskPresentationClass('flight', showFlightModal)" @click.self="!isSavingFlight && closeFlightModal()">
+    <div class="modal-card flight-modal t-modal" :class="modalPresentationClass('flight', showFlightModal)">
+      <flight-editor :form="flightForm" :busy="isSavingFlight" :error="flightError" @save="saveFlight" @cancel="closeFlightModal"></flight-editor>
+    </div>
   </div>
 
   <!-- 新增行程。搜尋下拉住在彈窗裡是既有規劃：cloud-theme.css 已經有
@@ -1542,27 +1516,29 @@
   </div>
 </div>
 
-<script src="./config.js?v=20261018.1"></script>
-<script src="./cache-refresh.js?v=20261018.1"></script>
-<script src="./keyword-map.js?v=20261018.1"></script>
-<script src="./js/utils.js?v=20261018.1"></script>
-<script src="./js/api.js?v=20261018.1"></script>
-<script src="./js/cache.js?v=20261018.1"></script>
-<script src="./js/maps.js?v=20261018.1"></script>
-<script src="./js/places.js?v=20261018.1"></script>
-<script src="./js/itinerary.js?v=20261018.1"></script>
-<script src="./js/hotels.js?v=20261018.1"></script>
-<script src="./js/expenses.js?v=20261018.1"></script>
-<script src="./js/sync-queue.js?v=20261018.1"></script>
-<script src="./js/sync-debug.js?v=20261018.1"></script>
-<script src="./js/personal-ledger.js?v=20261018.1"></script>
-<script src="./js/weather.js?v=20261018.1"></script>
-<script src="./js/export.js?v=20261018.1"></script>
-<script src="./js/probe-search.js?v=20261018.1"></script>
-<script src="./js/icon-system.js?v=20261018.1"></script>
-<script src="./app.js?v=20261018.1"></script>
-<script src="./search-zh-label.js?v=20261018.1"></script>
-<script src="./prep-checklist.js?v=20261018.1"></script>
+<script src="./config.js?v=20261025.2"></script>
+<script src="./cache-refresh.js?v=20261025.2"></script>
+<script src="./keyword-map.js?v=20261025.2"></script>
+<script src="./js/utils.js?v=20261025.2"></script>
+<script src="./js/api.js?v=20261025.2"></script>
+<script src="./js/cache.js?v=20261025.2"></script>
+<script src="./js/maps.js?v=20261025.2"></script>
+<script src="./js/places.js?v=20261025.2"></script>
+<script src="./js/itinerary.js?v=20261025.2"></script>
+<script src="./js/hotels.js?v=20261025.2"></script>
+<script src="./js/expenses.js?v=20261025.2"></script>
+<script src="./js/sync-queue.js?v=20261025.2"></script>
+<script src="./js/sync-debug.js?v=20261025.2"></script>
+<script src="./js/personal-ledger.js?v=20261025.2"></script>
+<script src="./js/weather.js?v=20261025.2"></script>
+<script src="./js/export.js?v=20261025.2"></script>
+<script src="./js/probe-search.js?v=20261025.2"></script>
+<script src="./js/icon-system.js?v=20261025.2"></script>
+<script src="./js/flights.js?v=20261025.2"></script>
+<script src="./js/flight-ui.js?v=20261025.2"></script>
+<script src="./app.js?v=20261025.2"></script>
+<script src="./search-zh-label.js?v=20261025.2"></script>
+<script src="./prep-checklist.js?v=20261025.2"></script>
 
 </body>
 </html>

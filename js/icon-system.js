@@ -101,7 +101,7 @@
     family: { viewBox: '0 0 32 32', body: '<ellipse cx="11" cy="11" rx="7" ry="9" fill="#F8CDC8"/><ellipse cx="24" cy="13" rx="6" ry="8" fill="#D9E8F8"/><path d="M11 20v9M24 21v8M9 22h4M22 23h4"/>' }
   });
 
-  const NAV_ICONS = Object.freeze({ itinerary: 'pin', money: 'wallet', ledger: 'ledger', prep: 'backpack', settings: 'settings' });
+  const NAV_ICONS = Object.freeze({ itinerary: 'pin', flights: 'plane', money: 'wallet', ledger: 'ledger', prep: 'backpack', settings: 'settings' });
   const TYPE_ICONS = Object.freeze({
     '景點': 'camera', '美食': 'food', '飲食': 'food', '餐廳': 'food',
     '咖啡': 'coffee', '咖啡廳': 'coffee', '住宿': 'bed', '飯店': 'bed',

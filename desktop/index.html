@@ -1,24 +1,25 @@
 <!DOCTYPE html>
-<!-- version: 20261018.1 -->
+<!-- version: 20261025.2 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261018.1" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261025.2" />
 
-  <script src="../js/device-router.js?v=20261018.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20261018.1"></script>
-  <script src="../vendor/Sortable.min.js?v=20261018.1"></script>
+  <script src="../js/device-router.js?v=20261025.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20261025.2"></script>
+  <script src="../vendor/Sortable.min.js?v=20261025.2"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20261018.1" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20261018.1" />
-  <link rel="stylesheet" href="./desktop.css?v=20261018.1" />
+  <link rel="stylesheet" href="../style.css?v=20261025.2" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20261025.2" />
+  <link rel="stylesheet" href="./desktop.css?v=20261025.2" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20261018.1" />
-  <link rel="stylesheet" href="../journal-theme.css?v=20261018.1" />
-  <link rel="stylesheet" href="../journal-finance.css?v=20261018.1" />
-  <link rel="stylesheet" href="../journal-prep.css?v=20261018.1" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20261025.2" />
+  <link rel="stylesheet" href="../journal-theme.css?v=20261025.2" />
+  <link rel="stylesheet" href="../journal-finance.css?v=20261025.2" />
+  <link rel="stylesheet" href="../journal-prep.css?v=20261025.2" />
+  <link rel="stylesheet" href="../flights.css?v=20261025.2" />
 </head>
 <body class="desktop-body journal-theme">
 
@@ -32,6 +33,7 @@
 
       <nav class="desktop-nav" aria-label="主要導覽">
         <button type="button" :class="{ 'is-active': currentTab === 'itinerary' }" @click="switchTab('itinerary'); switchDayViewMode('map')"><span class="nav-icon" v-html="renderIcon(getNavIcon('itinerary'))"></span> 行程</button>
+        <button v-if="showFlightsTab" type="button" :class="{ 'is-active': currentTab === 'flights' }" @click="switchTab('flights')"><span class="nav-icon" v-html="renderIcon(getNavIcon('flights'))"></span> 航班</button>
         <button type="button" :class="{ 'is-active': currentTab === 'money' }" @click="switchTab('money')"><span class="nav-icon" v-html="renderIcon(getNavIcon('money'))"></span> 分帳</button>
         <button type="button" :class="{ 'is-active': currentTab === 'ledger' }" @click="switchTab('ledger')"><span class="nav-icon" v-html="renderIcon(getNavIcon('ledger'))"></span> 記帳</button>
         <button type="button" :class="{ 'is-active': currentTab === 'prep' }" @click="switchTab('prep')"><span class="nav-icon" v-html="renderIcon(getNavIcon('prep'))"></span> 準備</button>
@@ -111,6 +113,7 @@
       <!-- 未選旅程時，行程／分帳／設定三個分頁不渲染內容，只顯示引導文字；
            準備分頁維持在下面獨立掛載（見該處註解），不受此判斷影響。 -->
       <template v-if="currentTrip">
+      <flight-page v-if="showFlightsTab" v-show="currentTab === 'flights'" :cards="flightCards" :backend-ready="flightBackendReady" :busy="isSavingFlight" :error="flightPageError" :focused-id="focusedFlightId" :schema-warning="flightSchemaWarning" @add="openFlightModal()" @edit="openFlightModal($event)" @remove="removeFlight" @visibility="setFlightVisibility"></flight-page>
       <section v-show="currentTab === 'itinerary'" class="desktop-pane desktop-itinerary">
         <div class="desktop-itinerary-left">
           <!-- Day 列黏在左欄捲動容器頂端，天數再多也不用捲回頂端換日期。
@@ -149,9 +152,8 @@
 
           <div class="desktop-list-block desktop-block-plan" ref="itineraryListEl">
             <h3>正式行程<span class="desktop-block-count">{{ filteredItinerary.length }}</span></h3>
+            <template v-for="place in filteredItinerary" :key="place.id">
             <article
-              v-for="place in filteredItinerary"
-              :key="place.id"
               :data-id="place.id"
               class="card desktop-place-card"
               @click="focusItineraryMapPoint(currentDayMapPoints.find(p => p.kind === 'itinerary' && p.id === place.id))"
@@ -175,7 +177,8 @@
                 <button type="button" class="desktop-icon-btn desktop-icon-danger" title="刪除" aria-label="刪除" @click="removePlace(place.id)" :disabled="isLoading"><span class="inline-icon" v-html="renderIcon('close')"></span></button>
               </div>
             </article>
-            <p v-if="!filteredItinerary.length" class="desktop-empty">這一天還沒有行程</p>
+            </template>
+            <p v-if="!filteredItinerary.length && !flightSlots.tail.length" class="desktop-empty">這一天還沒有行程</p>
           </div>
 
           <div class="desktop-list-block desktop-block-alt" ref="alternativeListEl">
@@ -190,17 +193,9 @@
             </article>
           </div>
 
-          <div class="desktop-list-block">
-            <h3>當日住宿</h3>
-            <article v-for="hotel in currentDayHotels" :key="hotel.id" class="card desktop-place-card desktop-hotel-row" @click="openHotelMap(hotel)">
-              <span class="desktop-place-icon" v-html="renderIcon('bed')"></span>
-              <div class="desktop-place-main">
-                <strong>{{ hotel.name }}</strong>
-                <em>{{ hotelDayRangeLabel(hotel) }} · {{ hotel.address }}</em>
-              </div>
-            </article>
-            <p v-if="!currentDayHotels.length" class="desktop-empty">這一天沒有住宿</p>
-          </div>
+          <stay-timeline :hotels="currentDayHotels" :busy="isSavingHotel || isDeletingHotel" @open="openHotelMap" @edit="openEditHotelModal" @remove="removeHotel"></stay-timeline>
+          <flight-timeline :flights="flightSlots.tail" @open="openFlightAirport"></flight-timeline>
+
         </div>
 
         <div class="desktop-itinerary-right">
@@ -988,6 +983,12 @@
         </form>
       </div>
 
+      <div v-if="isModalRendered('flight', showFlightModal)" class="desktop-modal-mask flight-modal-mask" :class="modalMaskPresentationClass('flight', showFlightModal)" @click.self="!isSavingFlight && closeFlightModal()">
+        <div class="card desktop-modal flight-modal t-modal" :class="modalPresentationClass('flight', showFlightModal)">
+          <flight-editor :form="flightForm" :busy="isSavingFlight" :error="flightError" @save="saveFlight" @cancel="closeFlightModal"></flight-editor>
+        </div>
+      </div>
+
       <div v-if="isModalRendered('edit-place', showEditModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-place', showEditModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditModal" @keydown.esc="closeEditModal">
         <div class="card desktop-modal t-modal" :class="modalPresentationClass('edit-place', showEditModal)">
           <h3>編輯行程</h3>
@@ -1217,28 +1218,30 @@
   </div>
 </div>
 
-<script src="../config.js?v=20261018.1"></script>
+<script src="../config.js?v=20261025.2"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20261018.1" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20261018.1"></script>
-<script src="../js/utils.js?v=20261018.1"></script>
-<script src="../js/api.js?v=20261018.1"></script>
-<script src="../js/cache.js?v=20261018.1"></script>
-<script src="../js/maps.js?v=20261018.1"></script>
-<script src="../js/places.js?v=20261018.1"></script>
-<script src="../js/itinerary.js?v=20261018.1"></script>
-<script src="../js/hotels.js?v=20261018.1"></script>
-<script src="../js/expenses.js?v=20261018.1"></script>
-<script src="../js/sync-queue.js?v=20261018.1"></script>
-<script src="../js/sync-debug.js?v=20261018.1"></script>
-<script src="../js/personal-ledger.js?v=20261018.1"></script>
-<script src="../js/weather.js?v=20261018.1"></script>
-<script src="../js/export.js?v=20261018.1"></script>
-<script src="../js/probe-search.js?v=20261018.1"></script>
-<script src="../js/icon-system.js?v=20261018.1"></script>
-<script src="../app.js?v=20261018.1"></script>
-<script src="../search-zh-label.js?v=20261018.1"></script>
-<script src="../prep-checklist.js?v=20261018.1"></script>
+<script src="../cache-refresh.js?v=20261025.2" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20261025.2"></script>
+<script src="../js/utils.js?v=20261025.2"></script>
+<script src="../js/api.js?v=20261025.2"></script>
+<script src="../js/cache.js?v=20261025.2"></script>
+<script src="../js/maps.js?v=20261025.2"></script>
+<script src="../js/places.js?v=20261025.2"></script>
+<script src="../js/itinerary.js?v=20261025.2"></script>
+<script src="../js/hotels.js?v=20261025.2"></script>
+<script src="../js/expenses.js?v=20261025.2"></script>
+<script src="../js/sync-queue.js?v=20261025.2"></script>
+<script src="../js/sync-debug.js?v=20261025.2"></script>
+<script src="../js/personal-ledger.js?v=20261025.2"></script>
+<script src="../js/weather.js?v=20261025.2"></script>
+<script src="../js/export.js?v=20261025.2"></script>
+<script src="../js/probe-search.js?v=20261025.2"></script>
+<script src="../js/icon-system.js?v=20261025.2"></script>
+<script src="../js/flights.js?v=20261025.2"></script>
+<script src="../js/flight-ui.js?v=20261025.2"></script>
+<script src="../app.js?v=20261025.2"></script>
+<script src="../search-zh-label.js?v=20261025.2"></script>
+<script src="../prep-checklist.js?v=20261025.2"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';
