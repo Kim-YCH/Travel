@@ -10,5 +10,5 @@
 window.TRAVEL_CONFIG = Object.freeze({
   API_URL: 'https://script.google.com/macros/s/AKfycbyUkeZoNZ31zn34P2l4l4xgPdVocvtfsw6RLJFuRJIS5yVNF1RlXrFUnH0Mqv-AD_Yc/exec',
   GOOGLE_MAPS_API_KEY: 'AIzaSyCLrHk9V-eQby0aDVx31iwFyqmhI-jIs4Q',
-  APP_VERSION: '20261026.1'
+  APP_VERSION: '20261026.2'
 });

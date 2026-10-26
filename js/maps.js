@@ -57,8 +57,8 @@
         </svg>
       `;
 
-  // 住宿 marker 回復成接近原本的實心 pin，不使用圓孔，避免 🏠 圖示被孔洞干擾。
-  const hotelPinSvg = (baseColor, lightColor, darkColor) => `
+  // Travel markers reuse the same SVG glyphs as the map toolbar controls.
+  const hotelPinSvg = (baseColor, lightColor, darkColor, glyph) => `
         <svg xmlns="http://www.w3.org/2000/svg" width="27" height="43" viewBox="0 0 27 43">
           <defs>
             <linearGradient id="hotelPinGrad" x1="6" y1="2" x2="21" y2="41" gradientUnits="userSpaceOnUse">
@@ -76,6 +76,8 @@
             d="M13.5 0C6.04 0 0 6.04 0 13.5C0 23.63 13.5 43 13.5 43C13.5 43 27 23.63 27 13.5C27 6.04 20.96 0 13.5 0Z"
             fill="url(#hotelPinGrad)"
           />
+          <circle cx="13.5" cy="13.5" r="10" fill="#FFFCF6"/>
+          <g transform="translate(4.5 4.5) scale(.75)" color="#493B35" style="--travel-icon-ink:#493B35">${glyph}</g>
         </svg>
       `;
 
@@ -94,12 +96,12 @@
     };
   };
 
-  const makeHotelMapPinIcon = (fillColor = '#0d9488') => {
+  const makeTravelMapPinIcon = (name, fillColor) => {
     if (!window.google || !window.google.maps) return null;
     const g = window.google.maps;
 
     const baseColor = normalizeHexColor(fillColor, '#0d9488');
-    const svg = hotelPinSvg(baseColor, shadeHexColor(baseColor, 26), shadeHexColor(baseColor, -34));
+    const svg = hotelPinSvg(baseColor, shadeHexColor(baseColor, 26), shadeHexColor(baseColor, -34), window.TravelIcons.renderIcon(name));
 
     return {
       url: svgDataUrl(svg),
@@ -108,6 +110,9 @@
       labelOrigin: new g.Point(17, 19)
     };
   };
+
+  const makeHotelMapPinIcon = (fillColor = '#0d9488') => makeTravelMapPinIcon('bed', fillColor);
+  const makeAirportMapPinIcon = (fillColor = '#64748b') => makeTravelMapPinIcon('plane', fillColor);
 
   /* ------------------------------------------------------------ 路線深層連結 */
 
@@ -218,6 +223,7 @@
     shadeHexColor,
     makeMapPinIcon,
     makeHotelMapPinIcon,
+    makeAirportMapPinIcon,
     buildNaverRouteUrl,
     buildNaverPlaceUrl,
     buildNaverWebPlaceUrl,

@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.2';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -1868,7 +1868,7 @@ createApp({
           timeLabel: '住宿',
           category: '住宿',
           tone: 'hotel',
-          icon: '🏠',
+          icon: 'bed',
           lat: Number(hotel.lat),
           lng: Number(hotel.lng),
           source: hotel
@@ -1894,7 +1894,7 @@ createApp({
       mapMarkerByPointKey.forEach((entry, key) => {
         const active = key === selectedKey;
         const color = active ? '#2563eb' : entry.baseColor;
-        entry.marker.setIcon(entry.kind === 'hotel' ? makeHotelMapPinIcon(color) : makeMapPinIcon(color));
+        entry.marker.setIcon(entry.kind === 'hotel' ? makeHotelMapPinIcon(color) : entry.kind === 'airport' ? makeAirportMapPinIcon(color) : makeMapPinIcon(color));
         entry.marker.setZIndex(active ? 1200 : entry.zIndex);
       });
     };
@@ -2052,7 +2052,7 @@ createApp({
 
       infoWindow.setContent(
         `<div style="padding:8px; color:#111; max-width:230px;">
-          <div style="font-weight:bold; margin-bottom:4px;">🏠 ${escapeHtml(hotel.name || '住宿')}</div>
+          <div style="display:flex;align-items:center;gap:4px;font-weight:bold;margin-bottom:4px;">${renderIcon('bed')} ${escapeHtml(hotel.name || '住宿')}</div>
           <div style="font-size:12px; color:#555; margin-bottom:3px;">${escapeHtml(hotelDayRangeLabel(hotel))}</div>
           <div style="font-size:12px; color:#555; margin-bottom:8px;">${escapeHtml(hotel.address || '')}</div>
           ${mapInfoWindowActionHtml({ buttonId, label: mapLabel, color: '#0d9488', desktopUrl })}
@@ -2087,7 +2087,7 @@ createApp({
       updateMapMarkers();
     };
 
-    const { normalizeHexColor, shadeHexColor, makeMapPinIcon, makeHotelMapPinIcon } = TravelMaps;
+    const { normalizeHexColor, shadeHexColor, makeMapPinIcon, makeHotelMapPinIcon, makeAirportMapPinIcon } = TravelMaps;
 
     // 把座標幾乎重合的點散開成一個小圓，避免地圖上的數字疊成一團。
     // key 以小數 4 位（約 11 公尺）分組，同格內超過一個點就以等角度散開。
@@ -2331,7 +2331,6 @@ createApp({
         const marker = new google.maps.Marker({
           position: { lat: Number(hotel.lat), lng: Number(hotel.lng) },
           map: mapInstance,
-          label: { text: '🏠', fontSize: '17px' },
           icon: makeHotelMapPinIcon('#0d9488'),
           zIndex: 900,
           title: hotel.name || '住宿'
@@ -2352,7 +2351,7 @@ createApp({
       airportsToRender.forEach(point => {
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng }, map: mapInstance,
-          icon: makeMapPinIcon('#64748b'), label: { text: '航', fontSize: '12px', color: '#1f2937' },
+          icon: makeAirportMapPinIcon('#64748b'),
           zIndex: 900, title: point.name
         });
         marker.addListener('click', () => {
