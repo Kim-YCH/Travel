@@ -331,6 +331,8 @@ body.journal-theme #app .map-travel-extras-toggle.is-active {
 }
 body.journal-theme #app .map-travel-extras-toggle:focus-visible { outline: 2px solid var(--journal-coral-ink); outline-offset: 2px; }
 body.journal-theme #app .map-travel-extras-toggle .travel-icon { width: 18px; height: 18px; }
+body.journal-theme #app .alternative-section-title { display: flex; align-items: center; gap: 6px; }
+body.journal-theme #app .alternative-section-title .travel-icon { width: 18px; height: 18px; }
 body.journal-theme #app.mobile-container .map-travel-extras-controls { position: absolute; top: 14px; right: 14px; z-index: 20; display: flex; gap: 6px; }
 body.journal-theme #app .desktop-map-head { flex-wrap: wrap; }
 body.journal-theme #app .desktop-map-actions { flex-wrap: wrap; justify-content: flex-end; }

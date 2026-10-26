@@ -1,34 +1,34 @@
 <!DOCTYPE html>
-<!-- version: 20261026.2 -->
+<!-- version: 20261026.3 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261026.2" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261026.2" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261026.2" />
-  <link rel="manifest" href="./site.webmanifest?v=20261026.2" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261026.3" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=20261026.3" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261026.3" />
+  <link rel="manifest" href="./site.webmanifest?v=20261026.3" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <script src="./js/device-router.js?v=20261026.2" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
-  <script src="./vendor/vue.global.prod.js?v=20261026.2"></script>
-  <script src="./vendor/Sortable.min.js?v=20261026.2"></script>
+  <script src="./js/device-router.js?v=20261026.3" data-current-view="mobile" data-mobile-url="./" data-desktop-url="./desktop/"></script>
+  <script src="./vendor/vue.global.prod.js?v=20261026.3"></script>
+  <script src="./vendor/Sortable.min.js?v=20261026.3"></script>
 
-  <link rel="stylesheet" href="./style.css?v=20261026.2" />
-  <link rel="stylesheet" href="./cloud-theme.css?v=20261026.2" />
+  <link rel="stylesheet" href="./style.css?v=20261026.3" />
+  <link rel="stylesheet" href="./cloud-theme.css?v=20261026.3" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為。
        cdn.tailwindcss.com 是在執行期把 <style> 用 document.head.append() 插進去的，
        而那段程式被 `document.body &&` 擋住，第一次注入必定發生在 <body> 出現之後 ——
        那時 head 裡的 <link> 全都在了，所以 Tailwind 的樣式其實排在最後、
        同權重打平時是 Tailwind 贏。排到前面會讓 preflight 的 padding:0 / font-size:100%
        等規則反被 style.css 蓋掉，全站表單控制項尺寸都會變。 -->
-  <link rel="stylesheet" href="./tailwind-static.css?v=20261026.2" />
-  <link rel="stylesheet" href="./journal-theme.css?v=20261026.2" />
-  <link rel="stylesheet" href="./journal-finance.css?v=20261026.2" />
-  <link rel="stylesheet" href="./journal-prep.css?v=20261026.2" />
-  <link rel="stylesheet" href="./flights.css?v=20261026.2" />
+  <link rel="stylesheet" href="./tailwind-static.css?v=20261026.3" />
+  <link rel="stylesheet" href="./journal-theme.css?v=20261026.3" />
+  <link rel="stylesheet" href="./journal-finance.css?v=20261026.3" />
+  <link rel="stylesheet" href="./journal-prep.css?v=20261026.3" />
+  <link rel="stylesheet" href="./flights.css?v=20261026.3" />
 </head>
 <body class="journal-theme">
 
@@ -200,6 +200,7 @@
           <div class="day-map-container w-full h-full min-h-0 relative">
             <div id="map" class="shadow-inner"></div>
             <div v-show="!mapLocatorOpen && !probeSearchOpen" class="map-travel-extras-controls">
+              <button type="button" class="map-travel-extras-toggle" :class="{ 'is-active': showMapAlternatives }" :aria-pressed="showMapAlternatives" aria-label="顯示備案" :title="showMapAlternatives ? '隱藏備案' : '顯示備案'" @click="toggleMapAlternatives"><span class="inline-icon" aria-hidden="true" v-html="renderIcon('book-open')"></span></button>
               <button type="button" class="map-travel-extras-toggle" :class="{ 'is-active': showMapHotels }" :aria-pressed="showMapHotels" aria-label="顯示住宿" :title="showMapHotels ? '隱藏住宿' : '顯示住宿'" @click="toggleMapHotels"><span class="inline-icon" aria-hidden="true" v-html="renderIcon('bed')"></span></button>
               <button type="button" class="map-travel-extras-toggle" :class="{ 'is-active': showMapAirports }" :aria-pressed="showMapAirports" aria-label="顯示機場" :title="showMapAirports ? '隱藏機場' : '顯示機場'" @click="toggleMapAirports"><span class="inline-icon" aria-hidden="true" v-html="renderIcon('plane')"></span></button>
             </div>
@@ -235,7 +236,7 @@
             </button>
 
             <div v-if="selectedMapPoint && !mapLocatorOpen && !probeSearchOpen" class="map-locator-current">
-              <span class="inline-icon" v-html="renderIcon(selectedMapPoint.kind === 'airport' ? 'plane' : getItineraryTypeIcon(selectedMapPoint.category))"></span>
+              <span class="inline-icon" v-html="renderIcon(selectedMapPoint.kind === 'airport' ? 'plane' : selectedMapPoint.kind === 'alternative' ? 'book-open' : getItineraryTypeIcon(selectedMapPoint.category))"></span>
               <div>
                 <span>目前定位</span>
                 <strong>{{ selectedMapPoint.name }}</strong>
@@ -279,7 +280,7 @@
                   :class="{ 'is-selected': selectedMapPoint && selectedMapPoint.key === point.key }"
                   @click="focusItineraryMapPoint(point)"
                 >
-                  <span class="map-locator-item-icon" :class="'itinerary-icon-' + point.tone" v-html="renderIcon(point.kind === 'airport' ? 'plane' : getItineraryTypeIcon(point.category))"></span>
+                  <span class="map-locator-item-icon" :class="'itinerary-icon-' + point.tone" v-html="renderIcon(point.kind === 'airport' ? 'plane' : point.kind === 'alternative' ? 'book-open' : getItineraryTypeIcon(point.category))"></span>
                   <span class="map-locator-item-main">
                     <span class="map-locator-item-title">
                       <time>{{ point.timeLabel }}</time>
@@ -416,7 +417,7 @@
         <!-- Alternatives -->
         <div v-show="dayViewMode === 'list'" class="card border border-amber-100 space-y-3 flex-shrink-0">
           <div>
-            <h3 class="font-bold text-gray-800"><span class="inline-icon" v-html="renderIcon('pin')"></span> Day {{ currentDay }} 備案</h3>
+            <h3 class="font-bold text-gray-800 alternative-section-title"><span class="inline-icon" aria-hidden="true" v-html="renderIcon('book-open')"></span> Day {{ currentDay }} 備案</h3>
       
           </div>
 
@@ -1520,29 +1521,29 @@
   </div>
 </div>
 
-<script src="./config.js?v=20261026.2"></script>
-<script src="./cache-refresh.js?v=20261026.2"></script>
-<script src="./keyword-map.js?v=20261026.2"></script>
-<script src="./js/utils.js?v=20261026.2"></script>
-<script src="./js/api.js?v=20261026.2"></script>
-<script src="./js/cache.js?v=20261026.2"></script>
-<script src="./js/maps.js?v=20261026.2"></script>
-<script src="./js/places.js?v=20261026.2"></script>
-<script src="./js/itinerary.js?v=20261026.2"></script>
-<script src="./js/hotels.js?v=20261026.2"></script>
-<script src="./js/expenses.js?v=20261026.2"></script>
-<script src="./js/sync-queue.js?v=20261026.2"></script>
-<script src="./js/sync-debug.js?v=20261026.2"></script>
-<script src="./js/personal-ledger.js?v=20261026.2"></script>
-<script src="./js/weather.js?v=20261026.2"></script>
-<script src="./js/export.js?v=20261026.2"></script>
-<script src="./js/probe-search.js?v=20261026.2"></script>
-<script src="./js/icon-system.js?v=20261026.2"></script>
-<script src="./js/flights.js?v=20261026.2"></script>
-<script src="./js/flight-ui.js?v=20261026.2"></script>
-<script src="./app.js?v=20261026.2"></script>
-<script src="./search-zh-label.js?v=20261026.2"></script>
-<script src="./prep-checklist.js?v=20261026.2"></script>
+<script src="./config.js?v=20261026.3"></script>
+<script src="./cache-refresh.js?v=20261026.3"></script>
+<script src="./keyword-map.js?v=20261026.3"></script>
+<script src="./js/utils.js?v=20261026.3"></script>
+<script src="./js/api.js?v=20261026.3"></script>
+<script src="./js/cache.js?v=20261026.3"></script>
+<script src="./js/maps.js?v=20261026.3"></script>
+<script src="./js/places.js?v=20261026.3"></script>
+<script src="./js/itinerary.js?v=20261026.3"></script>
+<script src="./js/hotels.js?v=20261026.3"></script>
+<script src="./js/expenses.js?v=20261026.3"></script>
+<script src="./js/sync-queue.js?v=20261026.3"></script>
+<script src="./js/sync-debug.js?v=20261026.3"></script>
+<script src="./js/personal-ledger.js?v=20261026.3"></script>
+<script src="./js/weather.js?v=20261026.3"></script>
+<script src="./js/export.js?v=20261026.3"></script>
+<script src="./js/probe-search.js?v=20261026.3"></script>
+<script src="./js/icon-system.js?v=20261026.3"></script>
+<script src="./js/flights.js?v=20261026.3"></script>
+<script src="./js/flight-ui.js?v=20261026.3"></script>
+<script src="./app.js?v=20261026.3"></script>
+<script src="./search-zh-label.js?v=20261026.3"></script>
+<script src="./prep-checklist.js?v=20261026.3"></script>
 
 </body>
 </html>

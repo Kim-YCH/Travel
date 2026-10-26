@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.2';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.3';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -190,8 +190,10 @@ createApp({
     const mapDisplayFilter = ref('all');
     const MAP_HOTELS_KEY = 'travel_map_hotels';
     const MAP_AIRPORTS_KEY = 'travel_map_airports';
+    const MAP_ALTERNATIVES_KEY = 'travel_map_alternatives';
     const showMapHotels = ref(TravelCache.readJSON(MAP_HOTELS_KEY, true) !== false);
     const showMapAirports = ref(TravelCache.readJSON(MAP_AIRPORTS_KEY, true) !== false);
+    const showMapAlternatives = ref(TravelCache.readJSON(MAP_ALTERNATIVES_KEY, true) !== false);
     const airportMapLocations = ref({});
     const pendingAirportMapLookups = new Map();
     const isMapReady = ref(false);
@@ -1758,6 +1760,12 @@ createApp({
       ? hotels.value.filter(hotel => (!day || isHotelActiveOnDay(hotel, day)) && hasMapCoordinates(hotel))
       : [];
 
+    const getMapAlternatives = (day) => showMapAlternatives.value
+      ? sortDayItemsByStoredOrder(itinerary.value.filter(item =>
+        isAlternativeItem(item) && shouldShowItineraryOnMap(item)
+        && (!day || (parseInt(item.day, 10) || 1) === day)))
+      : [];
+
     const getMapAirportCandidates = (day) => {
       if (!showMapAirports.value || !showFlightsTab.value) return [];
       const seen = new Set();
@@ -1831,6 +1839,22 @@ createApp({
       updateMapMarkers();
     };
 
+    const toggleMapAlternatives = () => {
+      showMapAlternatives.value = !showMapAlternatives.value;
+      TravelCache.writeJSON(MAP_ALTERNATIVES_KEY, showMapAlternatives.value);
+      clearMapExtraSelection('alternative');
+      updateMapMarkers();
+    };
+
+    const makeItineraryMapPoint = (item, kind = 'itinerary') => ({
+      key: getMapPointKey(kind, item), kind, id: item.id,
+      name: item.name || '未命名行程', address: item.address || '',
+      timeLabel: item.time ? formatTime(item.time) : '',
+      category: getItineraryCategoryLabel(item), tone: getItineraryTypeTone(item),
+      icon: kind === 'alternative' ? 'book-open' : getItineraryIcon(item),
+      lat: Number(item.lat), lng: Number(item.lng), source: item
+    });
+
     const getCurrentDayMapPoints = () => {
       const day = parseInt(currentDay.value, 10) || 1;
       const dayItems = sortDayItemsByStoredOrder(
@@ -1839,22 +1863,8 @@ createApp({
           && (item.day ? parseInt(item.day, 10) || 1 : 1) === day
           && shouldShowItineraryOnMap(item)
         )
-      ).map(item => ({
-        key: getMapPointKey('itinerary', item),
-        kind: 'itinerary',
-        id: item.id,
-        name: item.name || '未命名行程',
-        address: item.address || '',
-        // 沒排時間就留空，不要放「未定」佔位字（一天大半項目都沒填時間，
-        // 滿版的「未定」比空白更吵，也讓真正有時間的項目不好掃）
-        timeLabel: item.time ? formatTime(item.time) : '',
-        category: getItineraryCategoryLabel(item),
-        tone: getItineraryTypeTone(item),
-        icon: getItineraryIcon(item),
-        lat: Number(item.lat),
-        lng: Number(item.lng),
-        source: item
-      }));
+      ).map(item => makeItineraryMapPoint(item));
+      const dayAlternatives = getMapAlternatives(day).map(item => makeItineraryMapPoint(item, 'alternative'));
 
       const dayHotels = getMapHotels(day)
         .slice()
@@ -1874,7 +1884,7 @@ createApp({
           source: hotel
         }));
 
-      return dayItems.concat(dayHotels, getMapAirports(day));
+      return dayItems.concat(dayAlternatives, dayHotels, getMapAirports(day));
     };
 
     const currentDayMapPoints = computed(getCurrentDayMapPoints);
@@ -1894,7 +1904,7 @@ createApp({
       mapMarkerByPointKey.forEach((entry, key) => {
         const active = key === selectedKey;
         const color = active ? '#2563eb' : entry.baseColor;
-        entry.marker.setIcon(entry.kind === 'hotel' ? makeHotelMapPinIcon(color) : entry.kind === 'airport' ? makeAirportMapPinIcon(color) : makeMapPinIcon(color));
+        entry.marker.setIcon(entry.kind === 'hotel' ? makeHotelMapPinIcon(color) : entry.kind === 'airport' ? makeAirportMapPinIcon(color) : entry.kind === 'alternative' ? makeAlternativeMapPinIcon(color) : makeMapPinIcon(color));
         entry.marker.setZIndex(active ? 1200 : entry.zIndex);
       });
     };
@@ -2087,7 +2097,7 @@ createApp({
       updateMapMarkers();
     };
 
-    const { normalizeHexColor, shadeHexColor, makeMapPinIcon, makeHotelMapPinIcon, makeAirportMapPinIcon } = TravelMaps;
+    const { normalizeHexColor, shadeHexColor, makeMapPinIcon, makeHotelMapPinIcon, makeAirportMapPinIcon, makeAlternativeMapPinIcon } = TravelMaps;
 
     // 把座標幾乎重合的點散開成一個小圓，避免地圖上的數字疊成一團。
     // key 以小數 4 位（約 11 公尺）分組，同格內超過一個點就以等角度散開。
@@ -2135,6 +2145,7 @@ createApp({
         hotelList.map(one).join('|'),
         showMapHotels.value,
         showMapAirports.value,
+        showMapAlternatives.value,
         airportList.map(point => [one(point), point.flightId, point.timeLabel, point.source.flightNo].join('~')).join('|')
       ].join('#');
     };
@@ -2146,6 +2157,7 @@ createApp({
       resolveMapAirports(displayDay);
       const hotelsToRender = getMapHotels(displayDay);
       const airportsToRender = getMapAirports(displayDay);
+      const alternativeItemsToRender = getMapAlternatives(displayDay);
       let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
 
       if (displayDay) {
@@ -2158,11 +2170,7 @@ createApp({
       }
 
       {
-        let altsForSig = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && isAlternativeItem(item));
-        if (displayDay) {
-          altsForSig = altsForSig.filter(item => (item.day ? parseInt(item.day, 10) : 1) === displayDay);
-        }
-        const signature = buildMarkerSignature(displayDay, itemsToRender, altsForSig, hotelsToRender, airportsToRender);
+        const signature = buildMarkerSignature(displayDay, itemsToRender, alternativeItemsToRender, hotelsToRender, airportsToRender);
         if (signature === lastMarkerSignature && markers.length) {
           applyMapMarkerSelection();
           renderProbeMarker();
@@ -2261,21 +2269,19 @@ createApp({
       });
 
 
-      let alternativeItemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && isAlternativeItem(item));
-      if (displayDay) {
-        alternativeItemsToRender = alternativeItemsToRender.filter(item => (item.day ? parseInt(item.day,10) : 1) === displayDay);
-      }
-
       alternativeItemsToRender.forEach(item => {
+        const pointKey = getMapPointKey('alternative', item);
         const marker = new google.maps.Marker({
           position: { lat: Number(item.lat), lng: Number(item.lng) },
           map: mapInstance,
-          icon: makeMapPinIcon('#f59e0b'),
+          icon: makeAlternativeMapPinIcon('#f59e0b'),
           zIndex: 850,
           title: item.name
         });
 
         marker.addListener("click", () => {
+          const point = getCurrentDayMapPoints().find(candidate => candidate.key === pointKey);
+          if (point) markMapPointSelected(point);
           if (isKoreaTrip.value) {
             const buttonId = `open-alt-map-${String(item.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '')}`;
             const desktopUrl = isDesktopLayout()
@@ -2321,6 +2327,7 @@ createApp({
           infoWindow.open(mapInstance, marker);
         });
 
+        mapMarkerByPointKey.set(pointKey, { marker, kind: 'alternative', baseColor: '#f59e0b', zIndex: 850 });
         markers.push(marker);
         bounds.extend(marker.getPosition());
         hasPoint = true;
@@ -5591,7 +5598,7 @@ createApp({
       categories, itineraryTypes, currencyOptions, foreignCurrencyOptions,
       foreignCurrency, foreignToTwdRate, isSavingCurrencySettings,
       searchResults, translatedSearchHint, isSearching, isResolvingMapUrl, mapUrlResolveError, mapUrlProvider, isCoordinateMode, resolvedCoordName,
-      isMapReady, mapDisplayFilter, showMapHotels, showMapAirports, toggleMapHotels, toggleMapAirports, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
+      isMapReady, mapDisplayFilter, showMapHotels, showMapAirports, showMapAlternatives, toggleMapHotels, toggleMapAirports, toggleMapAlternatives, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
       tripWeather,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,

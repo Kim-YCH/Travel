@@ -113,6 +113,7 @@
 
   const makeHotelMapPinIcon = (fillColor = '#0d9488') => makeTravelMapPinIcon('bed', fillColor);
   const makeAirportMapPinIcon = (fillColor = '#64748b') => makeTravelMapPinIcon('plane', fillColor);
+  const makeAlternativeMapPinIcon = (fillColor = '#f59e0b') => makeTravelMapPinIcon('book-open', fillColor);
 
   /* ------------------------------------------------------------ 路線深層連結 */
 
@@ -224,6 +225,7 @@
     makeMapPinIcon,
     makeHotelMapPinIcon,
     makeAirportMapPinIcon,
+    makeAlternativeMapPinIcon,
     buildNaverRouteUrl,
     buildNaverPlaceUrl,
     buildNaverWebPlaceUrl,
