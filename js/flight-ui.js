@@ -31,8 +31,8 @@
 
   const StayTimeline = {
     name: 'StayTimeline',
-    props: { hotels: { type: Array, default: () => [] }, busy: Boolean },
-    emits: ['open', 'edit', 'remove'],
+    props: { hotels: { type: Array, default: () => [] } },
+    emits: ['open'],
     setup() {
       return { renderIcon: window.TravelIcons.renderIcon, rangeLabel: window.TravelHotels.hotelDayRangeLabel };
     },
@@ -47,10 +47,6 @@
             <span v-if="hotel.note" class="stay-timeline-note">{{ hotel.note }}</span>
           </span>
         </button>
-        <div class="stay-timeline-actions">
-          <button type="button" class="flight-icon-button" title="編輯住宿" aria-label="編輯住宿" data-stay-action="edit" :disabled="busy" @click="$emit('edit', hotel)"><span v-html="renderIcon('edit')"></span></button>
-          <button type="button" class="flight-icon-button flight-icon-button--danger" title="刪除住宿" aria-label="刪除住宿" data-stay-action="remove" :disabled="busy" @click="$emit('remove', hotel.id)"><span v-html="renderIcon('delete')"></span></button>
-        </div>
       </div>`
   };
 

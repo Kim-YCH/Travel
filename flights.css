@@ -83,7 +83,6 @@ body.journal-theme #app .flight-timeline-row { display: grid; grid-template-colu
 .stay-timeline-row .flight-timeline__rail::after { bottom: -12px; }
 body.journal-theme #app .stay-timeline-open { margin-bottom: 0; }
 .stay-timeline-note { font-size: 12px; white-space: pre-wrap; }
-.stay-timeline-actions { display: flex; justify-content: flex-end; gap: 4px; margin: 0 0 0 58px; padding: 0 0 4px; }
 .flight-timeline__type { color: var(--flight-ink, #47616F); font-size: 11px; }
 .flight-timeline__details { font-size: 12px; color: #5A6965; }
 .flight-timeline-row:hover .flight-timeline__body { outline: 1px solid #9EBEC5; }

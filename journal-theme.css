@@ -320,6 +320,20 @@ body.journal-theme #app .desktop-map-head { background: #E7F1EA; border: 1px sol
 body.journal-theme #app .desktop-map-head::after { content: none; }
 body.journal-theme #app .desktop-map-head h3 { color: var(--journal-ink); font-size: 16px; }
 body.journal-theme #app .desktop-map-actions button { background: var(--journal-surface); color: var(--journal-ink); border: 1px solid var(--journal-line); border-radius: 6px; }
+body.journal-theme #app .map-travel-extras-toggle {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px;
+  width: 44px; height: 44px; min-height: 44px; padding: 0;
+  color: var(--journal-muted); background: var(--journal-surface);
+  border: 1px solid var(--journal-line); border-radius: 6px; box-shadow: none;
+}
+body.journal-theme #app .map-travel-extras-toggle.is-active {
+  color: var(--journal-coral-ink); background: #FBE1D9; border-color: #C89387; box-shadow: none;
+}
+body.journal-theme #app .map-travel-extras-toggle:focus-visible { outline: 2px solid var(--journal-coral-ink); outline-offset: 2px; }
+body.journal-theme #app .map-travel-extras-toggle .travel-icon { width: 18px; height: 18px; }
+body.journal-theme #app.mobile-container .map-travel-extras-controls { position: absolute; top: 14px; right: 14px; z-index: 20; display: flex; gap: 6px; }
+body.journal-theme #app .desktop-map-head { flex-wrap: wrap; }
+body.journal-theme #app .desktop-map-actions { flex-wrap: wrap; justify-content: flex-end; }
 body.journal-theme #app .desktop-itinerary #map { border: 1px solid var(--journal-line); border-radius: 8px !important; box-shadow: none; }
 
 /* Mobile is its own compact notebook, not a scaled desktop. */

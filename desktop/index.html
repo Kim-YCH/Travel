@@ -1,25 +1,25 @@
 <!DOCTYPE html>
-<!-- version: 20261025.2 -->
+<!-- version: 20261026.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261025.2" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261026.1" />
 
-  <script src="../js/device-router.js?v=20261025.2" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20261025.2"></script>
-  <script src="../vendor/Sortable.min.js?v=20261025.2"></script>
+  <script src="../js/device-router.js?v=20261026.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20261026.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20261026.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20261025.2" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20261025.2" />
-  <link rel="stylesheet" href="./desktop.css?v=20261025.2" />
+  <link rel="stylesheet" href="../style.css?v=20261026.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20261026.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20261026.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20261025.2" />
-  <link rel="stylesheet" href="../journal-theme.css?v=20261025.2" />
-  <link rel="stylesheet" href="../journal-finance.css?v=20261025.2" />
-  <link rel="stylesheet" href="../journal-prep.css?v=20261025.2" />
-  <link rel="stylesheet" href="../flights.css?v=20261025.2" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20261026.1" />
+  <link rel="stylesheet" href="../journal-theme.css?v=20261026.1" />
+  <link rel="stylesheet" href="../journal-finance.css?v=20261026.1" />
+  <link rel="stylesheet" href="../journal-prep.css?v=20261026.1" />
+  <link rel="stylesheet" href="../flights.css?v=20261026.1" />
 </head>
 <body class="desktop-body journal-theme">
 
@@ -193,7 +193,7 @@
             </article>
           </div>
 
-          <stay-timeline :hotels="currentDayHotels" :busy="isSavingHotel || isDeletingHotel" @open="openHotelMap" @edit="openEditHotelModal" @remove="removeHotel"></stay-timeline>
+          <stay-timeline :hotels="currentDayHotels" @open="openHotelMap"></stay-timeline>
           <flight-timeline :flights="flightSlots.tail" @open="openFlightAirport"></flight-timeline>
 
         </div>
@@ -202,6 +202,8 @@
           <div class="desktop-map-head">
             <h3>Day {{ currentDay }} 地圖</h3>
             <div class="desktop-map-actions">
+              <button type="button" class="map-travel-extras-toggle" :class="{ 'is-active': showMapHotels }" :aria-pressed="showMapHotels" aria-label="顯示住宿" :title="showMapHotels ? '隱藏住宿' : '顯示住宿'" @click="toggleMapHotels"><span class="inline-icon" aria-hidden="true" v-html="renderIcon('bed')"></span></button>
+              <button type="button" class="map-travel-extras-toggle" :class="{ 'is-active': showMapAirports }" :aria-pressed="showMapAirports" aria-label="顯示機場" :title="showMapAirports ? '隱藏機場' : '顯示機場'" @click="toggleMapAirports"><span class="inline-icon" aria-hidden="true" v-html="renderIcon('plane')"></span></button>
               <button type="button" @click="fitBoundsToTrip">全部</button>
               <button type="button" @click="showAllCurrentDayMapPoints">本日</button>
               <button type="button" :class="{ 'is-active': probeSearchOpen }" :aria-pressed="probeSearchOpen" @click="toggleProbeSearch">探點</button>
@@ -1218,30 +1220,30 @@
   </div>
 </div>
 
-<script src="../config.js?v=20261025.2"></script>
+<script src="../config.js?v=20261026.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20261025.2" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20261025.2"></script>
-<script src="../js/utils.js?v=20261025.2"></script>
-<script src="../js/api.js?v=20261025.2"></script>
-<script src="../js/cache.js?v=20261025.2"></script>
-<script src="../js/maps.js?v=20261025.2"></script>
-<script src="../js/places.js?v=20261025.2"></script>
-<script src="../js/itinerary.js?v=20261025.2"></script>
-<script src="../js/hotels.js?v=20261025.2"></script>
-<script src="../js/expenses.js?v=20261025.2"></script>
-<script src="../js/sync-queue.js?v=20261025.2"></script>
-<script src="../js/sync-debug.js?v=20261025.2"></script>
-<script src="../js/personal-ledger.js?v=20261025.2"></script>
-<script src="../js/weather.js?v=20261025.2"></script>
-<script src="../js/export.js?v=20261025.2"></script>
-<script src="../js/probe-search.js?v=20261025.2"></script>
-<script src="../js/icon-system.js?v=20261025.2"></script>
-<script src="../js/flights.js?v=20261025.2"></script>
-<script src="../js/flight-ui.js?v=20261025.2"></script>
-<script src="../app.js?v=20261025.2"></script>
-<script src="../search-zh-label.js?v=20261025.2"></script>
-<script src="../prep-checklist.js?v=20261025.2"></script>
+<script src="../cache-refresh.js?v=20261026.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20261026.1"></script>
+<script src="../js/utils.js?v=20261026.1"></script>
+<script src="../js/api.js?v=20261026.1"></script>
+<script src="../js/cache.js?v=20261026.1"></script>
+<script src="../js/maps.js?v=20261026.1"></script>
+<script src="../js/places.js?v=20261026.1"></script>
+<script src="../js/itinerary.js?v=20261026.1"></script>
+<script src="../js/hotels.js?v=20261026.1"></script>
+<script src="../js/expenses.js?v=20261026.1"></script>
+<script src="../js/sync-queue.js?v=20261026.1"></script>
+<script src="../js/sync-debug.js?v=20261026.1"></script>
+<script src="../js/personal-ledger.js?v=20261026.1"></script>
+<script src="../js/weather.js?v=20261026.1"></script>
+<script src="../js/export.js?v=20261026.1"></script>
+<script src="../js/probe-search.js?v=20261026.1"></script>
+<script src="../js/icon-system.js?v=20261026.1"></script>
+<script src="../js/flights.js?v=20261026.1"></script>
+<script src="../js/flight-ui.js?v=20261026.1"></script>
+<script src="../app.js?v=20261026.1"></script>
+<script src="../search-zh-label.js?v=20261026.1"></script>
+<script src="../prep-checklist.js?v=20261026.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

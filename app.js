@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261025.2';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -188,6 +188,12 @@ createApp({
     const selectedPlaceData = ref(null);
 
     const mapDisplayFilter = ref('all');
+    const MAP_HOTELS_KEY = 'travel_map_hotels';
+    const MAP_AIRPORTS_KEY = 'travel_map_airports';
+    const showMapHotels = ref(TravelCache.readJSON(MAP_HOTELS_KEY, true) !== false);
+    const showMapAirports = ref(TravelCache.readJSON(MAP_AIRPORTS_KEY, true) !== false);
+    const airportMapLocations = ref({});
+    const pendingAirportMapLookups = new Map();
     const isMapReady = ref(false);
     const mapLocatorOpen = ref(false);
     const selectedMapPoint = ref(null);
@@ -1743,10 +1749,87 @@ createApp({
     };
 
     const shouldShowItineraryOnMap = (item) => {
-      return getItineraryType(item) !== '交通' && hasMapCoordinates(item);
+      return hasMapCoordinates(item);
     };
 
     const getMapPointKey = (kind, item) => `${kind}:${String(item?.id || '')}`;
+
+    const getMapHotels = (day) => showMapHotels.value
+      ? hotels.value.filter(hotel => (!day || isHotelActiveOnDay(hotel, day)) && hasMapCoordinates(hotel))
+      : [];
+
+    const getMapAirportCandidates = (day) => {
+      if (!showMapAirports.value || !showFlightsTab.value) return [];
+      const seen = new Set();
+      return flightCards.value.filter(flight => {
+        if (!flight.isValid || !flight.show_in_itinerary || !flight.day || (day && flight.day !== day)) return false;
+        if (String(flight.trip_id) !== String(currentTrip.value?.id)) return false;
+        const key = TravelFlights.resolveAirport(flight.departAirport)?.code || String(flight.departAirport).trim().toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).map(flight => ({
+        flight,
+        airportKey: TravelFlights.resolveAirport(flight.departAirport)?.code || String(flight.departAirport).trim().toUpperCase(),
+        name: TravelFlights.airportMapPlace(flight.departAirport).name
+      }));
+    };
+
+    const getMapAirports = (day) => getMapAirportCandidates(day).flatMap(({ flight, airportKey, name }) => {
+      const position = airportMapLocations.value[airportKey];
+      if (!hasMapCoordinates(position)) return [];
+      return [{
+        key: getMapPointKey('airport', { id: airportKey }), kind: 'airport', id: airportKey,
+        name, address: '', day: flight.day, timeLabel: flight.departTimeLabel,
+        category: '交通', tone: 'transport', flightId: flight.id,
+        lat: position.lat, lng: position.lng, source: flight
+      }];
+    });
+
+    const resolveMapAirports = (day) => {
+      if (!window.google?.maps?.Geocoder) return;
+      for (const { airportKey, name } of getMapAirportCandidates(day)) {
+        if (airportMapLocations.value[airportKey] || pendingAirportMapLookups.has(airportKey)) continue;
+        const request = new Promise(resolve => {
+          const timer = setTimeout(() => resolve(null), 12000);
+          try {
+            new google.maps.Geocoder().geocode({ address: name }, (results, status) => {
+              clearTimeout(timer);
+              const location = status === 'OK' && results?.[0]?.geometry?.location;
+              const position = location ? { lat: location.lat(), lng: location.lng() } : null;
+              resolve(hasMapCoordinates(position) && Math.abs(position.lat) <= 90 && Math.abs(position.lng) <= 180 ? position : null);
+            });
+          } catch (err) { clearTimeout(timer); resolve(null); }
+        });
+        pendingAirportMapLookups.set(airportKey, request);
+        request.then(position => {
+          pendingAirportMapLookups.delete(airportKey);
+          if (!position) return;
+          airportMapLocations.value = { ...airportMapLocations.value, [airportKey]: position };
+          // Recheck today's candidates: another trip may be waiting for the same lookup.
+          if (getMapAirportCandidates(getMapDisplayDay()).some(airport => airport.airportKey === airportKey)) updateMapMarkers();
+        });
+      }
+    };
+
+    const clearMapExtraSelection = (kind) => {
+      if (selectedMapPoint.value?.kind === kind) markMapPointSelected(null);
+      infoWindow?.close();
+    };
+
+    const toggleMapHotels = () => {
+      showMapHotels.value = !showMapHotels.value;
+      TravelCache.writeJSON(MAP_HOTELS_KEY, showMapHotels.value);
+      clearMapExtraSelection('hotel');
+      updateMapMarkers();
+    };
+
+    const toggleMapAirports = () => {
+      showMapAirports.value = !showMapAirports.value;
+      TravelCache.writeJSON(MAP_AIRPORTS_KEY, showMapAirports.value);
+      clearMapExtraSelection('airport');
+      updateMapMarkers();
+    };
 
     const getCurrentDayMapPoints = () => {
       const day = parseInt(currentDay.value, 10) || 1;
@@ -1773,8 +1856,7 @@ createApp({
         source: item
       }));
 
-      const dayHotels = hotels.value
-        .filter(hotel => isHotelActiveOnDay(hotel, day) && hasMapCoordinates(hotel))
+      const dayHotels = getMapHotels(day)
         .slice()
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
         .map(hotel => ({
@@ -1792,7 +1874,7 @@ createApp({
           source: hotel
         }));
 
-      return dayItems.concat(dayHotels);
+      return dayItems.concat(dayHotels, getMapAirports(day));
     };
 
     const currentDayMapPoints = computed(getCurrentDayMapPoints);
@@ -2040,7 +2122,7 @@ createApp({
     // 單一使用者動作常常連續觸發好幾次（樂觀寫入一次、雲端回來再一次、watcher 又一次），
     // 每次都是完整重建加上地圖跳動。這裡先算出「這次要畫什麼」的指紋，內容沒變就整段跳過。
     // 只跳過重建，選取高亮與探點 marker 仍然照常套用。
-    const buildMarkerSignature = (displayDay, items, alts, hotelList) => {
+    const buildMarkerSignature = (displayDay, items, alts, hotelList, airportList) => {
       // ★ order 與 time 一定要進指紋。
       // 單日模式下 marker 的標籤是「在清單中的第幾個」，而清單順序由
       // sortDayItemsByStoredOrder（order → time → name）決定。指紋漏掉這兩個欄位，
@@ -2050,7 +2132,10 @@ createApp({
         displayDay || 'all',
         items.map(one).join('|'),
         alts.map(one).join('|'),
-        hotelList.map(one).join('|')
+        hotelList.map(one).join('|'),
+        showMapHotels.value,
+        showMapAirports.value,
+        airportList.map(point => [one(point), point.flightId, point.timeLabel, point.source.flightNo].join('~')).join('|')
       ].join('#');
     };
 
@@ -2058,6 +2143,9 @@ createApp({
       if (!mapInstance || !window.google) return;
 
       const displayDay = getMapDisplayDay();
+      resolveMapAirports(displayDay);
+      const hotelsToRender = getMapHotels(displayDay);
+      const airportsToRender = getMapAirports(displayDay);
       let itemsToRender = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && !isAlternativeItem(item));
 
       if (displayDay) {
@@ -2071,12 +2159,10 @@ createApp({
 
       {
         let altsForSig = itinerary.value.filter(item => shouldShowItineraryOnMap(item) && isAlternativeItem(item));
-        let hotelsForSig = hotels.value.filter(hasMapCoordinates);
         if (displayDay) {
           altsForSig = altsForSig.filter(item => (item.day ? parseInt(item.day, 10) : 1) === displayDay);
-          hotelsForSig = hotelsForSig.filter(hotel => isHotelActiveOnDay(hotel, displayDay));
         }
-        const signature = buildMarkerSignature(displayDay, itemsToRender, altsForSig, hotelsForSig);
+        const signature = buildMarkerSignature(displayDay, itemsToRender, altsForSig, hotelsToRender, airportsToRender);
         if (signature === lastMarkerSignature && markers.length) {
           applyMapMarkerSelection();
           renderProbeMarker();
@@ -2240,11 +2326,6 @@ createApp({
         hasPoint = true;
       });
 
-      let hotelsToRender = hotels.value.filter(hasMapCoordinates);
-      if (displayDay) {
-        hotelsToRender = hotelsToRender.filter(hotel => isHotelActiveOnDay(hotel, displayDay));
-      }
-
       hotelsToRender.forEach(hotel => {
         const pointKey = getMapPointKey('hotel', hotel);
         const marker = new google.maps.Marker({
@@ -2263,6 +2344,28 @@ createApp({
         });
 
         mapMarkerByPointKey.set(pointKey, { marker, kind: 'hotel', baseColor: '#0d9488', zIndex: 900 });
+        markers.push(marker);
+        bounds.extend(marker.getPosition());
+        hasPoint = true;
+      });
+
+      airportsToRender.forEach(point => {
+        const marker = new google.maps.Marker({
+          position: { lat: point.lat, lng: point.lng }, map: mapInstance,
+          icon: makeMapPinIcon('#64748b'), label: { text: '航', fontSize: '12px', color: '#1f2937' },
+          zIndex: 900, title: point.name
+        });
+        marker.addListener('click', () => {
+          markMapPointSelected(point);
+          const buttonId = 'open-airport-map';
+          infoWindow.setContent(`<div style="padding:8px;color:#111;max-width:240px"><strong>${escapeHtml(point.name)}</strong><div style="margin:4px 0 8px">${escapeHtml(point.source.flightNo)} · ${escapeHtml(point.timeLabel)}</div>${mapInfoWindowActionHtml({ buttonId, label: '開啟機場地圖', color: '#64748b' })}</div>`);
+          infoWindow.open(mapInstance, marker);
+          google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+            const button = document.getElementById(buttonId);
+            if (button) button.onclick = () => openFlightAirport(point.flightId);
+          });
+        });
+        mapMarkerByPointKey.set(point.key, { marker, kind: 'airport', baseColor: '#64748b', zIndex: 900 });
         markers.push(marker);
         bounds.extend(marker.getPosition());
         hasPoint = true;
@@ -5403,6 +5506,7 @@ createApp({
     watch([itinerary, expenses, sharedWalletTransactions, personalLedgerManualEntries, people, hotels], () => scheduleTripCacheSave(), { deep: true });
     watch(currentTrip, () => scheduleTripCacheSave(), { deep: true });
     watch(flights, () => scheduleTripCacheSave(), { deep: true });
+    watch([flightCards, showFlightsTab], () => { if (mapInstance) updateMapMarkers(); });
     watch([() => currentTrip.value?.id, () => currentTrip.value?.city], () => updateFlightCountry());
     watch(trips, () => scheduleTripsCacheSave(), { deep: true });
 
@@ -5488,7 +5592,7 @@ createApp({
       categories, itineraryTypes, currencyOptions, foreignCurrencyOptions,
       foreignCurrency, foreignToTwdRate, isSavingCurrencySettings,
       searchResults, translatedSearchHint, isSearching, isResolvingMapUrl, mapUrlResolveError, mapUrlProvider, isCoordinateMode, resolvedCoordName,
-      isMapReady, mapDisplayFilter, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
+      isMapReady, mapDisplayFilter, showMapHotels, showMapAirports, toggleMapHotels, toggleMapAirports, mapLocatorOpen, selectedMapPoint, currentDayMapPoints,
       probeSearchOpen, probeQuery, probeResults, probeIsSearching, probePlace,
       tripWeather,
       newHotel, hotelSearchQuery, hotelSearchResults, hotelIsSearching, isAddingHotel, isDeletingHotel,
