@@ -184,6 +184,19 @@
     const day = Math.round((Date.parse(depart.slice(0, 10) + 'T00:00:00Z') - Date.parse(start + 'T00:00:00Z')) / 86400000) + 1;
     return day >= 1 && day <= Number(days) ? day : null;
   };
+  const maxFlightDay = (items, trip) => {
+    const start = validDate(text(trip?.start_date).slice(0, 10));
+    if (!start) return 1;
+    const startDay = Date.parse(start + 'T00:00:00Z');
+    return (items || []).reduce((max, flight) => {
+      if (trip?.id && text(flight?.trip_id) !== text(trip.id)) return max;
+      const depart = normalizeTimestamp(flight?.depart_time, flight?.depart_airport);
+      const arrive = normalizeTimestamp(flight?.arrive_time, flight?.arrive_airport);
+      if (!depart || !arrive || Date.parse(arrive) <= Date.parse(depart)) return max;
+      // An overnight return does not add a tab: only the departure-local day counts.
+      return Math.max(max, Math.round((Date.parse(depart.slice(0, 10) + 'T00:00:00Z') - startDay) / 86400000) + 1);
+    }, 1);
+  };
   const dateLabel = value => {
     if (!value) return '日期待確認';
     const date = value.slice(0, 10);
@@ -242,5 +255,5 @@
     });
     return { before, tail };
   };
-  window.TravelFlights = Object.freeze({ countryFromCity, createCountryResolver, resolveAirport, airportMapPlace, airportLocalTimestamp, validDate, normalizeTimestamp, normalizeFlight, normalizeFlights, presentFlight, flightDay, flightToForm, flightFromForm, timelineSlots });
+  window.TravelFlights = Object.freeze({ countryFromCity, createCountryResolver, resolveAirport, airportMapPlace, airportLocalTimestamp, validDate, normalizeTimestamp, normalizeFlight, normalizeFlights, presentFlight, flightDay, maxFlightDay, flightToForm, flightFromForm, timelineSlots });
 })(window);

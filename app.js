@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.3';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261026.4';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -98,7 +98,7 @@ createApp({
     const isRefreshingMoney = ref(false);
 
     const currentDay = ref(1);
-    const totalDays = ref(1);
+    const manualTotalDays = ref(1);
     const todayKey = ref('');
     let todayRefreshTimer = null;
     let moneyRefreshTimer = null;
@@ -122,6 +122,17 @@ createApp({
     const personalLedgerManualEntries = ref([]);
     const hotels = ref([]);
     const flights = ref([]);
+    const positiveDay = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : 1;
+    const totalDays = computed({
+      get: () => Math.max(
+        manualTotalDays.value,
+        itinerary.value.reduce((max, item) => Math.max(max, positiveDay(item.day)), 1),
+        // Hotel days are inclusive: ending on Day X extends the tabs to X, not X + 1.
+        hotels.value.reduce((max, hotel) => Math.max(max, positiveDay(hotel.start_day), positiveDay(hotel.end_day)), 1),
+        TravelFlights.maxFlightDay(flights.value, currentTrip.value)
+      ),
+      set: value => { manualTotalDays.value = positiveDay(value); }
+    });
     const flightMeta = ref(null);
     const flightCountry = ref(TravelFlights.countryFromCity(''));
     const showFlightsTab = computed(() => Boolean(currentTrip.value && flightCountry.value.eligible));
@@ -1033,10 +1044,7 @@ createApp({
 
         if (c.trip) currentTrip.value = { ...currentTrip.value, ...c.trip };
 
-        const maxDay = itinerary.value.reduce((m, it) =>
-          Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
-
-        totalDays.value = Math.max(1, maxDay);
+        manualTotalDays.value = 1;
 
         return true;
       } catch(e){
@@ -2736,10 +2744,7 @@ createApp({
           sharedWalletTransactions: walletPayload ? sharedWalletTransactions.value : null
         });
 
-        const maxDay = itinerary.value.reduce((m, it) =>
-          Math.max(m, it.day ? parseInt(it.day,10) : 1), 1);
-
-        totalDays.value = Math.max(1, maxDay);
+        manualTotalDays.value = 1;
         if (options.autoSelectToday) {
           applyEntryDayByToday();
         }
@@ -3027,6 +3032,7 @@ createApp({
       if (!currentTrip.value) return;
       if (!confirm(`刪除 Day ${d} 的所有行程？`)) return;
 
+      const originalTotalDays = totalDays.value;
       isLoading.value = true;
       try {
         const tripId = currentTrip.value.id;
@@ -3046,7 +3052,7 @@ createApp({
 
         await postJSON({ action:'clear_order', tripId, day: String(d) });
 
-        for (let day = d; day <= totalDays.value - 1; day++) {
+        for (let day = d; day <= originalTotalDays - 1; day++) {
           const selectedIds = getOrderIds(tripId, day, false);
           const alternativeIds = getOrderIds(tripId, day, true);
           if (selectedIds.length) await saveOrderToDB(tripId, day, selectedIds, false);
@@ -3056,9 +3062,9 @@ createApp({
           }
         }
 
-        await postJSON({ action:'clear_order', tripId, day: String(totalDays.value) });
+        await postJSON({ action:'clear_order', tripId, day: String(originalTotalDays) });
 
-        totalDays.value = Math.max(1, totalDays.value - 1);
+        totalDays.value = Math.max(1, originalTotalDays - 1);
         if (currentDay.value > totalDays.value) currentDay.value = totalDays.value;
 
         await nextTick();
@@ -5460,6 +5466,10 @@ createApp({
       if (pendingSyncQueue.value.length > 0) return 'sync-badge-queued';
       if (syncStatus.value === 'error') return 'sync-badge-error';
       return 'sync-badge-synced';
+    });
+
+    watch([totalDays, isLoading], ([days, loading]) => {
+      if (!loading && currentDay.value > days) currentDay.value = days;
     });
 
     watch(currentDay, () => {
