@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261102.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261104.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -3355,16 +3355,23 @@ createApp({
       return { key, label, name: source.name || '', nameKo: source.name_ko || source.nameKo || '', lat, lng };
     };
 
-    // 當天可以直接選的點：行程點（依排序）在前，住宿在後。沒有座標的不列入。
+    // 行程、當天住宿、前一晚住宿依序列出；連住不重複，沒有座標的不列入。
     const routePointOptions = computed(() => {
       const day = currentDay.value;
       const items = getDayOrderedItems(day, false)
         .map(it => toRoutePoint(it, `item:${it.id}`, `${it.time ? formatTime(it.time) + ' ' : ''}${it.name || ''}`.trim()))
         .filter(Boolean);
-      const hotels = getHotelsForDay(day)
+      const dayHotels = getHotelsForDay(day);
+      const dayHotelIds = new Set(dayHotels.map(h => String(h.id)));
+      const previousHotels = day > 1 ? getHotelsForDay(day - 1)
+        .filter(h => !dayHotelIds.has(String(h.id))) : [];
+      const hotelPoints = dayHotels
         .map(h => toRoutePoint(h, `hotel:${h.id}`, `🏠 ${h.name || ''}`.trim()))
         .filter(Boolean);
-      return [...items, ...hotels];
+      const previousHotelPoints = previousHotels
+        .map(h => toRoutePoint(h, `hotel:${h.id}`, `🏠 前一晚住宿 · ${h.name || ''}`.trim()))
+        .filter(Boolean);
+      return [...items, ...hotelPoints, ...previousHotelPoints];
     });
 
     const resolveRoutePoint = (key) => (key ? routePointOptions.value.find(o => o.key === key) || null : null);
