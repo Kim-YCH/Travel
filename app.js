@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261104.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261105.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -3369,7 +3369,7 @@ createApp({
         .map(h => toRoutePoint(h, `hotel:${h.id}`, `🏠 ${h.name || ''}`.trim()))
         .filter(Boolean);
       const previousHotelPoints = previousHotels
-        .map(h => toRoutePoint(h, `hotel:${h.id}`, `🏠 前一晚住宿 · ${h.name || ''}`.trim()))
+        .map(h => toRoutePoint(h, `hotel:${h.id}`, `🏠 ${h.name || ''}`.trim()))
         .filter(Boolean);
       return [...items, ...hotelPoints, ...previousHotelPoints];
     });
