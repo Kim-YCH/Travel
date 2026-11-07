@@ -149,13 +149,11 @@
   };
 
   const recordDate = (record, fallback = '') => {
-    const explicit = formatTaiwanDate(fallback || record?.date || record?.created_at || record?.updated_at);
+    const explicit = formatTaiwanDate(fallback || record?.date);
     if (explicit) return explicit;
-    const timestamp = Number(String(record?.id || '').split('_')[0]);
-    if (Number.isFinite(timestamp) && timestamp >= 1000000000000 && timestamp <= 9999999999999) {
-      return formatTaiwanDate(timestamp);
-    }
-    return '';
+    const match = String(record?.id || '').trim().match(/^(?:(?:wallet|ledger)_)?([1-9]\d{12})(?:_[A-Za-z0-9_-]+)?$/);
+    if (match) return formatTaiwanDate(Number(match[1]));
+    return formatTaiwanDate(record?.created_at);
   };
 
   const normalizeManualEntry = item => ({

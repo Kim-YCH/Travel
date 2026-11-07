@@ -51,9 +51,10 @@
 
   const normalizeExpenseRecord = (item) => ({
     ...item,
+    date: expenseDateValue(item),
     amount: Number(item?.amount) || 0,
     currency: normalizeCurrency(item?.currency),
-    day: item?.day ? parseInt(item.day, 10) || 1 : 1,
+    ...(item?.day != null ? { day: parseInt(item.day, 10) || 1 } : {}),
     involved: normalizeInvolved(item?.involved),
     category: item?.category || '其他',
     payer: item?.payer || ''
@@ -107,7 +108,7 @@
     id: String(item?.id || ''),
     trip_id: String(item?.trip_id || item?.tripId || ''),
     type: String(item?.type || '').trim().toLowerCase(),
-    date: String(item?.date || '').slice(0, 10),
+    date: expenseDateValue(item),
     title: String(item?.title || '').trim(),
     person: normalizeSharedWalletPeople(item?.person).join(','),
     amount: Number(item?.amount) || 0,
@@ -141,16 +142,18 @@
   };
 
   const recordCreatedDateLabel = (record, fallbackDate = '') => {
+    const explicitDate = String(record?.date || '').trim();
+    if (isValidCalendarDate(explicitDate)) return explicitDate.replaceAll('-', '/');
+    const explicitTime = /^\d{4}-\d{2}-\d{2}T/.test(explicitDate) && isValidCalendarDate(explicitDate.slice(0, 10))
+      ? Date.parse(explicitDate) : NaN;
     const createdAt = String(record?.created_at || '');
     const createdDatePrefix = createdAt.match(/^\d{4}-\d{2}-\d{2}/);
     const createdTime = createdDatePrefix && !isValidCalendarDate(createdDatePrefix[0])
       ? NaN
       : Date.parse(createdAt);
-    const idTime = Number(String(record?.id || '').split('_')[0]);
-    const idDate = Number.isFinite(idTime) && idTime >= 1e12 ? new Date(idTime) : null;
-    const timestamp = Number.isFinite(createdTime)
-      ? createdTime
-      : (idDate && Number.isFinite(idDate.getTime()) ? idDate.getTime() : NaN);
+    const idMatch = String(record?.id || '').trim().match(/^(?:(?:wallet|ledger)_)?([1-9]\d{12})(?:_[A-Za-z0-9_-]+)?$/);
+    const idTime = idMatch ? Number(idMatch[1]) : NaN;
+    const timestamp = Number.isFinite(explicitTime) ? explicitTime : Number.isFinite(idTime) ? idTime : createdTime;
 
     if (Number.isFinite(timestamp)) {
       const parts = new Intl.DateTimeFormat('en-CA', {
@@ -167,11 +170,21 @@
     return isValidCalendarDate(fallback) ? fallback.replaceAll('-', '/') : '—';
   };
 
-  const walletTransactionDateLabel = record => {
-    const date = String(record?.date || '').slice(0, 10);
-    if (isValidCalendarDate(date)) return date.replaceAll('-', '/');
-    return recordCreatedDateLabel(record);
+  const expenseDateValue = record => {
+    const explicit = String(record?.date || '').trim();
+    if (explicit) {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(explicit)
+        && isValidCalendarDate(explicit.slice(0, 10))) {
+        const label = recordCreatedDateLabel({ created_at: explicit });
+        if (label !== '—') return label.replaceAll('/', '-');
+      }
+      return explicit;
+    }
+    const label = recordCreatedDateLabel({ id: record?.id, created_at: record?.created_at });
+    return label === '—' ? '' : label.replaceAll('/', '-');
   };
+
+  const walletTransactionDateLabel = record => recordCreatedDateLabel(record);
 
   const filterSharedWalletRecords = (records, type) => (
     (Array.isArray(records) ? records : [])

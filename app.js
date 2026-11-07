@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261105.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261107.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -156,15 +156,11 @@ createApp({
     const newPlaceType = ref('景點');
     const newNote = ref('');
     const newPerson = ref('');
-    const newExpense = ref({ title: '', amount: '', currency: 'TWD', payer: '', involved: [], category: '飲食', day: 1 });
+    const defaultRegistrationDate = () => recordCreatedDateLabel({ created_at: new Date().toISOString() }).replaceAll('/', '-');
+    const newExpense = ref({ date: defaultRegistrationDate(), title: '', amount: '', currency: 'TWD', payer: '', involved: [], category: '飲食' });
     const walletEntryMode = ref('deposit');
-    const defaultWalletDate = () => {
-      const now = new Date();
-      const offset = now.getTimezoneOffset() * 60000;
-      return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-    };
     const createEmptyPersonalLedgerEntry = () => ({
-      date: defaultWalletDate(),
+      date: defaultRegistrationDate(),
       title: '',
       amount: '',
       currency: 'TWD',
@@ -173,8 +169,8 @@ createApp({
     });
     const selectedLedgerOwner = ref('');
     const newPersonalLedgerEntry = ref(createEmptyPersonalLedgerEntry());
-    const newSharedWalletDeposit = ref({ person: '', amount: '', currency: 'TWD', note: '' });
-    const newSharedWalletPayment = ref({ title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' });
+    const newSharedWalletDeposit = ref({ date: defaultRegistrationDate(), person: '', amount: '', currency: 'TWD', note: '' });
+    const newSharedWalletPayment = ref({ date: defaultRegistrationDate(), title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' });
     const currencyOptions = Object.freeze([
       { value: 'TWD', label: '台幣 (TWD)' },
       { value: 'FOREIGN', label: '外幣' }
@@ -269,7 +265,7 @@ createApp({
 
     const showEditExpenseModal = ref(false);
     const editExpenseId = ref('');
-    const editExpense = ref({ title: '', amount: '', currency: 'TWD', payer: '', involved: [], category: '飲食', day: 1 });
+    const editExpense = ref({ date: '', title: '', amount: '', currency: 'TWD', payer: '', involved: [], category: '飲食' });
     const isSavingExpense = ref(false);
 
     const showEditWalletModal = ref(false);
@@ -806,7 +802,6 @@ createApp({
         day = (remembered >= 1 && remembered <= maxDay) ? remembered : 1;
       }
       currentDay.value = day;
-      newExpense.value.day = day;
     };
 
     const dayLabel = (day) => {
@@ -823,7 +818,7 @@ createApp({
       return toYMD(addDays(base, (parseInt(day, 10) || 1) - 1));
     };
 
-    const expenseDateLabel = (expense) => dayDateYMD(expense?.day || 1);
+    const expenseDateLabel = (expense) => recordCreatedDateLabel(expense);
 
     const daysFromToday = (ymd) => {
       const target = parseYMD(ymd);
@@ -2518,8 +2513,8 @@ createApp({
       personalLedgerManualEntries.value = [];
       selectedLedgerOwner.value = '';
       people.value = [];
-      newSharedWalletDeposit.value = { person: '', amount: '', currency: 'TWD', note: '' };
-      newSharedWalletPayment.value = { title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
+      newSharedWalletDeposit.value = { date: defaultRegistrationDate(), person: '', amount: '', currency: 'TWD', note: '' };
+      newSharedWalletPayment.value = { date: defaultRegistrationDate(), title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
       hotels.value = [];
       flights.value = [];
       flightMeta.value = null;
@@ -4052,7 +4047,7 @@ createApp({
       return expenses.value
         .filter(e => !isLegacyPublicAccountExpense(e))
         .slice()
-        .sort((a, b) => expenseCreatedTime(b) - expenseCreatedTime(a));
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || expenseCreatedTime(b) - expenseCreatedTime(a));
     });
 
 
@@ -4597,7 +4592,7 @@ createApp({
       const form = isDeposit ? newSharedWalletDeposit.value : newSharedWalletPayment.value;
       const amount = Number(form.amount || 0);
       const currency = normalizeCurrency(form.currency);
-      const date = defaultWalletDate();
+      const date = String(form.date || '');
       const person = normalizePersonName(form.person);
       const selectedPeople = normalizeSharedWalletPeople(form.persons);
       const title = String(form.title || '').trim();
@@ -4608,7 +4603,7 @@ createApp({
         ? person
         : validSelectedPeople.join(',');
 
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || amount <= 0) return;
+      if (!validPersonalLedgerDate(date) || amount <= 0) return;
       if (!validateTransactionCurrency(currency)) return;
       if (isDeposit && (!person || !validPeople.includes(person))) return;
       if (!isDeposit && !title) return;
@@ -4644,9 +4639,9 @@ createApp({
         if (res && res.status === 'error') throw new Error(res.message || 'wallet transaction add failed');
 
         if (isDeposit) {
-          newSharedWalletDeposit.value = { person, amount: '', currency: 'TWD', note: '' };
+          newSharedWalletDeposit.value = { date: defaultRegistrationDate(), person, amount: '', currency: 'TWD', note: '' };
         } else {
-          newSharedWalletPayment.value = { title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
+          newSharedWalletPayment.value = { date: defaultRegistrationDate(), title: '', amount: '', currency: 'TWD', persons: [], category: '飲食', note: '' };
         }
       } catch (err) {
         const index = sharedWalletTransactions.value.findIndex(item => String(item.id) === String(transaction.id));
@@ -4952,8 +4947,9 @@ createApp({
       const amount = Number(newExpense.value.amount || 0);
       const currency = normalizeCurrency(newExpense.value.currency);
       const payer = normalizePersonName(newExpense.value.payer);
+      const date = String(newExpense.value.date || '');
 
-      if (!title || amount <= 0 || !payer) return;
+      if (!title || amount <= 0 || !payer || !validPersonalLedgerDate(date)) return;
       if (!currentTrip.value?.id) return;
       if (!validateTransactionCurrency(currency)) return;
       const validPeople = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
@@ -4972,7 +4968,7 @@ createApp({
         amount,
         currency,
         payer,
-        day: newExpense.value.day || currentDay.value || 1,
+        date,
         involved,
         trip_id: currentTrip.value.id
       });
@@ -4982,13 +4978,13 @@ createApp({
       scheduleTripCacheSave();
 
       newExpense.value = {
+        date: defaultRegistrationDate(),
         title: '',
         amount: '',
         currency: 'TWD',
         payer: people.value[0]?.name || '',
         involved: people.value.map(p => p.name),
-        category: '飲食',
-        day: currentDay.value || 1
+        category: '飲食'
       };
 
       try {
@@ -5024,13 +5020,13 @@ createApp({
 
       editExpenseId.value = String(exp.id);
       editExpense.value = {
+        date: normalizeExpenseRecord(exp).date,
         title: String(exp.title || ''),
         amount: Number(exp.amount) || '',
         currency: normalizeCurrency(exp.currency),
         payer: String(exp.payer || ''),
         involved: normalizeInvolved(exp.involved),
-        category: exp.category || '飲食',
-        day: exp.day ? parseInt(exp.day, 10) || 1 : 1
+        category: exp.category || '飲食'
       };
       showEditExpenseModal.value = true;
     };
@@ -5057,7 +5053,8 @@ createApp({
       const amount = Number(editExpense.value.amount || 0);
       const currency = normalizeCurrency(editExpense.value.currency);
       const payer = normalizePersonName(editExpense.value.payer);
-      if (!title || amount <= 0 || !payer) return;
+      const date = String(editExpense.value.date || '');
+      if (!title || amount <= 0 || !payer || !validPersonalLedgerDate(date)) return;
       if (!validateTransactionCurrency(currency)) return;
       const validPeople = people.value.map(person => normalizePersonName(person.name)).filter(Boolean);
       const involved = normalizeInvolved(editExpense.value.involved)
@@ -5076,7 +5073,7 @@ createApp({
           amount,
           currency,
           payer,
-          day: editExpense.value.day || 1,
+          date,
           involved,
           trip_id: currentTrip.value.id
         });
@@ -5480,7 +5477,6 @@ createApp({
     });
 
     watch(currentDay, () => {
-      newExpense.value.day = currentDay.value || 1;
       mapLocatorOpen.value = false;
       selectedMapPoint.value = null;
       if (getMapDisplayDay()) {
