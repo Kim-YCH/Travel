@@ -1,25 +1,25 @@
 <!DOCTYPE html>
-<!-- version: 20261107.1 -->
+<!-- version: 20261108.1 -->
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>出發囉</title>
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261107.1" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=20261108.1" />
 
-  <script src="../js/device-router.js?v=20261107.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
-  <script src="../vendor/vue.global.prod.js?v=20261107.1"></script>
-  <script src="../vendor/Sortable.min.js?v=20261107.1"></script>
+  <script src="../js/device-router.js?v=20261108.1" data-current-view="desktop" data-mobile-url="../" data-desktop-url="./"></script>
+  <script src="../vendor/vue.global.prod.js?v=20261108.1"></script>
+  <script src="../vendor/Sortable.min.js?v=20261108.1"></script>
 
-  <link rel="stylesheet" href="../style.css?v=20261107.1" />
-  <link rel="stylesheet" href="../cloud-theme.css?v=20261107.1" />
-  <link rel="stylesheet" href="./desktop.css?v=20261107.1" />
+  <link rel="stylesheet" href="../style.css?v=20261108.1" />
+  <link rel="stylesheet" href="../cloud-theme.css?v=20261108.1" />
+  <link rel="stylesheet" href="./desktop.css?v=20261108.1" />
   <!-- 必須排在所有專案 CSS 之後，才能重現 CDN 的層疊行為（理由同手機版 index.html）。 -->
-  <link rel="stylesheet" href="../tailwind-static.css?v=20261107.1" />
-  <link rel="stylesheet" href="../journal-theme.css?v=20261107.1" />
-  <link rel="stylesheet" href="../journal-finance.css?v=20261107.1" />
-  <link rel="stylesheet" href="../journal-prep.css?v=20261107.1" />
-  <link rel="stylesheet" href="../flights.css?v=20261107.1" />
+  <link rel="stylesheet" href="../tailwind-static.css?v=20261108.1" />
+  <link rel="stylesheet" href="../journal-theme.css?v=20261108.1" />
+  <link rel="stylesheet" href="../journal-finance.css?v=20261108.1" />
+  <link rel="stylesheet" href="../journal-prep.css?v=20261108.1" />
+  <link rel="stylesheet" href="../flights.css?v=20261108.1" />
 </head>
 <body class="desktop-body journal-theme">
 
@@ -464,8 +464,8 @@
 
               <div class="desktop-form desktop-expense-form">
                 <label class="desktop-form-field">
-                  <span>登記日期</span>
-                  <input v-model="newExpense.date" type="date" aria-label="個人分帳登記日期" required />
+                  <span>日期</span>
+                  <input v-model="newExpense.date" type="date" aria-label="個人分帳日期" required />
                 </label>
                 <label class="desktop-form-field">
                   <span>項目</span>
@@ -532,7 +532,7 @@
               </div>
               <div class="desktop-table desktop-table-expense">
                 <div class="desktop-tr desktop-th">
-                  <span>登記日期</span><span>項目</span><span>付款人</span><span>分類</span><span>參與</span><span class="desktop-td-amount">金額</span><span></span>
+                  <span>日期</span><span>項目</span><span>付款人</span><span>分類</span><span>參與</span><span class="desktop-td-amount">金額</span><span></span>
                 </div>
                 <div v-for="item in filteredExpenses" :key="item.id" class="desktop-tr">
                   <span class="desktop-td-date">{{ expenseRecordDateLabel(item) }}</span>
@@ -579,8 +579,8 @@
 
               <div v-if="walletEntryMode === 'deposit'" class="desktop-form desktop-wallet-form">
                 <label class="desktop-form-field">
-                  <span>登記日期</span>
-                  <input v-model="newSharedWalletDeposit.date" type="date" aria-label="存入登記日期" required />
+                  <span>日期</span>
+                  <input v-model="newSharedWalletDeposit.date" type="date" aria-label="存入日期" required />
                 </label>
                 <label class="desktop-form-field">
                   <span>存入人</span>
@@ -610,8 +610,8 @@
               <template v-else>
                 <div class="desktop-form desktop-wallet-form">
                   <label class="desktop-form-field">
-                    <span>登記日期</span>
-                    <input v-model="newSharedWalletPayment.date" type="date" aria-label="公費支出登記日期" required />
+                    <span>日期</span>
+                    <input v-model="newSharedWalletPayment.date" type="date" aria-label="公費支出日期" required />
                   </label>
                   <label class="desktop-form-field">
                     <span>支出項目</span>
@@ -674,7 +674,7 @@
               </template>
 
               <div class="desktop-table desktop-table-wallet">
-                <div class="desktop-tr desktop-th"><span>登記日期</span><span>項目</span><span>對象</span><span class="desktop-td-amount">金額</span><span></span></div>
+                <div class="desktop-tr desktop-th"><span>日期</span><span>項目</span><span>對象</span><span class="desktop-td-amount">金額</span><span></span></div>
                 <div v-for="tx in visibleSharedWalletRecords" :key="tx.id" class="desktop-tr">
                   <span class="desktop-td-date">{{ walletRecordDateLabel(tx) }}</span>
                   <strong>{{ tx.type === 'deposit' ? (tx.person || '存入') : tx.title }}</strong>
@@ -810,7 +810,7 @@
         <div class="desktop-ledger-grid">
           <form class="desktop-ledger-form" @submit.prevent="addPersonalLedgerEntry">
             <h3>新增記帳</h3>
-            <label><span>登記日期</span><input v-model="newPersonalLedgerEntry.date" type="date" required></label>
+            <label><span>日期</span><input v-model="newPersonalLedgerEntry.date" type="date" required></label>
             <label><span>項目</span><input v-model="newPersonalLedgerEntry.title" type="text" placeholder="項目名稱" required></label>
             <div class="desktop-ledger-form-row">
               <label><span>金額</span><input v-model.number="newPersonalLedgerEntry.amount" type="number" min="0" step="any" placeholder="0" required></label>
@@ -837,7 +837,7 @@
             <h3 id="desktop-ledger-list-title">明細</h3>
             <div class="desktop-ledger-table" v-if="personalLedgerEntries.length">
               <div class="desktop-ledger-table-head" aria-hidden="true">
-                <span>登記日期</span><span>項目</span><span>來源</span><span>金額</span><span></span>
+                <span>日期</span><span>項目</span><span>來源</span><span>金額</span><span></span>
               </div>
               <article v-for="entry in personalLedgerEntries" :key="entry.id" class="desktop-ledger-row">
                 <time>{{ entry.date || '—' }}</time>
@@ -1087,7 +1087,7 @@
             </select>
             <select v-model="editExpense.payer"><option v-for="p in people" :key="'d-ep-' + p.name" :value="p.name">{{ p.name }}</option></select>
             <select v-model="editExpense.category"><option v-for="cat in categories" :key="'d-ec-' + cat" :value="cat">{{ cat }}</option></select>
-            <label class="desktop-form-field"><span>登記日期</span><input v-model="editExpense.date" type="date" aria-label="編輯分帳登記日期" required /></label>
+            <label class="desktop-form-field"><span>日期</span><input v-model="editExpense.date" type="date" aria-label="編輯分帳日期" required /></label>
           </div>
           <div class="desktop-money-field">
             <span>分攤給（點擊切換）</span>
@@ -1109,7 +1109,7 @@
         <div class="card desktop-modal t-modal" :class="modalPresentationClass('edit-wallet', showEditWalletModal)">
           <h3>編輯錢包紀錄</h3>
           <div class="desktop-form">
-            <label class="desktop-form-field"><span>登記日期</span><input v-model="editWallet.date" type="date" aria-label="編輯公帳登記日期" required /></label>
+            <label class="desktop-form-field"><span>日期</span><input v-model="editWallet.date" type="date" aria-label="編輯公帳日期" required /></label>
             <input v-model="editWallet.title" placeholder="項目" />
             <input v-model.number="editWallet.amount" type="number" min="0" />
             <select v-model="editWallet.currency" aria-label="編輯錢包幣別">
@@ -1165,7 +1165,7 @@
       <div v-if="isModalRendered('edit-ledger', showEditPersonalLedgerModal)" class="desktop-modal-mask" :class="modalMaskPresentationClass('edit-ledger', showEditPersonalLedgerModal)" role="dialog" aria-modal="true" tabindex="-1" data-desktop-modal-mask @click.self="closeEditPersonalLedgerModal" @keydown.esc="closeEditPersonalLedgerModal">
         <form class="card desktop-modal desktop-ledger-edit t-modal" :class="modalPresentationClass('edit-ledger', showEditPersonalLedgerModal)" @submit.prevent="savePersonalLedgerEntry">
           <h3>編輯記帳</h3>
-          <label><span>登記日期</span><input v-model="editPersonalLedgerEntry.date" type="date" required></label>
+          <label><span>日期</span><input v-model="editPersonalLedgerEntry.date" type="date" required></label>
           <label><span>項目</span><input v-model="editPersonalLedgerEntry.title" type="text"></label>
           <label><span>金額</span><input v-model.number="editPersonalLedgerEntry.amount" type="number" min="0" step="any"></label>
           <label>
@@ -1233,30 +1233,30 @@
   </div>
 </div>
 
-<script src="../config.js?v=20261107.1"></script>
+<script src="../config.js?v=20261108.1"></script>
 <!-- sw.js 在站台根目錄，桌面版在 desktop/ 底下，必須明確指定路徑才註冊得到。 -->
-<script src="../cache-refresh.js?v=20261107.1" data-sw-url="../sw.js"></script>
-<script src="../keyword-map.js?v=20261107.1"></script>
-<script src="../js/utils.js?v=20261107.1"></script>
-<script src="../js/api.js?v=20261107.1"></script>
-<script src="../js/cache.js?v=20261107.1"></script>
-<script src="../js/maps.js?v=20261107.1"></script>
-<script src="../js/places.js?v=20261107.1"></script>
-<script src="../js/itinerary.js?v=20261107.1"></script>
-<script src="../js/hotels.js?v=20261107.1"></script>
-<script src="../js/expenses.js?v=20261107.1"></script>
-<script src="../js/sync-queue.js?v=20261107.1"></script>
-<script src="../js/sync-debug.js?v=20261107.1"></script>
-<script src="../js/personal-ledger.js?v=20261107.1"></script>
-<script src="../js/weather.js?v=20261107.1"></script>
-<script src="../js/export.js?v=20261107.1"></script>
-<script src="../js/probe-search.js?v=20261107.1"></script>
-<script src="../js/icon-system.js?v=20261107.1"></script>
-<script src="../js/flights.js?v=20261107.1"></script>
-<script src="../js/flight-ui.js?v=20261107.1"></script>
-<script src="../app.js?v=20261107.1"></script>
-<script src="../search-zh-label.js?v=20261107.1"></script>
-<script src="../prep-checklist.js?v=20261107.1"></script>
+<script src="../cache-refresh.js?v=20261108.1" data-sw-url="../sw.js"></script>
+<script src="../keyword-map.js?v=20261108.1"></script>
+<script src="../js/utils.js?v=20261108.1"></script>
+<script src="../js/api.js?v=20261108.1"></script>
+<script src="../js/cache.js?v=20261108.1"></script>
+<script src="../js/maps.js?v=20261108.1"></script>
+<script src="../js/places.js?v=20261108.1"></script>
+<script src="../js/itinerary.js?v=20261108.1"></script>
+<script src="../js/hotels.js?v=20261108.1"></script>
+<script src="../js/expenses.js?v=20261108.1"></script>
+<script src="../js/sync-queue.js?v=20261108.1"></script>
+<script src="../js/sync-debug.js?v=20261108.1"></script>
+<script src="../js/personal-ledger.js?v=20261108.1"></script>
+<script src="../js/weather.js?v=20261108.1"></script>
+<script src="../js/export.js?v=20261108.1"></script>
+<script src="../js/probe-search.js?v=20261108.1"></script>
+<script src="../js/icon-system.js?v=20261108.1"></script>
+<script src="../js/flights.js?v=20261108.1"></script>
+<script src="../js/flight-ui.js?v=20261108.1"></script>
+<script src="../app.js?v=20261108.1"></script>
+<script src="../search-zh-label.js?v=20261108.1"></script>
+<script src="../prep-checklist.js?v=20261108.1"></script>
 <script>
   (() => {
     const modalSelector = '[data-desktop-modal-mask]';

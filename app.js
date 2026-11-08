@@ -5,7 +5,7 @@ createApp({
   setup() {
     const API_URL = window.TRAVEL_CONFIG?.API_URL || '';
     const GOOGLE_MAPS_API_KEY = window.TRAVEL_CONFIG?.GOOGLE_MAPS_API_KEY || '';
-    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261107.1';
+    const APP_VERSION = window.TRAVEL_CONFIG?.APP_VERSION || '20261108.1';
     // 這些模組必須在 app.js 之前同步載入；缺任何一個都無法運作，直接中止比在執行期才報錯好追。
     [
       'TravelUtils', 'TravelApi', 'TravelCache', 'TravelItinerary',
@@ -996,6 +996,7 @@ createApp({
     const cacheKey = TravelCache.tripCacheKey;
 
     const saveTripCache = (tripId) => {
+      if (!tripId || String(currentTrip.value?.id || '') !== String(tripId)) return;
       try {
         localStorage.setItem(cacheKey(tripId), JSON.stringify({
           itinerary: itinerary.value,
@@ -1019,6 +1020,8 @@ createApp({
         if (!raw) return false;
 
         const c = JSON.parse(raw);
+        // A stale refresh may have saved another trip under this cache key.
+        if (c.trip && String(c.trip.id || '') !== String(tripId)) return false;
 
         itinerary.value = Array.isArray(c.itinerary) ? c.itinerary.map(normalizeItineraryRecord) : [];
         expenses.value  = Array.isArray(c.expenses) ? c.expenses.map(normalizeExpenseRecord) : [];
@@ -2544,10 +2547,12 @@ createApp({
       applyEntryDayByToday();
 
       await nextTick();
+      if (String(currentTrip.value?.id || '') !== String(tripId)) return;
       scheduleSortableInit();
 
       if (isDayMapView()) {
         await loadGoogleMaps();
+        if (String(currentTrip.value?.id || '') !== String(tripId)) return;
         initGoogleMap();
       } else {
         updateMapMarkers();
@@ -2556,7 +2561,9 @@ createApp({
       loadPendingQueue(tripId);
       if (pendingSyncQueue.value.length) {
         flushPendingQueue().then(() => {
-          fetchData({ autoSelectToday: true, force: true });
+          if (String(currentTrip.value?.id || '') === String(tripId)) {
+            fetchData({ autoSelectToday: true, force: true });
+          }
         });
       } else {
         fetchData({ autoSelectToday: true });
@@ -2699,6 +2706,9 @@ createApp({
         }
 
         const trip = data?.trip || null;
+        if (trip && String(trip.id || '') !== String(tripId)) {
+          throw new Error('tripData identity mismatch');
+        }
         const itin = Array.isArray(data?.itinerary) ? data.itinerary : [];
         const exp  = Array.isArray(data?.expenses) ? data.expenses : [];
         const ppl  = Array.isArray(data?.people) ? data.people : [];
@@ -2748,13 +2758,15 @@ createApp({
         if (String(currentTrip.value?.id || '') !== String(tripId)) return false;
 
         await nextTick();
+        if (String(currentTrip.value?.id || '') !== String(tripId)) return false;
         scheduleSortableInit();
 
         if (isDayMapView()) {
           await loadGoogleMaps();
+          if (String(currentTrip.value?.id || '') !== String(tripId)) return false;
           initGoogleMap();
           setTimeout(() => {
-            if (mapInstance && window.google) {
+            if (String(currentTrip.value?.id || '') === String(tripId) && mapInstance && window.google) {
               google.maps.event.trigger(mapInstance, 'resize');
               updateMapMarkers();
             }
@@ -2773,7 +2785,7 @@ createApp({
         return true;
       } finally {
         console.log("fetchData total ms =", Math.round(performance.now() - t_start));
-        if (showLoading) isLoading.value = false;
+        if (showLoading && String(currentTrip.value?.id || '') === String(tripId)) isLoading.value = false;
       }
     };
 
